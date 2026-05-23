@@ -231,7 +231,8 @@ Return only valid JSON with this exact shape:
 Rules:
 - Preserve the user's original text in original_text.
 - corrected_text must contain a polished corrected version of the whole text.
-- category must be exactly one of: Grammar, Spelling, Punctuation, Word Choice, Preposition, Natural Language, Other.
+- category must be exactly one of: Grammar, Natural Language, Spelling, Word Choice, Other.
+- Punctuation and preposition errors must be returned as Grammar.
 - short_explanation must be one informal but technically accurate sentence.
 - If there are no corrections, return an empty corrections array and keep corrected_text equal to original_text.
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
