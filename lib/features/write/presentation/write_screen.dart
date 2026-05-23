@@ -5,15 +5,21 @@ import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../../../shared/widgets/primary_action_button.dart';
-import '../../corrections/application/correction_service.dart';
 import '../../corrections/application/correction_service_exception.dart';
+import '../../corrections/application/submit_correction_use_case.dart';
 import '../../corrections/domain/correction_item.dart';
 import '../../corrections/presentation/corrections_screen.dart';
+import '../../saved/application/save_correction_use_case.dart';
 
 class WriteScreen extends StatefulWidget {
-  const WriteScreen({required this.correctionService, super.key});
+  const WriteScreen({
+    required this.submitCorrectionUseCase,
+    required this.saveCorrectionUseCase,
+    super.key,
+  });
 
-  final CorrectionService correctionService;
+  final SubmitCorrectionUseCase submitCorrectionUseCase;
+  final SaveCorrectionUseCase saveCorrectionUseCase;
 
   @override
   State<WriteScreen> createState() => _WriteScreenState();
@@ -113,11 +119,22 @@ class _WriteScreenState extends State<WriteScreen> {
     setState(() => _isReviewing = true);
 
     try {
-      final response = await widget.correctionService.correctText(
+      final result = await widget.submitCorrectionUseCase(
         _controller.text.trim(),
       );
 
       if (!mounted) {
+        return;
+      }
+
+      if (result.wasQueued) {
+        _showSnackBar('No internet available. Submission queued for sync.');
+        return;
+      }
+
+      final response = result.response;
+      if (response == null) {
+        _showSnackBar('Something went wrong. Please try again.');
         return;
       }
 
@@ -150,16 +167,24 @@ class _WriteScreenState extends State<WriteScreen> {
 
   Future<void> _saveCorrection(CorrectionItem item) async {
     try {
-      await widget.correctionService.generateLongExplanation(item);
+      await widget.saveCorrectionUseCase(
+        correction: item,
+        originalSentence: _controller.text.trim(),
+      );
       if (!mounted) {
         return;
       }
-      _showSnackBar('Long explanation generated. Local saving is next.');
+      _showSnackBar('Saved for later');
     } on CorrectionServiceException catch (error) {
       if (!mounted) {
         return;
       }
       _showSnackBar(_messageForCorrectionError(error));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar('Something went wrong. Please try again.');
     }
   }
 
