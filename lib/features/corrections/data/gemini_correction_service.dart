@@ -6,6 +6,7 @@ import '../application/correction_service.dart';
 import '../application/correction_service_exception.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
+import '../../saved/domain/saved_explanation.dart';
 
 class GeminiCorrectionService implements CorrectionService {
   GeminiCorrectionService({
@@ -61,6 +62,38 @@ Short explanation: ${correction.shortExplanation}
 ''',
       responseMimeType: 'text/plain',
     );
+  }
+
+  @override
+  Future<SavedExplanation> generateStructuredExplanation(
+    CorrectionItem correction,
+  ) async {
+    _ensureConfigured();
+
+    final responseText = await _generateContent(
+      systemInstruction: _structuredExplanationSystemInstruction,
+      userText:
+          '''
+Original phrase: ${correction.originalPhrase}
+Corrected phrase: ${correction.correctedPhrase}
+Category: ${correction.category.label}
+Short explanation: ${correction.shortExplanation}
+''',
+    );
+
+    try {
+      final jsonObject = jsonDecode(_extractJsonObject(responseText));
+      if (jsonObject is! Map<String, Object?>) {
+        throw const FormatException('Root value is not an object.');
+      }
+
+      return SavedExplanation.fromJson(jsonObject);
+    } on FormatException catch (error) {
+      throw CorrectionServiceException(
+        CorrectionFailureReason.invalidResponse,
+        'Gemini returned an invalid structured explanation: $error',
+      );
+    }
   }
 
   Future<String> _generateContent({
@@ -248,4 +281,22 @@ Include:
 - one or two alternative phrasings if useful
 
 Return plain text only, not JSON or Markdown.
+''';
+
+const _structuredExplanationSystemInstruction = '''
+You explain Spanish corrections to learners.
+
+Return only valid JSON with this exact shape:
+{
+  "why_its_wrong": "string",
+  "in_context": "string",
+  "alternatives": ["string"]
+}
+
+Rules:
+- why_its_wrong explains why the original phrase is incorrect or unnatural.
+- in_context gives one corrected example sentence using the corrected phrase naturally.
+- alternatives contains one to three alternative phrasings. Use an empty array if there are no useful alternatives.
+- Keep every field concise and learner-friendly.
+- Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
 ''';

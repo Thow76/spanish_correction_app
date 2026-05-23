@@ -2,7 +2,6 @@ import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
 import '../../corrections/domain/correction_item.dart';
 import '../domain/saved_correction.dart';
-import '../domain/saved_explanation.dart';
 
 class SaveCorrectionUseCase {
   const SaveCorrectionUseCase({
@@ -18,7 +17,7 @@ class SaveCorrectionUseCase {
     required CorrectionItem correction,
     required String originalSentence,
   }) async {
-    final longExplanation = await _correctionService.generateLongExplanation(
+    final explanation = await _correctionService.generateStructuredExplanation(
       correction,
     );
     final savedCorrection = SavedCorrection(
@@ -26,7 +25,7 @@ class SaveCorrectionUseCase {
       category: correction.category,
       shortExplanation: correction.shortExplanation,
       originalSentence: originalSentence,
-      explanation: SavedExplanation.fromLegacyLongExplanation(longExplanation),
+      explanation: explanation,
       savedAt: DateTime.now(),
       correctedPhrase: correction.correctedPhrase,
     );
