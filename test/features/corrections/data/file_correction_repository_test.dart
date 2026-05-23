@@ -8,6 +8,7 @@ import 'package:spanish_correction_app/features/corrections/domain/error_categor
 import 'package:spanish_correction_app/features/corrections/domain/queued_submission.dart';
 import 'package:spanish_correction_app/features/history/domain/correction_submission.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_correction.dart';
+import 'package:spanish_correction_app/features/saved/domain/saved_explanation.dart';
 
 void main() {
   late Directory tempDirectory;
@@ -46,7 +47,11 @@ void main() {
       category: ErrorCategory.grammar,
       shortExplanation: 'Use fui for first-person preterite of ir.',
       originalSentence: 'Ayer yo fue al mercado.',
-      longExplanation: 'The verb ir uses fui for yo in the preterite.',
+      explanation: const SavedExplanation(
+        whyItsWrong: 'The verb ir uses fui for yo in the preterite.',
+        inContext: 'Ayer fui al mercado.',
+        alternatives: ['Fui al mercado ayer.'],
+      ),
       savedAt: DateTime(2026, 5, 24),
       correctedPhrase: 'fui',
     );

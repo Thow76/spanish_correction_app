@@ -65,7 +65,7 @@ class SavedDetailScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.lg),
                 _Section(
                   title: 'Detailed explanation',
-                  body: correction.longExplanation,
+                  body: correction.explanation.whyItsWrong,
                 ),
               ],
             ),
