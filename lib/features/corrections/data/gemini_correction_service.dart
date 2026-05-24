@@ -4,6 +4,7 @@ import 'dart:io';
 
 import '../application/correction_service.dart';
 import '../application/correction_service_exception.dart';
+import '../application/correction_response_schema.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
 import '../../saved/domain/saved_explanation.dart';
@@ -36,8 +37,9 @@ class GeminiCorrectionService implements CorrectionService {
         throw const FormatException('Root value is not an object.');
       }
 
-      final response = CorrectionResponse.fromJson(
+      final response = CorrectionResponse.fromAnchoredJson(
         jsonObject,
+        submittedText: text,
         allowLegacyCategories: false,
       );
       _validateCorrectionResponse(response);
@@ -247,30 +249,29 @@ Short explanation: ${correction.shortExplanation}
   }
 }
 
-const _correctionSystemInstruction = '''
+final _correctionSystemInstruction =
+    '''
 You are a Spanish correction engine for a mobile language-learning app.
 
 Return only valid JSON with this exact shape:
-{
-  "original_text": "string",
-  "corrected_text": "string",
-  "corrections": [
-    {
-      "original_phrase": "string",
-      "corrected_phrase": "string",
-      "category": "string",
-      "short_explanation": "string"
-    }
-  ]
-}
+$correctionResponseJsonShape
 
 Rules:
 - Preserve the user's original text in original_text.
 - corrected_text must contain a polished corrected version of the whole text.
+- Each correction must identify the text being corrected with start_index and end_index only.
+- Do not include original_phrase in any correction.
+- start_index is zero-based and inclusive.
+- end_index is zero-based and exclusive.
+- Indexes must refer only to the submitted Spanish text, not the instruction text or labels.
+- Indexes are measured in user-perceived characters, not bytes.
+- Accented letters, ñ, inverted punctuation, emoji, and combining-accent sequences each count as one user-perceived character.
+- The app will derive the original phrase from the submitted text range, so the ranges must anchor to the exact submitted text.
 - category must be exactly one of: Grammar, Natural Language, Spelling, Word Choice, Other.
 - short_explanation must be one informal but technically accurate sentence.
 - If there are no corrections, return an empty corrections array and keep corrected_text equal to original_text.
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
+- Do not create Spelling corrections for accents or Spanish characters that are already present in the submitted text.
 
 Category rules:
 - Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, and punctuation.
