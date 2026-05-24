@@ -105,9 +105,39 @@ void main() {
     );
 
     expect(response.originalText, 'Cómo estás? Qué tal?');
+    expect(response.correctedText, '¿Cómo estás? Qué tal?');
     expect(response.corrections.single.originalPhrase, 'Cómo estás?');
     expect(response.corrections.single.startIndex, 0);
     expect(response.corrections.single.endIndex, 11);
+  });
+
+  test('anchored parsing reconstructs corrected text from anchored edits', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Como estas? Que tal?',
+        'corrected_text': 'This model value should not be trusted.',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 11,
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+          {
+            'start_index': 12,
+            'end_index': 20,
+            'corrected_phrase': '¿Qué tal?',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+        ],
+      },
+      submittedText: 'Como estas? Que tal?',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.correctedText, '¿Cómo estás? ¿Qué tal?');
   });
 
   test('anchored parsing slices user-perceived characters', () {
@@ -152,6 +182,7 @@ void main() {
     );
 
     expect(response.corrections, isEmpty);
+    expect(response.correctedText, 'Hola');
   });
 
   test('anchored parsing drops unchanged corrections', () {
@@ -174,6 +205,7 @@ void main() {
     );
 
     expect(response.corrections, isEmpty);
+    expect(response.correctedText, '¿Cómo estás?');
   });
 
   test('anchored parsing drops stale echoed original phrases', () {

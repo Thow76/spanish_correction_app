@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 import 'correction_item.dart';
 
 class CorrectionResponse {
@@ -40,23 +42,26 @@ class CorrectionResponse {
     bool allowLegacyCategories = true,
   }) {
     final rawCorrections = json['corrections'];
+    final corrections = rawCorrections is List
+        ? rawCorrections
+              .whereType<Map<String, Object?>>()
+              .map(
+                (json) => CorrectionItem.tryFromAnchoredJson(
+                  json,
+                  submittedText: submittedText,
+                  allowLegacyCategories: allowLegacyCategories,
+                ),
+              )
+              .whereType<CorrectionItem>()
+              .toList()
+        : const <CorrectionItem>[];
 
     return CorrectionResponse(
       originalText: submittedText,
-      correctedText: json['corrected_text'] as String? ?? '',
-      corrections: rawCorrections is List
-          ? rawCorrections
-                .whereType<Map<String, Object?>>()
-                .map(
-                  (json) => CorrectionItem.tryFromAnchoredJson(
-                    json,
-                    submittedText: submittedText,
-                    allowLegacyCategories: allowLegacyCategories,
-                  ),
-                )
-                .whereType<CorrectionItem>()
-                .toList()
-          : const [],
+      correctedText: corrections.isEmpty
+          ? submittedText
+          : _reconstructCorrectedText(submittedText, corrections),
+      corrections: corrections,
     );
   }
 
@@ -66,5 +71,24 @@ class CorrectionResponse {
       'corrected_text': correctedText,
       'corrections': corrections.map((item) => item.toJson()).toList(),
     };
+  }
+
+  static String _reconstructCorrectedText(
+    String submittedText,
+    List<CorrectionItem> corrections,
+  ) {
+    final characters = submittedText.characters.toList();
+    final sortedCorrections = [...corrections]
+      ..sort((left, right) => right.startIndex!.compareTo(left.startIndex!));
+
+    for (final correction in sortedCorrections) {
+      characters.replaceRange(
+        correction.startIndex!,
+        correction.endIndex!,
+        correction.correctedPhrase.characters,
+      );
+    }
+
+    return characters.join();
   }
 }
