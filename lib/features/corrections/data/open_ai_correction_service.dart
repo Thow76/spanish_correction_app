@@ -29,7 +29,7 @@ class OpenAiCorrectionService implements CorrectionService {
     final responseText = await _createChatCompletion(
       systemInstruction: _correctionSystemInstruction,
       userText: 'Review this Spanish text:\n\n$text',
-      responseFormat: const {'type': 'json_object'},
+      responseFormat: _correctionResponseFormat,
     );
 
     try {
@@ -84,7 +84,7 @@ Corrected phrase: ${correction.correctedPhrase}
 Category: ${correction.category.label}
 Short explanation: ${correction.shortExplanation}
 ''',
-      responseFormat: const {'type': 'json_object'},
+      responseFormat: _structuredExplanationResponseFormat,
     );
 
     try {
@@ -219,6 +219,48 @@ Short explanation: ${correction.shortExplanation}
     }
   }
 }
+
+const _correctionResponseFormat = {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'spanish_correction_response',
+    'strict': true,
+    'schema': correctionResponseJsonSchema,
+  },
+};
+
+const _structuredExplanationResponseFormat = {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'saved_correction_explanation',
+    'strict': true,
+    'schema': _structuredExplanationJsonSchema,
+  },
+};
+
+const _structuredExplanationJsonSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': ['why_its_wrong', 'in_context', 'alternatives'],
+  'properties': {
+    'why_its_wrong': {
+      'type': 'string',
+      'description':
+          'Why the original phrase is incorrect or unnatural, in concise learner-friendly language.',
+    },
+    'in_context': {
+      'type': 'string',
+      'description':
+          'One corrected example sentence using the corrected phrase naturally.',
+    },
+    'alternatives': {
+      'type': 'array',
+      'description':
+          'One to three alternative phrasings, or an empty array when none are useful.',
+      'items': {'type': 'string'},
+    },
+  },
+};
 
 final _correctionSystemInstruction =
     '''
