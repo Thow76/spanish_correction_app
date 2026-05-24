@@ -132,26 +132,70 @@ void main() {
     expect(response.corrections.single.originalPhrase, 'Café');
   });
 
-  test('anchored parsing rejects invalid ranges', () {
-    expect(
-      () => CorrectionResponse.fromAnchoredJson(
-        {
-          'original_text': 'Hola',
-          'corrected_text': 'Hola',
-          'corrections': [
-            {
-              'start_index': 0,
-              'end_index': 8,
-              'corrected_phrase': 'Hola',
-              'category': 'Other',
-              'short_explanation': 'Invalid range.',
-            },
-          ],
-        },
-        submittedText: 'Hola',
-        allowLegacyCategories: false,
-      ),
-      throwsFormatException,
+  test('anchored parsing drops invalid ranges', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Hola',
+        'corrected_text': 'Hola',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 8,
+            'corrected_phrase': 'Hola',
+            'category': 'Other',
+            'short_explanation': 'Invalid range.',
+          },
+        ],
+      },
+      submittedText: 'Hola',
+      allowLegacyCategories: false,
     );
+
+    expect(response.corrections, isEmpty);
+  });
+
+  test('anchored parsing drops unchanged corrections', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': '¿Cómo estás?',
+        'corrected_text': '¿Cómo estás?',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 12,
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Spelling',
+            'short_explanation': 'No correction is needed.',
+          },
+        ],
+      },
+      submittedText: '¿Cómo estás?',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.corrections, isEmpty);
+  });
+
+  test('anchored parsing drops stale echoed original phrases', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'C mo est s?',
+        'corrected_text': '¿Cómo estás?',
+        'corrections': [
+          {
+            'original_phrase': 'C mo est s?',
+            'start_index': 0,
+            'end_index': 11,
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Spelling',
+            'short_explanation': 'Accents are missing.',
+          },
+        ],
+      },
+      submittedText: 'Cómo estás?',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.corrections, isEmpty);
   });
 }

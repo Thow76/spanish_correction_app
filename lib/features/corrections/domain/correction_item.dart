@@ -62,6 +62,35 @@ class CorrectionItem {
     );
   }
 
+  static CorrectionItem? tryFromAnchoredJson(
+    Map<String, Object?> json, {
+    required String submittedText,
+    bool allowLegacyCategories = true,
+  }) {
+    try {
+      final item = CorrectionItem.fromAnchoredJson(
+        json,
+        submittedText: submittedText,
+        allowLegacyCategories: allowLegacyCategories,
+      );
+
+      if (item.originalPhrase.isEmpty ||
+          item.correctedPhrase == item.originalPhrase) {
+        return null;
+      }
+
+      final echoedOriginalPhrase = json['original_phrase'];
+      if (echoedOriginalPhrase is String &&
+          echoedOriginalPhrase != item.originalPhrase) {
+        return null;
+      }
+
+      return item;
+    } on FormatException {
+      return null;
+    }
+  }
+
   Map<String, Object?> toJson() {
     return {
       'original_phrase': originalPhrase,

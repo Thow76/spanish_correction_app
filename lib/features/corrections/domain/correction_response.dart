@@ -48,12 +48,13 @@ class CorrectionResponse {
           ? rawCorrections
                 .whereType<Map<String, Object?>>()
                 .map(
-                  (json) => CorrectionItem.fromAnchoredJson(
+                  (json) => CorrectionItem.tryFromAnchoredJson(
                     json,
                     submittedText: submittedText,
                     allowLegacyCategories: allowLegacyCategories,
                   ),
                 )
+                .whereType<CorrectionItem>()
                 .toList()
           : const [],
     );
