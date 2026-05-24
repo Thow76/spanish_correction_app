@@ -10,7 +10,7 @@ class AppConfig {
   factory AppConfig.fromEnvironment() {
     const correctionProvider = String.fromEnvironment(
       'CORRECTION_PROVIDER',
-      defaultValue: 'gemini',
+      defaultValue: 'openai',
     );
 
     return AppConfig(

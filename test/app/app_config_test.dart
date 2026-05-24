@@ -31,10 +31,10 @@ void main() {
     );
   });
 
-  test('default config keeps Gemini as the active correction provider', () {
+  test('default config uses OpenAI as the active correction provider', () {
     final config = AppConfig.fromEnvironment();
 
-    expect(config.correctionProvider, CorrectionProvider.gemini);
+    expect(config.correctionProvider, CorrectionProvider.openAi);
     expect(config.openAiCorrectionModel, 'gpt-4.1-mini');
   });
 
