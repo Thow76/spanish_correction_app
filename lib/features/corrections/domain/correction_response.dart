@@ -11,7 +11,10 @@ class CorrectionResponse {
   final String correctedText;
   final List<CorrectionItem> corrections;
 
-  factory CorrectionResponse.fromJson(Map<String, Object?> json) {
+  factory CorrectionResponse.fromJson(
+    Map<String, Object?> json, {
+    bool allowLegacyCategories = true,
+  }) {
     final rawCorrections = json['corrections'];
 
     return CorrectionResponse(
@@ -20,7 +23,12 @@ class CorrectionResponse {
       corrections: rawCorrections is List
           ? rawCorrections
                 .whereType<Map<String, Object?>>()
-                .map(CorrectionItem.fromJson)
+                .map(
+                  (json) => CorrectionItem.fromJson(
+                    json,
+                    allowLegacyCategories: allowLegacyCategories,
+                  ),
+                )
                 .toList()
           : const [],
     );

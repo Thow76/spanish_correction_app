@@ -21,4 +21,17 @@ void main() {
   test('falls back to other for unknown labels', () {
     expect(ErrorCategory.fromLabel('Style'), ErrorCategory.other);
   });
+
+  test('strict API parser rejects legacy and unknown labels', () {
+    expect(ErrorCategory.fromApiLabel('Grammar'), ErrorCategory.grammar);
+    expect(
+      () => ErrorCategory.fromApiLabel('Punctuation'),
+      throwsFormatException,
+    );
+    expect(
+      () => ErrorCategory.fromApiLabel('Preposition'),
+      throwsFormatException,
+    );
+    expect(() => ErrorCategory.fromApiLabel('Style'), throwsFormatException);
+  });
 }

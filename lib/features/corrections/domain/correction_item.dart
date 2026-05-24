@@ -13,11 +13,16 @@ class CorrectionItem {
   final ErrorCategory category;
   final String shortExplanation;
 
-  factory CorrectionItem.fromJson(Map<String, Object?> json) {
+  factory CorrectionItem.fromJson(
+    Map<String, Object?> json, {
+    bool allowLegacyCategories = true,
+  }) {
     return CorrectionItem(
       originalPhrase: json['original_phrase'] as String? ?? '',
       correctedPhrase: json['corrected_phrase'] as String? ?? '',
-      category: ErrorCategory.fromLabel(json['category'] as String? ?? ''),
+      category: allowLegacyCategories
+          ? ErrorCategory.fromLabel(json['category'] as String? ?? '')
+          : ErrorCategory.fromApiLabel(json['category'] as String? ?? ''),
       shortExplanation: json['short_explanation'] as String? ?? '',
     );
   }

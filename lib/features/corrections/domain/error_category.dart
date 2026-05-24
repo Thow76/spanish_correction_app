@@ -26,4 +26,16 @@ enum ErrorCategory {
       orElse: () => ErrorCategory.other,
     );
   }
+
+  static ErrorCategory fromApiLabel(String value) {
+    final normalizedValue = value.trim();
+
+    for (final category in ErrorCategory.values) {
+      if (category.label == normalizedValue) {
+        return category;
+      }
+    }
+
+    throw FormatException('Unsupported correction category "$value".');
+  }
 }

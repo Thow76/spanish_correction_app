@@ -36,7 +36,10 @@ class GeminiCorrectionService implements CorrectionService {
         throw const FormatException('Root value is not an object.');
       }
 
-      final response = CorrectionResponse.fromJson(jsonObject);
+      final response = CorrectionResponse.fromJson(
+        jsonObject,
+        allowLegacyCategories: false,
+      );
       _validateCorrectionResponse(response);
       return response;
     } on FormatException catch (error) {
