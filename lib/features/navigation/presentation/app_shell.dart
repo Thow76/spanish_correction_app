@@ -11,6 +11,7 @@ import '../../corrections/application/sync_queued_submissions_use_case.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../saved/application/save_correction_use_case.dart';
 import '../../saved/presentation/saved_screen.dart';
+import '../../write/application/transcription_service.dart';
 import '../../write/presentation/write_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -18,12 +19,14 @@ class AppShell extends StatefulWidget {
     required this.correctionService,
     required this.repositoryController,
     required this.networkStatusService,
+    required this.transcriptionService,
     super.key,
   });
 
   final CorrectionService correctionService;
   final CorrectionRepositoryController repositoryController;
   final NetworkStatusService networkStatusService;
+  final TranscriptionService transcriptionService;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -70,6 +73,7 @@ class _AppShellState extends State<AppShell> {
       WriteScreen(
         submitCorrectionUseCase: submitCorrectionUseCase,
         saveCorrectionUseCase: saveCorrectionUseCase,
+        transcriptionService: widget.transcriptionService,
       ),
       HistoryScreen(
         repositoryController: widget.repositoryController,

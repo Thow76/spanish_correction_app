@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
@@ -10,16 +14,20 @@ import '../../corrections/application/submit_correction_use_case.dart';
 import '../../corrections/domain/correction_item.dart';
 import '../../corrections/presentation/corrections_screen.dart';
 import '../../saved/application/save_correction_use_case.dart';
+import '../application/transcription_service.dart';
+import '../application/transcription_service_exception.dart';
 
 class WriteScreen extends StatefulWidget {
   const WriteScreen({
     required this.submitCorrectionUseCase,
     required this.saveCorrectionUseCase,
+    required this.transcriptionService,
     super.key,
   });
 
   final SubmitCorrectionUseCase submitCorrectionUseCase;
   final SaveCorrectionUseCase saveCorrectionUseCase;
+  final TranscriptionService transcriptionService;
 
   @override
   State<WriteScreen> createState() => _WriteScreenState();
@@ -27,12 +35,21 @@ class WriteScreen extends StatefulWidget {
 
 class _WriteScreenState extends State<WriteScreen> {
   static const _characterLimit = 600;
+  static const _recordingLimitSeconds = 60;
+
   final _controller = TextEditingController();
+  final _audioRecorder = AudioRecorder();
+  Timer? _recordingTimer;
   bool _hasShownLimitMessage = false;
   bool _isReviewing = false;
+  bool _isRecording = false;
+  bool _isTranscribing = false;
+  int _recordingSecondsRemaining = _recordingLimitSeconds;
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
+    _audioRecorder.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -77,12 +94,19 @@ class _WriteScreenState extends State<WriteScreen> {
               const SizedBox(height: AppSpacing.xl),
               const _DividerLabel(),
               const SizedBox(height: AppSpacing.md),
-              _MicControl(onTap: _showWhisperRequirements),
+              _MicControl(
+                onTap: _isTranscribing ? null : _handleMicTap,
+                isRecording: _isRecording,
+                isTranscribing: _isTranscribing,
+                secondsRemaining: _recordingSecondsRemaining,
+              ),
               const SizedBox(height: AppSpacing.xxl),
               PrimaryActionButton(
                 label: _isReviewing ? 'Reviewing' : 'Corregir',
                 isLoading: _isReviewing,
-                onPressed: count == 0 ? null : _reviewText,
+                onPressed: count == 0 || _isRecording || _isTranscribing
+                    ? null
+                    : _reviewText,
               ),
             ],
           ),
@@ -165,6 +189,128 @@ class _WriteScreenState extends State<WriteScreen> {
     }
   }
 
+  Future<void> _handleMicTap() async {
+    if (_isRecording) {
+      await _stopRecordingAndTranscribe();
+    } else {
+      await _startRecording();
+    }
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      final hasPermission = await _audioRecorder.hasPermission();
+      if (!hasPermission) {
+        _showSnackBar('Microphone permission is required to record audio.');
+        return;
+      }
+
+      final temporaryDirectory = await getTemporaryDirectory();
+      final audioPath =
+          '${temporaryDirectory.path}/spanish-recording-${DateTime.now().microsecondsSinceEpoch}.m4a';
+
+      await _audioRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          numChannels: 1,
+          sampleRate: 44100,
+        ),
+        path: audioPath,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isRecording = true;
+        _recordingSecondsRemaining = _recordingLimitSeconds;
+      });
+
+      _recordingTimer?.cancel();
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) {
+          return;
+        }
+
+        final nextValue = _recordingSecondsRemaining - 1;
+        setState(() => _recordingSecondsRemaining = nextValue);
+
+        if (nextValue <= 0) {
+          _recordingTimer?.cancel();
+          _stopRecordingAndTranscribe(showLimitMessage: true);
+        }
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar('Unable to transcribe audio - please try again.');
+    }
+  }
+
+  Future<void> _stopRecordingAndTranscribe({
+    bool showLimitMessage = false,
+  }) async {
+    _recordingTimer?.cancel();
+
+    if (!_isRecording) {
+      return;
+    }
+
+    setState(() {
+      _isRecording = false;
+      _isTranscribing = true;
+    });
+
+    try {
+      final audioPath = await _audioRecorder.stop();
+      if (showLimitMessage && mounted) {
+        _showSnackBar('Recording limit reached');
+      }
+
+      if (audioPath == null) {
+        throw const TranscriptionServiceException(
+          TranscriptionFailureReason.apiFailure,
+          'No recording path returned.',
+        );
+      }
+
+      final transcript = await widget.transcriptionService
+          .transcribeSpanishAudio(audioPath);
+
+      if (!mounted) {
+        return;
+      }
+
+      final limitedTranscript = transcript.characters
+          .take(_characterLimit)
+          .toString();
+      _controller.text = limitedTranscript;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+      _handleTextChanged(limitedTranscript);
+    } on TranscriptionServiceException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar(_messageForTranscriptionError(error));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar('Unable to transcribe audio - please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTranscribing = false;
+          _recordingSecondsRemaining = _recordingLimitSeconds;
+        });
+      }
+    }
+  }
+
   Future<void> _saveCorrection(CorrectionItem item) async {
     try {
       await widget.saveCorrectionUseCase(
@@ -188,15 +334,6 @@ class _WriteScreenState extends State<WriteScreen> {
     }
   }
 
-  void _showWhisperRequirements() {
-    _showIntegrationSheet(
-      title: 'Whisper recording setup',
-      icon: Icons.mic_none,
-      body:
-          'Next we will add Android microphone permission, record a 60 second audio file, send it for Spanish transcription, and pass the returned text into this input.',
-    );
-  }
-
   String _messageForCorrectionError(CorrectionServiceException error) {
     return switch (error.reason) {
       CorrectionFailureReason.missingConfiguration =>
@@ -209,50 +346,16 @@ class _WriteScreenState extends State<WriteScreen> {
     };
   }
 
-  void _showIntegrationSheet({
-    required String title,
-    required IconData icon,
-    required String body,
-  }) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      showDragHandle: true,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: AppColors.cyan.withValues(alpha: 0.12),
-                child: Icon(icon, color: AppColors.cyan),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontFamily: 'Sora',
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                body,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 15,
-                  height: 24 / 15,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  String _messageForTranscriptionError(TranscriptionServiceException error) {
+    return switch (error.reason) {
+      TranscriptionFailureReason.missingConfiguration =>
+        'OpenAI API key is missing. Run with --dart-define=OPENAI_API_KEY=...',
+      TranscriptionFailureReason.networkUnavailable =>
+        'No internet available. Please check your connection.',
+      TranscriptionFailureReason.apiFailure ||
+      TranscriptionFailureReason.invalidResponse =>
+        'Unable to transcribe audio - please try again.',
+    };
   }
 }
 
@@ -364,12 +467,27 @@ class _DividerLabel extends StatelessWidget {
 }
 
 class _MicControl extends StatelessWidget {
-  const _MicControl({required this.onTap});
+  const _MicControl({
+    required this.onTap,
+    required this.isRecording,
+    required this.isTranscribing,
+    required this.secondsRemaining,
+  });
 
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isRecording;
+  final bool isTranscribing;
+  final int secondsRemaining;
 
   @override
   Widget build(BuildContext context) {
+    final color = isRecording ? AppColors.coral : AppColors.cyan;
+    final label = isTranscribing
+        ? 'Transcribing...'
+        : isRecording
+        ? 'Tap to stop'
+        : 'Tap to record';
+
     return Center(
       child: Column(
         children: [
@@ -382,30 +500,65 @@ class _MicControl extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.cyan.withValues(alpha: 0.12),
+                color: color.withValues(alpha: isRecording ? 0.2 : 0.12),
                 border: Border.all(
-                  color: AppColors.cyan.withValues(alpha: 0.4),
+                  color: color.withValues(alpha: isRecording ? 1 : 0.4),
                   width: 2,
                 ),
+                boxShadow: isRecording
+                    ? [
+                        BoxShadow(
+                          color: AppColors.coral.withValues(alpha: 0.32),
+                          blurRadius: 18,
+                        ),
+                      ]
+                    : null,
               ),
-              child: const Icon(
-                Icons.mic_none,
-                color: AppColors.cyan,
-                size: 34,
-              ),
+              child: isTranscribing
+                  ? const SizedBox.square(
+                      dimension: 28,
+                      child: CircularProgressIndicator(
+                        color: AppColors.cyan,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Icon(
+                      isRecording ? Icons.stop : Icons.mic_none,
+                      color: color,
+                      size: 34,
+                    ),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          const Text(
-            'Tap to record',
-            style: TextStyle(
+          Text(
+            label,
+            style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (isRecording) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              _formatTimer(secondsRemaining),
+              style: TextStyle(
+                color: secondsRemaining <= 10
+                    ? AppColors.coral
+                    : AppColors.textPrimary,
+                fontFamily: 'Sora',
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  String _formatTimer(int value) {
+    final safeValue = value.clamp(0, 60);
+    return '0:${safeValue.toString().padLeft(2, '0')}';
   }
 }

@@ -268,10 +268,29 @@ Rules:
 - Preserve the user's original text in original_text.
 - corrected_text must contain a polished corrected version of the whole text.
 - category must be exactly one of: Grammar, Natural Language, Spelling, Word Choice, Other.
-- Punctuation and preposition errors must be returned as Grammar.
 - short_explanation must be one informal but technically accurate sentence.
 - If there are no corrections, return an empty corrections array and keep corrected_text equal to original_text.
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
+
+Category rules:
+- Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, and punctuation.
+- Natural Language: phrasing that is technically understandable but unnatural, awkward, overly literal, or not how a native speaker would normally write it.
+- Spelling: misspellings, missing or incorrect written accents/diacritics, and orthographic errors.
+- Word Choice: incorrect or suboptimal vocabulary choice where grammar and spelling are otherwise acceptable.
+- Other: only use this for genuine edge cases that do not fit the categories above.
+
+Punctuation handling:
+- Always inspect punctuation separately, even if the sentence has other errors.
+- Missing or incorrect Spanish opening question marks (¿), closing question marks (?), opening exclamation marks (¡), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are Grammar.
+- Examples:
+  - "Como estas?" -> "¿Cómo estás?" includes Grammar for missing opening question mark and Spelling for missing accents.
+  - "Que bonito!" -> "¡Qué bonito!" includes Grammar for missing opening exclamation mark and Spelling for missing accent.
+  - "Hola como estas" -> "Hola, ¿cómo estás?" includes Grammar for missing comma/question punctuation and Spelling for missing accents.
+
+Important category boundaries:
+- Missing accents are Spelling, not Grammar.
+- Incorrect prepositions are Grammar.
+- Punctuation is Grammar, not Other.
 ''';
 
 const _longExplanationSystemInstruction = '''

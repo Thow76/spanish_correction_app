@@ -5,6 +5,8 @@ import '../features/corrections/application/correction_service.dart';
 import '../features/corrections/data/file_correction_repository.dart';
 import '../features/corrections/data/gemini_correction_service.dart';
 import '../features/navigation/presentation/app_shell.dart';
+import '../features/write/application/transcription_service.dart';
+import '../features/write/data/open_ai_whisper_transcription_service.dart';
 import '../shared/network/connectivity_network_status_service.dart';
 import '../shared/network/network_status_service.dart';
 import 'app_config.dart';
@@ -21,6 +23,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   late final CorrectionService _correctionService;
   late final CorrectionRepositoryController _repositoryController;
   late final NetworkStatusService _networkStatusService;
+  late final TranscriptionService _transcriptionService;
 
   @override
   void initState() {
@@ -30,6 +33,9 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
     _correctionService = GeminiCorrectionService(
       apiKey: config.geminiApiKey,
       model: config.geminiModel,
+    );
+    _transcriptionService = OpenAiWhisperTranscriptionService(
+      apiKey: config.openAiApiKey,
     );
     _repositoryController = CorrectionRepositoryController(
       FileCorrectionRepository(),
@@ -47,6 +53,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
         correctionService: _correctionService,
         repositoryController: _repositoryController,
         networkStatusService: _networkStatusService,
+        transcriptionService: _transcriptionService,
       ),
     );
   }
