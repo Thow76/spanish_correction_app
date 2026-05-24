@@ -79,6 +79,12 @@ class CorrectionItem {
         return null;
       }
 
+      if (item.category == ErrorCategory.spelling &&
+          _containsSpanishCharacters(item.originalPhrase) &&
+          !_containsSpanishCharacters(item.correctedPhrase)) {
+        return null;
+      }
+
       final echoedOriginalPhrase = json['original_phrase'];
       if (echoedOriginalPhrase is String &&
           echoedOriginalPhrase != item.originalPhrase) {
@@ -115,5 +121,9 @@ class CorrectionItem {
     }
 
     return characters.skip(startIndex).take(endIndex - startIndex).toString();
+  }
+
+  static bool _containsSpanishCharacters(String value) {
+    return RegExp(r'[áéíóúüñÁÉÍÓÚÜÑ¿¡]').hasMatch(value);
   }
 }

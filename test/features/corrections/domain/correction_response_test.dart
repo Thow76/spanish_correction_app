@@ -208,6 +208,79 @@ void main() {
     expect(response.correctedText, '¿Cómo estás?');
   });
 
+  test(
+    'anchored parsing keeps fully correct Spanish question text unchanged',
+    () {
+      final response = CorrectionResponse.fromAnchoredJson(
+        {
+          'original_text': '¿Cómo estás? ¿Qué tal?',
+          'corrected_text': 'C mo est s? Qu tal?',
+          'corrections': [
+            {
+              'start_index': 0,
+              'end_index': 22,
+              'corrected_phrase': '¿Cómo estás? ¿Qué tal?',
+              'category': 'Spelling',
+              'short_explanation': 'No correction is actually needed.',
+            },
+          ],
+        },
+        submittedText: '¿Cómo estás? ¿Qué tal?',
+        allowLegacyCategories: false,
+      );
+
+      expect(response.originalText, '¿Cómo estás? ¿Qué tal?');
+      expect(response.correctedText, '¿Cómo estás? ¿Qué tal?');
+      expect(response.corrections, isEmpty);
+    },
+  );
+
+  test('anchored parsing keeps accented medical sentence unchanged', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Ma ana ir al m dico.',
+        'corrected_text': 'Mañana iré al médico.',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 21,
+            'corrected_phrase': 'Mañana iré al médico.',
+            'category': 'Spelling',
+            'short_explanation': 'The accents are already present.',
+          },
+        ],
+      },
+      submittedText: 'Mañana iré al médico.',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.correctedText, 'Mañana iré al médico.');
+    expect(response.corrections, isEmpty);
+  });
+
+  test('anchored parsing drops garbled correction text for accented input', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'C mo est s?',
+        'corrected_text': 'C mo est s?',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 11,
+            'corrected_phrase': 'C mo est s?',
+            'category': 'Spelling',
+            'short_explanation': 'The response lost Spanish characters.',
+          },
+        ],
+      },
+      submittedText: 'Cómo estás?',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.correctedText, 'Cómo estás?');
+    expect(response.corrections, isEmpty);
+  });
+
   test('anchored parsing drops stale echoed original phrases', () {
     final response = CorrectionResponse.fromAnchoredJson(
       {
