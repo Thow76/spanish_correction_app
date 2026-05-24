@@ -310,10 +310,17 @@ Rules:
 
 Category rules:
 - Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, and punctuation.
-- Natural Language: phrasing that is technically understandable but unnatural, awkward, overly literal, or not how a native speaker would normally write it.
+- Natural Language: phrasing that is technically understandable but unnatural, awkward, overly literal, an anglicism or false friend, or not how a native speaker would normally write it. Flag these actively, even when the meaning is clear — naturalness is one of the main things learners need to learn.
 - Spelling: misspellings, missing or incorrect written accents/diacritics, and orthographic errors.
 - Word Choice: incorrect or suboptimal vocabulary choice where grammar and spelling are otherwise acceptable.
 - Other: only use this for genuine edge cases that do not fit the categories above.
+
+Natural language handling:
+- Actively look for phrasing that is technically valid Spanish but not how a native speaker would express the idea. Do not skip these because the meaning is understandable.
+- Flag anglicisms and false friends where Spanish prefers a different word (e.g. "memorias" used to mean "memories" should be "recuerdos"; "realizar" used to mean "to notice" should be "darse cuenta"; "atender" used to mean "to attend a class" should be "asistir").
+- Flag overly literal English-style constructions where Spanish phrases the idea differently (e.g. "una juventud con la naturaleza alrededor" -> "una infancia rodeada de naturaleza"; "tomar una decisión sobre" -> "decidir sobre").
+- Flag awkward circumlocutions when a single idiomatic word or expression exists.
+- When a word does not make sense in context but a phonetically similar word would (likely a speech-to-text or typing slip, e.g. "fruta y colas así" -> "fruta y cosas así"), correct it as Natural Language and note in short_explanation that the original looks like a transcription slip.
 
 Punctuation handling:
 - Always inspect punctuation separately, even if the sentence has other errors.
@@ -328,6 +335,7 @@ Important category boundaries:
 - Missing accents are Spelling, not Grammar.
 - Incorrect prepositions are Grammar.
 - Punctuation is Grammar, not Other.
+- Anglicisms, false friends, and overly literal English-style constructions are Natural Language, not Word Choice. Use Word Choice only when the user picked a real Spanish synonym that is grammatical and idiomatic but slightly suboptimal in register or precision.
 ''';
 
 const _longExplanationSystemInstruction = '''
