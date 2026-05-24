@@ -105,7 +105,7 @@ void main() {
     );
 
     expect(response.originalText, 'Cómo estás? Qué tal?');
-    expect(response.correctedText, '¿Cómo estás? Qué tal?');
+    expect(response.correctedText, '¿Cómo estás? ¿Qué tal?');
     expect(response.corrections.single.originalPhrase, 'Cómo estás?');
     expect(response.corrections.single.startIndex, 0);
     expect(response.corrections.single.endIndex, 11);
@@ -170,6 +170,65 @@ void main() {
     expect(response.corrections.first.originalPhrase, isEmpty);
     expect(response.corrections.first.startIndex, 0);
     expect(response.corrections.first.endIndex, 0);
+  });
+
+  test('anchored parsing prefers plausible model corrected text over bad ranges', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text':
+            'Hola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
+        'corrected_text':
+            'Hola a todos y bienvenidos a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 0,
+            'corrected_phrase': 'i',
+            'category': 'Spelling',
+            'short_explanation':
+                'The range is wrong, but corrected_text is coherent.',
+          },
+          {
+            'start_index': 81,
+            'end_index': 81,
+            'corrected_phrase': '!',
+            'category': 'Grammar',
+            'short_explanation':
+                'The range is wrong, but corrected_text is coherent.',
+          },
+        ],
+      },
+      submittedText:
+          'Hola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
+      allowLegacyCategories: false,
+    );
+
+    expect(
+      response.correctedText,
+      'Hola a todos y bienvenidos a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
+    );
+  });
+
+  test('anchored parsing rejects unrelated model corrected text', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Como estas? Que tal?',
+        'corrected_text': 'This model value should not be trusted.',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 11,
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+        ],
+      },
+      submittedText: 'Como estas? Que tal?',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.correctedText, '¿Cómo estás? Que tal?');
   });
 
   test('anchored parsing slices user-perceived characters', () {

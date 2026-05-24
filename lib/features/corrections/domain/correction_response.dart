@@ -55,12 +55,21 @@ class CorrectionResponse {
               .whereType<CorrectionItem>()
               .toList()
         : const <CorrectionItem>[];
+    final modelCorrectedText = json['corrected_text'] as String? ?? '';
+    final reconstructedCorrectedText = corrections.isEmpty
+        ? submittedText
+        : _reconstructCorrectedText(submittedText, corrections);
 
     return CorrectionResponse(
       originalText: submittedText,
-      correctedText: corrections.isEmpty
-          ? submittedText
-          : _reconstructCorrectedText(submittedText, corrections),
+      correctedText:
+          _shouldUseModelCorrectedText(
+            submittedText: submittedText,
+            modelCorrectedText: modelCorrectedText,
+            hasCorrections: corrections.isNotEmpty,
+          )
+          ? modelCorrectedText.trim()
+          : reconstructedCorrectedText,
       corrections: corrections,
     );
   }
@@ -90,5 +99,58 @@ class CorrectionResponse {
     }
 
     return characters.join();
+  }
+
+  static bool _shouldUseModelCorrectedText({
+    required String submittedText,
+    required String modelCorrectedText,
+    required bool hasCorrections,
+  }) {
+    final trimmed = modelCorrectedText.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+
+    if (!hasCorrections) {
+      return trimmed == submittedText;
+    }
+
+    final submittedLength = submittedText.characters.length;
+    final correctedLength = trimmed.characters.length;
+    if (submittedLength == 0 || correctedLength == 0) {
+      return false;
+    }
+
+    final upperBound = submittedLength + 40;
+    if (correctedLength > upperBound || correctedLength * 3 < submittedLength) {
+      return false;
+    }
+
+    final submittedWords = _normalisedWords(submittedText);
+    if (submittedWords.isEmpty) {
+      return true;
+    }
+
+    final correctedWords = _normalisedWords(trimmed);
+    final sharedWords = submittedWords.intersection(correctedWords).length;
+    return sharedWords / submittedWords.length >= 0.5;
+  }
+
+  static Set<String> _normalisedWords(String text) {
+    return RegExp(r'[\p{L}\p{N}]+', unicode: true)
+        .allMatches(_removeSpanishDiacritics(text.toLowerCase()))
+        .map((match) => match.group(0)!)
+        .where((word) => word.length >= 3)
+        .toSet();
+  }
+
+  static String _removeSpanishDiacritics(String text) {
+    return text
+        .replaceAll(RegExp('[áàäâ]'), 'a')
+        .replaceAll(RegExp('[éèëê]'), 'e')
+        .replaceAll(RegExp('[íìïî]'), 'i')
+        .replaceAll(RegExp('[óòöô]'), 'o')
+        .replaceAll(RegExp('[úùüû]'), 'u')
+        .replaceAll('ñ', 'n');
   }
 }

@@ -205,6 +205,10 @@ class _TextPanel extends StatelessWidget {
 
     for (final item in corrections) {
       final phrase = phraseSelector(item);
+      if (phrase.isEmpty) {
+        continue;
+      }
+
       final source = remaining.toString();
       final index = source.indexOf(phrase);
       if (index == -1) {
