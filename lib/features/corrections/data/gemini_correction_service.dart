@@ -263,6 +263,8 @@ Rules:
 - Do not include original_phrase in any correction.
 - start_index is zero-based and inclusive.
 - end_index is zero-based and exclusive.
+- For missing punctuation or any other inserted text, use an empty range where start_index equals end_index at the insertion point.
+- Do not replace a neighboring character just to add missing punctuation.
 - Indexes must refer only to the submitted Spanish text, not the instruction text or labels.
 - Indexes are measured in user-perceived characters, not bytes.
 - Accented letters, ñ, inverted punctuation, emoji, and combining-accent sequences each count as one user-perceived character.
@@ -284,9 +286,9 @@ Punctuation handling:
 - Always inspect punctuation separately, even if the sentence has other errors.
 - Missing or incorrect Spanish opening question marks (¿), closing question marks (?), opening exclamation marks (¡), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are Grammar.
 - Examples:
-  - "Como estas?" -> "¿Cómo estás?" includes Grammar for missing opening question mark and Spelling for missing accents.
-  - "Que bonito!" -> "¡Qué bonito!" includes Grammar for missing opening exclamation mark and Spelling for missing accent.
-  - "Hola como estas" -> "Hola, ¿cómo estás?" includes Grammar for missing comma/question punctuation and Spelling for missing accents.
+  - "Como estas?" -> "¿Cómo estás?" includes Grammar insertion of "¿" at 0 and Spelling edits for missing accents.
+  - "Que bonito!" -> "¡Qué bonito!" includes Grammar insertion of "¡" at 0 and Spelling edit for missing accent.
+  - "Hola como estas" -> "Hola, ¿cómo estás?" includes Grammar insertions for comma/question punctuation and Spelling edits for missing accents.
 
 Important category boundaries:
 - Missing accents are Spelling, not Grammar.

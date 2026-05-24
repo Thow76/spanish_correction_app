@@ -27,16 +27,17 @@ const correctionResponseJsonSchema = <String, Object?>{
           'start_index': {
             'type': 'integer',
             'description':
-                'Zero-based inclusive start index in user-perceived characters.',
+                'Zero-based inclusive start index in user-perceived characters. For insertions, this is the insertion point.',
           },
           'end_index': {
             'type': 'integer',
             'description':
-                'Zero-based exclusive end index in user-perceived characters.',
+                'Zero-based exclusive end index in user-perceived characters. For insertions, this must equal start_index.',
           },
           'corrected_phrase': {
             'type': 'string',
-            'description': 'The replacement phrase for the indexed text range.',
+            'description':
+                'The replacement phrase for the indexed text range, or inserted text for a zero-length range.',
           },
           'category': {
             'type': 'string',
@@ -78,6 +79,7 @@ const correctionResponseJsonShape = '''
 const correctionResponseIndexingRules = [
   'start_index is zero-based and inclusive.',
   'end_index is zero-based and exclusive.',
+  'For insertions, start_index and end_index are the same cursor position.',
   'Indexes are measured in user-perceived characters, not bytes.',
   'The app derives the original phrase from the submitted text range.',
   'Correction items must not include an original_phrase field.',

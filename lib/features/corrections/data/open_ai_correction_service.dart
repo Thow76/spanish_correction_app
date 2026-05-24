@@ -26,10 +26,10 @@ class OpenAiCorrectionService implements CorrectionService {
   Future<CorrectionResponse> correctText(String text) async {
     _ensureConfigured();
 
-    final responseText = await _createChatCompletion(
+    final responseText = await _createResponse(
       systemInstruction: _correctionSystemInstruction,
       userText: 'Review this Spanish text:\n\n$text',
-      responseFormat: _correctionResponseFormat,
+      textFormat: _correctionResponseFormat,
     );
 
     try {
@@ -57,7 +57,7 @@ class OpenAiCorrectionService implements CorrectionService {
   Future<String> generateLongExplanation(CorrectionItem correction) {
     _ensureConfigured();
 
-    return _createChatCompletion(
+    return _createResponse(
       systemInstruction: _longExplanationSystemInstruction,
       userText:
           '''
@@ -75,7 +75,7 @@ Short explanation: ${correction.shortExplanation}
   ) async {
     _ensureConfigured();
 
-    final responseText = await _createChatCompletion(
+    final responseText = await _createResponse(
       systemInstruction: _structuredExplanationSystemInstruction,
       userText:
           '''
@@ -84,7 +84,7 @@ Corrected phrase: ${correction.correctedPhrase}
 Category: ${correction.category.label}
 Short explanation: ${correction.shortExplanation}
 ''',
-      responseFormat: _structuredExplanationResponseFormat,
+      textFormat: _structuredExplanationResponseFormat,
     );
 
     try {
@@ -102,30 +102,31 @@ Short explanation: ${correction.shortExplanation}
     }
   }
 
-  Future<String> _createChatCompletion({
+  Future<String> _createResponse({
     required String systemInstruction,
     required String userText,
-    Map<String, Object?>? responseFormat,
+    Map<String, Object?>? textFormat,
   }) async {
     try {
       final request = await _httpClient
-          .postUrl(Uri.https('api.openai.com', '/v1/chat/completions'))
+          .postUrl(Uri.https('api.openai.com', '/v1/responses'))
           .timeout(const Duration(seconds: 10));
 
       request.headers
         ..set(HttpHeaders.authorizationHeader, 'Bearer $_apiKey')
         ..set(HttpHeaders.contentTypeHeader, ContentType.json.mimeType);
 
-      request.write(
-        jsonEncode({
-          'model': _model,
-          'messages': [
-            {'role': 'system', 'content': systemInstruction},
-            {'role': 'user', 'content': userText},
-          ],
-          'temperature': 0.2,
-          'response_format': ?responseFormat,
-        }),
+      request.add(
+        utf8.encode(
+          jsonEncode({
+            'model': _model,
+            'input': [
+              {'role': 'system', 'content': systemInstruction},
+              {'role': 'user', 'content': userText},
+            ],
+            if (textFormat != null) 'text': {'format': textFormat},
+          }),
+        ),
       );
 
       final response = await request.close().timeout(
@@ -145,27 +146,7 @@ Short explanation: ${correction.shortExplanation}
         throw const FormatException('OpenAI response root is not an object.');
       }
 
-      final choices = decoded['choices'];
-      if (choices is! List || choices.isEmpty) {
-        throw const FormatException('OpenAI response has no choices.');
-      }
-
-      final choice = choices.first;
-      if (choice is! Map<String, Object?>) {
-        throw const FormatException('OpenAI choice is not an object.');
-      }
-
-      final message = choice['message'];
-      if (message is! Map<String, Object?>) {
-        throw const FormatException('OpenAI choice has no message.');
-      }
-
-      final content = message['content'];
-      if (content is! String || content.trim().isEmpty) {
-        throw const FormatException('OpenAI message content is empty.');
-      }
-
-      return content.trim();
+      return _extractOutputText(decoded);
     } on SocketException catch (error) {
       throw CorrectionServiceException(
         CorrectionFailureReason.networkUnavailable,
@@ -213,6 +194,47 @@ Short explanation: ${correction.shortExplanation}
     return trimmed.substring(start, end + 1);
   }
 
+  static String _extractOutputText(Map<String, Object?> decoded) {
+    final outputText = decoded['output_text'];
+    if (outputText is String && outputText.trim().isNotEmpty) {
+      return outputText.trim();
+    }
+
+    final output = decoded['output'];
+    if (output is! List) {
+      throw const FormatException('OpenAI response has no output.');
+    }
+
+    final buffer = StringBuffer();
+    for (final item in output) {
+      if (item is! Map<String, Object?>) {
+        continue;
+      }
+
+      final content = item['content'];
+      if (content is! List) {
+        continue;
+      }
+
+      for (final part in content) {
+        if (part is! Map<String, Object?>) {
+          continue;
+        }
+
+        final text = part['text'];
+        if (text is String) {
+          buffer.write(text);
+        }
+      }
+    }
+
+    final text = buffer.toString().trim();
+    if (text.isEmpty) {
+      throw const FormatException('OpenAI response has no output text.');
+    }
+    return text;
+  }
+
   static void _validateCorrectionResponse(CorrectionResponse response) {
     if (response.originalText.isEmpty || response.correctedText.isEmpty) {
       throw const FormatException('Missing original_text or corrected_text.');
@@ -222,20 +244,16 @@ Short explanation: ${correction.shortExplanation}
 
 const _correctionResponseFormat = {
   'type': 'json_schema',
-  'json_schema': {
-    'name': 'spanish_correction_response',
-    'strict': true,
-    'schema': correctionResponseJsonSchema,
-  },
+  'name': 'spanish_correction_response',
+  'strict': true,
+  'schema': correctionResponseJsonSchema,
 };
 
 const _structuredExplanationResponseFormat = {
   'type': 'json_schema',
-  'json_schema': {
-    'name': 'saved_correction_explanation',
-    'strict': true,
-    'schema': _structuredExplanationJsonSchema,
-  },
+  'name': 'saved_correction_explanation',
+  'strict': true,
+  'schema': _structuredExplanationJsonSchema,
 };
 
 const _structuredExplanationJsonSchema = <String, Object?>{
@@ -276,6 +294,8 @@ Rules:
 - Do not include original_phrase in any correction.
 - start_index is zero-based and inclusive.
 - end_index is zero-based and exclusive.
+- For missing punctuation or any other inserted text, use an empty range where start_index equals end_index at the insertion point.
+- Do not replace a neighboring character just to add missing punctuation.
 - Indexes must refer only to the submitted Spanish text, not the instruction text or labels.
 - Indexes are measured in user-perceived characters, not bytes.
 - Accented letters, ñ, inverted punctuation, emoji, and combining-accent sequences each count as one user-perceived character.
@@ -297,9 +317,9 @@ Punctuation handling:
 - Always inspect punctuation separately, even if the sentence has other errors.
 - Missing or incorrect Spanish opening question marks (¿), closing question marks (?), opening exclamation marks (¡), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are Grammar.
 - Examples:
-  - "Como estas?" -> "¿Cómo estás?" includes Grammar for missing opening question mark and Spelling for missing accents.
-  - "Que bonito!" -> "¡Qué bonito!" includes Grammar for missing opening exclamation mark and Spelling for missing accent.
-  - "Hola como estas" -> "Hola, ¿cómo estás?" includes Grammar for missing comma/question punctuation and Spelling for missing accents.
+  - "Como estas?" -> "¿Cómo estás?" includes Grammar insertion of "¿" at 0 and Spelling edits for missing accents.
+  - "Que bonito!" -> "¡Qué bonito!" includes Grammar insertion of "¡" at 0 and Spelling edit for missing accent.
+  - "Hola como estas" -> "Hola, ¿cómo estás?" includes Grammar insertions for comma/question punctuation and Spelling edits for missing accents.
 
 Important category boundaries:
 - Missing accents are Spelling, not Grammar.

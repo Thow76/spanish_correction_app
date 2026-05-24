@@ -140,6 +140,38 @@ void main() {
     expect(response.correctedText, '¿Cómo estás? ¿Qué tal?');
   });
 
+  test('anchored parsing supports zero-length insertion ranges', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Cómo estás? Qué tal?',
+        'corrected_text': 'This model value should not be trusted.',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 0,
+            'corrected_phrase': '¿',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+          {
+            'start_index': 12,
+            'end_index': 12,
+            'corrected_phrase': '¿',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+        ],
+      },
+      submittedText: 'Cómo estás? Qué tal?',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.correctedText, '¿Cómo estás? ¿Qué tal?');
+    expect(response.corrections.first.originalPhrase, isEmpty);
+    expect(response.corrections.first.startIndex, 0);
+    expect(response.corrections.first.endIndex, 0);
+  });
+
   test('anchored parsing slices user-perceived characters', () {
     final response = CorrectionResponse.fromAnchoredJson(
       {

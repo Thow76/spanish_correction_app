@@ -74,8 +74,8 @@ class CorrectionItem {
         allowLegacyCategories: allowLegacyCategories,
       );
 
-      if (item.originalPhrase.isEmpty ||
-          item.correctedPhrase == item.originalPhrase) {
+      if (item.correctedPhrase.isEmpty ||
+          (!item.isInsertion && item.correctedPhrase == item.originalPhrase)) {
         return null;
       }
 
@@ -108,6 +108,9 @@ class CorrectionItem {
     };
   }
 
+  bool get isInsertion =>
+      startIndex != null && endIndex != null && startIndex == endIndex;
+
   static String _sliceSubmittedText(
     String submittedText, {
     required int startIndex,
@@ -115,7 +118,7 @@ class CorrectionItem {
   }) {
     final characters = submittedText.characters;
     if (startIndex < 0 ||
-        endIndex <= startIndex ||
+        endIndex < startIndex ||
         endIndex > characters.length) {
       throw FormatException('Invalid correction range $startIndex..$endIndex.');
     }

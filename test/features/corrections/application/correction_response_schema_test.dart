@@ -17,6 +17,12 @@ void main() {
     expect(itemProperties, isNot(contains('original_phrase')));
     expect(
       correctionResponseIndexingRules,
+      contains(
+        'For insertions, start_index and end_index are the same cursor position.',
+      ),
+    );
+    expect(
+      correctionResponseIndexingRules,
       contains('Correction items must not include an original_phrase field.'),
     );
   });
