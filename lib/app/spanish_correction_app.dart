@@ -4,6 +4,7 @@ import '../features/corrections/application/correction_repository_controller.dar
 import '../features/corrections/application/correction_service.dart';
 import '../features/corrections/data/file_correction_repository.dart';
 import '../features/corrections/data/gemini_correction_service.dart';
+import '../features/corrections/data/open_ai_correction_service.dart';
 import '../features/navigation/presentation/app_shell.dart';
 import '../features/write/application/transcription_service.dart';
 import '../features/write/data/open_ai_whisper_transcription_service.dart';
@@ -30,10 +31,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
     super.initState();
 
     final config = AppConfig.fromEnvironment();
-    _correctionService = GeminiCorrectionService(
-      apiKey: config.geminiApiKey,
-      model: config.geminiModel,
-    );
+    _correctionService = buildCorrectionService(config);
     _transcriptionService = OpenAiWhisperTranscriptionService(
       apiKey: config.openAiApiKey,
     );
@@ -57,4 +55,17 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
       ),
     );
   }
+}
+
+CorrectionService buildCorrectionService(AppConfig config) {
+  return switch (config.correctionProvider) {
+    CorrectionProvider.gemini => GeminiCorrectionService(
+      apiKey: config.geminiApiKey,
+      model: config.geminiModel,
+    ),
+    CorrectionProvider.openAi => OpenAiCorrectionService(
+      apiKey: config.openAiApiKey,
+      model: config.openAiCorrectionModel,
+    ),
+  };
 }

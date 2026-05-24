@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/app/app_config.dart';
+import 'package:spanish_correction_app/app/spanish_correction_app.dart';
+import 'package:spanish_correction_app/features/corrections/data/gemini_correction_service.dart';
+import 'package:spanish_correction_app/features/corrections/data/open_ai_correction_service.dart';
 
 void main() {
   test('correction provider defaults to Gemini for unknown values', () {
@@ -33,5 +36,33 @@ void main() {
 
     expect(config.correctionProvider, CorrectionProvider.gemini);
     expect(config.openAiCorrectionModel, 'gpt-4.1-mini');
+  });
+
+  test('builds Gemini correction service for Gemini provider', () {
+    final service = buildCorrectionService(
+      const AppConfig(
+        correctionProvider: CorrectionProvider.gemini,
+        geminiApiKey: 'gemini-key',
+        geminiModel: 'gemini-model',
+        openAiApiKey: 'openai-key',
+        openAiCorrectionModel: 'openai-model',
+      ),
+    );
+
+    expect(service, isA<GeminiCorrectionService>());
+  });
+
+  test('builds OpenAI correction service for OpenAI provider', () {
+    final service = buildCorrectionService(
+      const AppConfig(
+        correctionProvider: CorrectionProvider.openAi,
+        geminiApiKey: 'gemini-key',
+        geminiModel: 'gemini-model',
+        openAiApiKey: 'openai-key',
+        openAiCorrectionModel: 'openai-model',
+      ),
+    );
+
+    expect(service, isA<OpenAiCorrectionService>());
   });
 }
