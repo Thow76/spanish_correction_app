@@ -167,7 +167,8 @@ class _WriteScreenState extends State<WriteScreen> {
           builder: (context) {
             return CorrectionsScreen(
               response: response,
-              onSaveCorrection: _saveCorrection,
+              onSaveCorrection: (item) =>
+                  _saveCorrection(item, response.correctedText),
             );
           },
         ),
@@ -311,11 +312,15 @@ class _WriteScreenState extends State<WriteScreen> {
     }
   }
 
-  Future<void> _saveCorrection(CorrectionItem item) async {
+  Future<void> _saveCorrection(
+    CorrectionItem item,
+    String correctedSentence,
+  ) async {
     try {
       await widget.saveCorrectionUseCase(
         correction: item,
         originalSentence: _controller.text.trim(),
+        correctedSentence: correctedSentence,
       );
       if (!mounted) {
         return;

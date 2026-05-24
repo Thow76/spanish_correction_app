@@ -134,6 +134,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 await widget.saveCorrectionUseCase(
                   correction: correction,
                   originalSentence: submission.response.originalText,
+                  correctedSentence: submission.response.correctedText,
                 );
                 if (!context.mounted) {
                   return;

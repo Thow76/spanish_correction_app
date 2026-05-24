@@ -54,6 +54,8 @@ void main() {
       ),
       savedAt: DateTime(2026, 5, 24),
       correctedPhrase: 'fui',
+      originalPhrase: 'fue',
+      correctedSentence: 'Ayer fui al mercado.',
     );
 
     await repository.addSavedCorrection(savedCorrection);

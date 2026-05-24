@@ -5,13 +5,22 @@ import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../domain/saved_correction.dart';
 
-class SavedDetailScreen extends StatelessWidget {
+class SavedDetailScreen extends StatefulWidget {
   const SavedDetailScreen({required this.correction, super.key});
 
   final SavedCorrection correction;
 
   @override
+  State<SavedDetailScreen> createState() => _SavedDetailScreenState();
+}
+
+class _SavedDetailScreenState extends State<SavedDetailScreen> {
+  final Set<_DetailSection> _collapsedSections = {};
+
+  @override
   Widget build(BuildContext context) {
+    final correction = widget.correction;
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -53,28 +62,85 @@ class SavedDetailScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
                 _CategoryPill(correction: correction),
                 const SizedBox(height: AppSpacing.xl),
-                _Section(
-                  title: "Why it's wrong",
-                  body: _fallbackText(correction.explanation.whyItsWrong),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _Section(
-                  title: 'In context',
-                  body: _fallbackText(correction.explanation.inContext),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _Section(
-                  title: 'Alternatives',
-                  body: correction.explanation.alternatives.isEmpty
-                      ? 'No alternatives saved for this correction.'
-                      : correction.explanation.alternatives.join('\n'),
-                ),
+                ..._buildSections(correction),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  List<Widget> _buildSections(SavedCorrection correction) {
+    final sections = <(_DetailSection, Widget)>[
+      (
+        _DetailSection.whyItsWrong,
+        _TextBody(
+          text: _fallbackText(correction.explanation.whyItsWrong),
+        ),
+      ),
+      (
+        _DetailSection.inContext,
+        _TextBody(text: _fallbackText(correction.explanation.inContext)),
+      ),
+      (
+        _DetailSection.alternatives,
+        _TextBody(
+          text: correction.explanation.alternatives.isEmpty
+              ? 'No alternatives saved for this correction.'
+              : correction.explanation.alternatives.join('\n'),
+        ),
+      ),
+      (
+        _DetailSection.originalText,
+        correction.originalSentence.isEmpty
+            ? const _TextBody(text: 'No original text saved for this correction.')
+            : _HighlightedSentence(
+                sentence: correction.originalSentence,
+                highlight: correction.originalPhrase,
+                color: correction.category.color,
+              ),
+      ),
+      (
+        _DetailSection.correctedText,
+        correction.correctedSentence.isEmpty
+            ? const _TextBody(
+                text: 'No corrected text saved for this correction.',
+              )
+            : _HighlightedSentence(
+                sentence: correction.correctedSentence,
+                highlight: correction.correctedPhrase,
+                color: correction.category.color,
+              ),
+      ),
+    ];
+
+    final widgets = <Widget>[];
+    for (var index = 0; index < sections.length; index++) {
+      final (section, body) = sections[index];
+      widgets.add(
+        _CollapsibleSection(
+          title: section.title,
+          isCollapsed: _collapsedSections.contains(section),
+          onToggle: () => _toggleSection(section),
+          child: body,
+        ),
+      );
+      if (index < sections.length - 1) {
+        widgets.add(const SizedBox(height: AppSpacing.lg));
+      }
+    }
+    return widgets;
+  }
+
+  void _toggleSection(_DetailSection section) {
+    setState(() {
+      if (_collapsedSections.contains(section)) {
+        _collapsedSections.remove(section);
+      } else {
+        _collapsedSections.add(section);
+      }
+    });
   }
 
   String _formatDate(DateTime value) {
@@ -87,6 +153,18 @@ class SavedDetailScreen extends StatelessWidget {
     final trimmed = value.trim();
     return trimmed.isEmpty ? 'No detail saved for this section.' : trimmed;
   }
+}
+
+enum _DetailSection {
+  whyItsWrong("Why it's wrong"),
+  inContext('In context'),
+  alternatives('Alternatives'),
+  originalText('Original text'),
+  correctedText('Corrected text');
+
+  const _DetailSection(this.title);
+
+  final String title;
 }
 
 class _CategoryPill extends StatelessWidget {
@@ -122,44 +200,157 @@ class _CategoryPill extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.body});
+class _CollapsibleSection extends StatelessWidget {
+  const _CollapsibleSection({
+    required this.title,
+    required this.isCollapsed,
+    required this.onToggle,
+    required this.child,
+  });
 
   final String title;
-  final String body;
+  final bool isCollapsed;
+  final VoidCallback onToggle;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.cyan.withValues(alpha: 0.16)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: isCollapsed ? 0 : 0.5,
+                    duration: const Duration(milliseconds: 160),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            body,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 15,
-              height: 24 / 15,
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                0,
+                AppSpacing.lg,
+                AppSpacing.lg,
+              ),
+              child: child,
             ),
+            crossFadeState: isCollapsed
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            duration: const Duration(milliseconds: 160),
           ),
         ],
       ),
     );
+  }
+}
+
+class _TextBody extends StatelessWidget {
+  const _TextBody({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: AppColors.textPrimary,
+        fontSize: 15,
+        height: 24 / 15,
+      ),
+    );
+  }
+}
+
+class _HighlightedSentence extends StatelessWidget {
+  const _HighlightedSentence({
+    required this.sentence,
+    required this.highlight,
+    required this.color,
+  });
+
+  final String sentence;
+  final String highlight;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final range = _findRange(sentence, highlight);
+
+    if (range == null) {
+      return _TextBody(text: sentence);
+    }
+
+    return Text.rich(
+      TextSpan(
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 15,
+          height: 24 / 15,
+        ),
+        children: [
+          if (range.$1 > 0) TextSpan(text: sentence.substring(0, range.$1)),
+          TextSpan(
+            text: sentence.substring(range.$1, range.$2),
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          ),
+          if (range.$2 < sentence.length)
+            TextSpan(text: sentence.substring(range.$2)),
+        ],
+      ),
+    );
+  }
+
+  static (int, int)? _findRange(String sentence, String highlight) {
+    if (highlight.isEmpty) {
+      return null;
+    }
+
+    final exact = sentence.indexOf(highlight);
+    if (exact != -1) {
+      return (exact, exact + highlight.length);
+    }
+
+    final lower = sentence.toLowerCase().indexOf(highlight.toLowerCase());
+    if (lower != -1) {
+      return (lower, lower + highlight.length);
+    }
+
+    return null;
   }
 }

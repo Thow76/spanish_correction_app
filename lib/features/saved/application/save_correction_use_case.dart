@@ -16,6 +16,7 @@ class SaveCorrectionUseCase {
   Future<SavedCorrection> call({
     required CorrectionItem correction,
     required String originalSentence,
+    required String correctedSentence,
   }) async {
     final explanation = await _correctionService.generateStructuredExplanation(
       correction,
@@ -28,6 +29,8 @@ class SaveCorrectionUseCase {
       explanation: explanation,
       savedAt: DateTime.now(),
       correctedPhrase: correction.correctedPhrase,
+      originalPhrase: correction.originalPhrase,
+      correctedSentence: correctedSentence,
     );
 
     await _repositoryController.addSavedCorrection(savedCorrection);

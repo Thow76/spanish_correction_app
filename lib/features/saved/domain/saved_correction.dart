@@ -10,6 +10,8 @@ class SavedCorrection {
     required this.explanation,
     required this.savedAt,
     required this.correctedPhrase,
+    required this.originalPhrase,
+    required this.correctedSentence,
   });
 
   final String id;
@@ -19,6 +21,8 @@ class SavedCorrection {
   final SavedExplanation explanation;
   final DateTime savedAt;
   final String correctedPhrase;
+  final String originalPhrase;
+  final String correctedSentence;
 
   factory SavedCorrection.fromJson(Map<String, Object?> json) {
     final rawExplanation = json['explanation'];
@@ -36,6 +40,8 @@ class SavedCorrection {
           DateTime.tryParse(json['saved_at'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       correctedPhrase: json['corrected_phrase'] as String? ?? '',
+      originalPhrase: json['original_phrase'] as String? ?? '',
+      correctedSentence: json['corrected_sentence'] as String? ?? '',
     );
   }
 
@@ -48,6 +54,8 @@ class SavedCorrection {
       'explanation': explanation.toJson(),
       'saved_at': savedAt.toIso8601String(),
       'corrected_phrase': correctedPhrase,
+      'original_phrase': originalPhrase,
+      'corrected_sentence': correctedSentence,
     };
   }
 }
