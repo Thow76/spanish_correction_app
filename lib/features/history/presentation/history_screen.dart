@@ -25,6 +25,8 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
+  final Set<_HistoryGroup> _collapsedGroups = {};
+
   @override
   void initState() {
     super.initState();
@@ -64,20 +66,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       'Recent submissions will appear here after you review Spanish text.',
                 )
               else
-                ...submissions.map(
-                  (submission) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: Dismissible(
-                      key: ValueKey(submission.id),
-                      direction: DismissDirection.endToStart,
-                      background: const _DismissBackground(),
-                      confirmDismiss: (_) => _confirmDelete(),
-                      onDismissed: (_) => _deleteSubmission(submission),
-                      child: _HistoryCard(
-                        submission: submission,
-                        onTap: () => _openSubmission(submission),
-                      ),
-                    ),
+                ..._groupSubmissions(submissions).entries.map(
+                  (entry) => _HistoryGroupSection(
+                    group: entry.key,
+                    submissions: entry.value,
+                    isCollapsed: _collapsedGroups.contains(entry.key),
+                    onToggle: () => _toggleGroup(entry.key),
+                    onOpenSubmission: _openSubmission,
+                    onConfirmDelete: _confirmDelete,
+                    onDeleteSubmission: _deleteSubmission,
                   ),
                 ),
             ],
@@ -91,6 +88,39 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _toggleGroup(_HistoryGroup group) {
+    setState(() {
+      if (_collapsedGroups.contains(group)) {
+        _collapsedGroups.remove(group);
+      } else {
+        _collapsedGroups.add(group);
+      }
+    });
+  }
+
+  Map<_HistoryGroup, List<CorrectionSubmission>> _groupSubmissions(
+    List<CorrectionSubmission> submissions,
+  ) {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final startOfWeek = startOfToday.subtract(const Duration(days: 6));
+
+    final grouped = <_HistoryGroup, List<CorrectionSubmission>>{};
+    for (final submission in submissions) {
+      final group = !submission.createdAt.isBefore(startOfToday)
+          ? _HistoryGroup.today
+          : !submission.createdAt.isBefore(startOfWeek)
+              ? _HistoryGroup.thisWeek
+              : _HistoryGroup.older;
+      grouped.putIfAbsent(group, () => []).add(submission);
+    }
+
+    return {
+      for (final group in _HistoryGroup.values)
+        if (grouped.containsKey(group)) group: grouped[group]!,
+    };
   }
 
   void _openSubmission(CorrectionSubmission submission) {
@@ -273,6 +303,113 @@ class _HistoryCard extends StatelessWidget {
     final hour = value.hour.toString().padLeft(2, '0');
     final minute = value.minute.toString().padLeft(2, '0');
     return '$day/$month/${value.year} $hour:$minute';
+  }
+}
+
+enum _HistoryGroup {
+  today('Today'),
+  thisWeek('This Week'),
+  older('Older');
+
+  const _HistoryGroup(this.label);
+
+  final String label;
+}
+
+class _HistoryGroupSection extends StatelessWidget {
+  const _HistoryGroupSection({
+    required this.group,
+    required this.submissions,
+    required this.isCollapsed,
+    required this.onToggle,
+    required this.onOpenSubmission,
+    required this.onConfirmDelete,
+    required this.onDeleteSubmission,
+  });
+
+  final _HistoryGroup group;
+  final List<CorrectionSubmission> submissions;
+  final bool isCollapsed;
+  final VoidCallback onToggle;
+  final ValueChanged<CorrectionSubmission> onOpenSubmission;
+  final Future<bool> Function() onConfirmDelete;
+  final ValueChanged<CorrectionSubmission> onDeleteSubmission;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 44,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      group.label,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontFamily: 'Sora',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    submissions.length.toString(),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AnimatedRotation(
+                    turns: isCollapsed ? 0 : 0.5,
+                    duration: const Duration(milliseconds: 160),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              children: submissions
+                  .map(
+                    (submission) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: Dismissible(
+                        key: ValueKey(submission.id),
+                        direction: DismissDirection.endToStart,
+                        background: const _DismissBackground(),
+                        confirmDismiss: (_) => onConfirmDelete(),
+                        onDismissed: (_) => onDeleteSubmission(submission),
+                        child: _HistoryCard(
+                          submission: submission,
+                          onTap: () => onOpenSubmission(submission),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+            crossFadeState: isCollapsed
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            duration: const Duration(milliseconds: 160),
+          ),
+        ],
+      ),
+    );
   }
 }
 
