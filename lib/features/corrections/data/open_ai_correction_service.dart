@@ -290,16 +290,18 @@ $correctionResponseJsonShape
 Rules:
 - Preserve the user's original text in original_text.
 - corrected_text must contain a polished corrected version of the whole text.
-- Each correction must identify the text being corrected with start_index and end_index only.
-- Do not include original_phrase in any correction.
+- Each correction must identify the text being corrected with start_index, end_index, and original_phrase.
+- original_phrase must be the exact substring of the submitted text between start_index and end_index, copied character-for-character including accents, ñ, and Spanish punctuation.
+- For zero-length insertion ranges, original_phrase must be an empty string.
+- Before returning each correction, verify that original_phrase matches the slice your indexes point to; if it does not, fix the indexes so they do. The app rejects any correction where they disagree.
 - start_index is zero-based and inclusive.
 - end_index is zero-based and exclusive.
 - For missing punctuation or any other inserted text, use an empty range where start_index equals end_index at the insertion point.
+- Insertion points must fall on a word boundary (start of text, end of text, or next to whitespace or punctuation). Never insert in the middle of a word.
 - Do not replace a neighboring character just to add missing punctuation.
 - Indexes must refer only to the submitted Spanish text, not the instruction text or labels.
 - Indexes are measured in user-perceived characters, not bytes.
 - Accented letters, ñ, inverted punctuation, emoji, and combining-accent sequences each count as one user-perceived character.
-- The app will derive the original phrase from the submitted text range, so the ranges must anchor to the exact submitted text.
 - category must be exactly one of: Grammar, Natural Language, Spelling, Word Choice, Other.
 - short_explanation must be one informal but technically accurate sentence.
 - If there are no corrections, return an empty corrections array and keep corrected_text equal to original_text.
@@ -316,9 +318,10 @@ Category rules:
 Punctuation handling:
 - Always inspect punctuation separately, even if the sentence has other errors.
 - Missing or incorrect Spanish opening question marks (¿), closing question marks (?), opening exclamation marks (¡), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are Grammar.
+- Insertion points for punctuation must sit on a word boundary. Opening marks like "¿" and "¡" go before a word; closing marks like "?", "!", ",", ".", ";", and ":" go immediately after a word, never inside one.
 - Examples:
-  - "Como estas?" -> "¿Cómo estás?" includes Grammar insertion of "¿" at 0 and Spelling edits for missing accents.
-  - "Que bonito!" -> "¡Qué bonito!" includes Grammar insertion of "¡" at 0 and Spelling edit for missing accent.
+  - "Como estas?" -> "¿Cómo estás?" includes Grammar insertion of "¿" at start_index 0, end_index 0, original_phrase "" and Spelling edits for missing accents.
+  - "Que bonito!" -> "¡Qué bonito!" includes Grammar insertion of "¡" at start_index 0, end_index 0, original_phrase "" and Spelling edit for missing accent.
   - "Hola como estas" -> "Hola, ¿cómo estás?" includes Grammar insertions for comma/question punctuation and Spelling edits for missing accents.
 
 Important category boundaries:

@@ -38,6 +38,12 @@ class CorrectionRepositoryController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> removeSubmission(String id) async {
+    await _repository.removeSubmission(id);
+    _recentSubmissions = await _repository.loadRecentSubmissions();
+    notifyListeners();
+  }
+
   Future<void> loadSavedCorrections() async {
     _savedCorrections = await _repository.loadSavedCorrections();
     notifyListeners();
@@ -45,6 +51,12 @@ class CorrectionRepositoryController extends ChangeNotifier {
 
   Future<void> addSavedCorrection(SavedCorrection correction) async {
     await _repository.addSavedCorrection(correction);
+    _savedCorrections = await _repository.loadSavedCorrections();
+    notifyListeners();
+  }
+
+  Future<void> removeSavedCorrection(String id) async {
+    await _repository.removeSavedCorrection(id);
     _savedCorrections = await _repository.loadSavedCorrections();
     notifyListeners();
   }

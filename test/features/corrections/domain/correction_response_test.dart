@@ -94,6 +94,7 @@ void main() {
           {
             'start_index': 0,
             'end_index': 11,
+            'original_phrase': 'Cómo estás?',
             'corrected_phrase': '¿Cómo estás?',
             'category': 'Grammar',
             'short_explanation': 'Spanish questions need an opening mark.',
@@ -120,6 +121,7 @@ void main() {
           {
             'start_index': 0,
             'end_index': 11,
+            'original_phrase': 'Como estas?',
             'corrected_phrase': '¿Cómo estás?',
             'category': 'Grammar',
             'short_explanation': 'Spanish questions need an opening mark.',
@@ -127,6 +129,7 @@ void main() {
           {
             'start_index': 12,
             'end_index': 20,
+            'original_phrase': 'Que tal?',
             'corrected_phrase': '¿Qué tal?',
             'category': 'Grammar',
             'short_explanation': 'Spanish questions need an opening mark.',
@@ -149,6 +152,7 @@ void main() {
           {
             'start_index': 0,
             'end_index': 0,
+            'original_phrase': '',
             'corrected_phrase': '¿',
             'category': 'Grammar',
             'short_explanation': 'Spanish questions need an opening mark.',
@@ -156,6 +160,7 @@ void main() {
           {
             'start_index': 12,
             'end_index': 12,
+            'original_phrase': '',
             'corrected_phrase': '¿',
             'category': 'Grammar',
             'short_explanation': 'Spanish questions need an opening mark.',
@@ -183,6 +188,7 @@ void main() {
           {
             'start_index': 0,
             'end_index': 0,
+            'original_phrase': '',
             'corrected_phrase': 'i',
             'category': 'Spelling',
             'short_explanation':
@@ -191,6 +197,7 @@ void main() {
           {
             'start_index': 81,
             'end_index': 81,
+            'original_phrase': '',
             'corrected_phrase': '!',
             'category': 'Grammar',
             'short_explanation':
@@ -218,6 +225,7 @@ void main() {
           {
             'start_index': 0,
             'end_index': 11,
+            'original_phrase': 'Como estas?',
             'corrected_phrase': '¿Cómo estás?',
             'category': 'Grammar',
             'short_explanation': 'Spanish questions need an opening mark.',
@@ -238,11 +246,12 @@ void main() {
         'corrected_text': 'Café bueno',
         'corrections': [
           {
-            'start_index': 0,
-            'end_index': 4,
-            'corrected_phrase': 'Café',
-            'category': 'Spelling',
-            'short_explanation': 'The accent belongs on the e.',
+            'start_index': 5,
+            'end_index': 9,
+            'original_phrase': 'bien',
+            'corrected_phrase': 'bueno',
+            'category': 'Word Choice',
+            'short_explanation': 'Bueno fits the noun being described.',
           },
         ],
       },
@@ -250,7 +259,7 @@ void main() {
       allowLegacyCategories: false,
     );
 
-    expect(response.corrections.single.originalPhrase, 'Café');
+    expect(response.corrections.single.originalPhrase, 'bien');
   });
 
   test('anchored parsing drops invalid ranges', () {
@@ -369,6 +378,58 @@ void main() {
     );
 
     expect(response.correctedText, 'Cómo estás?');
+    expect(response.corrections, isEmpty);
+  });
+
+  test('anchored parsing re-anchors when the model indexes drift off the echoed phrase', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text':
+            'Hola, me llamo Andrew y soy de Escocia. Estoy 50 años.',
+        'corrected_text':
+            'Hola, me llamo Andrew y soy de Escocia. Tengo 50 años.',
+        'corrections': [
+          {
+            'start_index': 5,
+            'end_index': 10,
+            'original_phrase': 'Estoy',
+            'corrected_phrase': 'Tengo',
+            'category': 'Word Choice',
+            'short_explanation': 'Use tener to express age in Spanish.',
+          },
+        ],
+      },
+      submittedText:
+          'Hola, me llamo Andrew y soy de Escocia. Estoy 50 años.',
+      allowLegacyCategories: false,
+    );
+
+    final correction = response.corrections.single;
+    expect(correction.originalPhrase, 'Estoy');
+    expect(correction.correctedPhrase, 'Tengo');
+    expect(correction.startIndex, 40);
+    expect(correction.endIndex, 45);
+  });
+
+  test('anchored parsing drops corrections without an echoed original_phrase', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Cómo estás?',
+        'corrected_text': '¿Cómo estás?',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 11,
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Grammar',
+            'short_explanation': 'Missing opening question mark.',
+          },
+        ],
+      },
+      submittedText: 'Cómo estás?',
+      allowLegacyCategories: false,
+    );
+
     expect(response.corrections, isEmpty);
   });
 

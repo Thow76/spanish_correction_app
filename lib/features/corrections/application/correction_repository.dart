@@ -7,9 +7,13 @@ abstract interface class CorrectionRepository {
 
   Future<void> addSubmission(CorrectionSubmission submission);
 
+  Future<void> removeSubmission(String id);
+
   Future<List<SavedCorrection>> loadSavedCorrections();
 
   Future<void> addSavedCorrection(SavedCorrection correction);
+
+  Future<void> removeSavedCorrection(String id);
 
   Future<List<QueuedSubmission>> loadQueuedSubmissions();
 

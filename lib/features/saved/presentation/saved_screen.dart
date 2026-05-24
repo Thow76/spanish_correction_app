@@ -88,6 +88,8 @@ class _SavedScreenState extends State<SavedScreen> {
                     isCollapsed: _collapsedCategories.contains(entry.key),
                     onToggle: () => _toggleCategory(entry.key),
                     onOpenCorrection: _openDetail,
+                    onConfirmDelete: _confirmDelete,
+                    onDeleteCorrection: _deleteSavedCorrection,
                   ),
                 ),
             ],
@@ -119,6 +121,58 @@ class _SavedScreenState extends State<SavedScreen> {
         builder: (context) => SavedDetailScreen(correction: correction),
       ),
     );
+  }
+
+  Future<bool> _confirmDelete() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Delete saved correction?',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: const Text(
+            'This will remove the correction from your saved list. This cannot be undone.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: AppColors.coral),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
+  Future<void> _deleteSavedCorrection(SavedCorrection correction) async {
+    try {
+      await widget.repositoryController.removeSavedCorrection(correction.id);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved correction deleted')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to delete correction. Please try again.'),
+        ),
+      );
+    }
   }
 
   List<ErrorCategory> _availableCategories(List<SavedCorrection> corrections) {
@@ -282,6 +336,8 @@ class _CategorySection extends StatelessWidget {
     required this.isCollapsed,
     required this.onToggle,
     required this.onOpenCorrection,
+    required this.onConfirmDelete,
+    required this.onDeleteCorrection,
   });
 
   final ErrorCategory category;
@@ -289,6 +345,8 @@ class _CategorySection extends StatelessWidget {
   final bool isCollapsed;
   final VoidCallback onToggle;
   final ValueChanged<SavedCorrection> onOpenCorrection;
+  final Future<bool> Function() onConfirmDelete;
+  final ValueChanged<SavedCorrection> onDeleteCorrection;
 
   @override
   Widget build(BuildContext context) {
@@ -351,9 +409,16 @@ class _CategorySection extends StatelessWidget {
                   .map(
                     (correction) => Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: _SavedCorrectionCard(
-                        correction: correction,
-                        onTap: () => onOpenCorrection(correction),
+                      child: Dismissible(
+                        key: ValueKey(correction.id),
+                        direction: DismissDirection.endToStart,
+                        background: const _SavedDismissBackground(),
+                        confirmDismiss: (_) => onConfirmDelete(),
+                        onDismissed: (_) => onDeleteCorrection(correction),
+                        child: _SavedCorrectionCard(
+                          correction: correction,
+                          onTap: () => onOpenCorrection(correction),
+                        ),
                       ),
                     ),
                   )
@@ -364,6 +429,38 @@ class _CategorySection extends StatelessWidget {
                 : CrossFadeState.showSecond,
             duration: const Duration(milliseconds: 160),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SavedDismissBackground extends StatelessWidget {
+  const _SavedDismissBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.coral.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.coral.withValues(alpha: 0.5)),
+      ),
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Delete',
+            style: TextStyle(
+              color: AppColors.coral,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Icon(Icons.delete_outline, color: AppColors.coral),
         ],
       ),
     );

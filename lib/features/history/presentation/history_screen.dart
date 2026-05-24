@@ -67,9 +67,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ...submissions.map(
                   (submission) => Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: _HistoryCard(
-                      submission: submission,
-                      onTap: () => _openSubmission(submission),
+                    child: Dismissible(
+                      key: ValueKey(submission.id),
+                      direction: DismissDirection.endToStart,
+                      background: const _DismissBackground(),
+                      confirmDismiss: (_) => _confirmDelete(),
+                      onDismissed: (_) => _deleteSubmission(submission),
+                      child: _HistoryCard(
+                        submission: submission,
+                        onTap: () => _openSubmission(submission),
+                      ),
                     ),
                   ),
                 ),
@@ -126,6 +133,56 @@ class _HistoryScreenState extends State<HistoryScreen> {
         },
       ),
     );
+  }
+
+  Future<bool> _confirmDelete() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Delete entry?',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: const Text(
+            'This will remove the submission from your history. This cannot be undone.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: AppColors.coral),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
+  Future<void> _deleteSubmission(CorrectionSubmission submission) async {
+    try {
+      await widget.repositoryController.removeSubmission(submission.id);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Entry deleted')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to delete entry. Please try again.')),
+      );
+    }
   }
 
   String _messageForCorrectionError(CorrectionServiceException error) {
@@ -216,6 +273,38 @@ class _HistoryCard extends StatelessWidget {
     final hour = value.hour.toString().padLeft(2, '0');
     final minute = value.minute.toString().padLeft(2, '0');
     return '$day/$month/${value.year} $hour:$minute';
+  }
+}
+
+class _DismissBackground extends StatelessWidget {
+  const _DismissBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.coral.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.coral.withValues(alpha: 0.5)),
+      ),
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Delete',
+            style: TextStyle(
+              color: AppColors.coral,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Icon(Icons.delete_outline, color: AppColors.coral),
+        ],
+      ),
+    );
   }
 }
 

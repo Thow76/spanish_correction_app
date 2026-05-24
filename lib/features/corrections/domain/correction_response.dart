@@ -42,7 +42,7 @@ class CorrectionResponse {
     bool allowLegacyCategories = true,
   }) {
     final rawCorrections = json['corrections'];
-    final corrections = rawCorrections is List
+    final parsedCorrections = rawCorrections is List
         ? rawCorrections
               .whereType<Map<String, Object?>>()
               .map(
@@ -56,9 +56,10 @@ class CorrectionResponse {
               .toList()
         : const <CorrectionItem>[];
     final modelCorrectedText = json['corrected_text'] as String? ?? '';
-    final reconstructedCorrectedText = corrections.isEmpty
+    final reconstructedCorrectedText = parsedCorrections.isEmpty
         ? submittedText
-        : _reconstructCorrectedText(submittedText, corrections);
+        : _reconstructCorrectedText(submittedText, parsedCorrections);
+    final corrections = _withCorrectedRanges(parsedCorrections);
 
     return CorrectionResponse(
       originalText: submittedText,
@@ -72,6 +73,36 @@ class CorrectionResponse {
           : reconstructedCorrectedText,
       corrections: corrections,
     );
+  }
+
+  static List<CorrectionItem> _withCorrectedRanges(
+    List<CorrectionItem> corrections,
+  ) {
+    if (corrections.isEmpty) {
+      return corrections;
+    }
+
+    final sortedByStart = [...corrections]
+      ..sort((left, right) => left.startIndex!.compareTo(right.startIndex!));
+
+    final correctedRanges = <CorrectionItem, (int, int)>{};
+    var delta = 0;
+    for (final correction in sortedByStart) {
+      final correctedStart = correction.startIndex! + delta;
+      final correctedLength = correction.correctedPhrase.characters.length;
+      final correctedEnd = correctedStart + correctedLength;
+      correctedRanges[correction] = (correctedStart, correctedEnd);
+      delta += correctedLength - (correction.endIndex! - correction.startIndex!);
+    }
+
+    return corrections
+        .map(
+          (correction) => correction.withCorrectedRange(
+            correctedStartIndex: correctedRanges[correction]!.$1,
+            correctedEndIndex: correctedRanges[correction]!.$2,
+          ),
+        )
+        .toList();
   }
 
   Map<String, Object?> toJson() {

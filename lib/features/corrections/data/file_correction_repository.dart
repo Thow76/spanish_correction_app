@@ -34,6 +34,20 @@ class FileCorrectionRepository implements CorrectionRepository {
   }
 
   @override
+  Future<void> removeSubmission(String id) async {
+    final state = await _readState();
+    final nextSubmissions = state.recentSubmissions
+        .where((submission) => submission.id != id)
+        .toList();
+
+    if (nextSubmissions.length == state.recentSubmissions.length) {
+      return;
+    }
+
+    await _writeState(state.copyWith(recentSubmissions: nextSubmissions));
+  }
+
+  @override
   Future<List<SavedCorrection>> loadSavedCorrections() async {
     final state = await _readState();
     return List.unmodifiable(state.savedCorrections);
@@ -46,6 +60,20 @@ class FileCorrectionRepository implements CorrectionRepository {
       correction,
       ...state.savedCorrections.where((item) => item.id != correction.id),
     ];
+
+    await _writeState(state.copyWith(savedCorrections: nextSaved));
+  }
+
+  @override
+  Future<void> removeSavedCorrection(String id) async {
+    final state = await _readState();
+    final nextSaved = state.savedCorrections
+        .where((correction) => correction.id != id)
+        .toList();
+
+    if (nextSaved.length == state.savedCorrections.length) {
+      return;
+    }
 
     await _writeState(state.copyWith(savedCorrections: nextSaved));
   }

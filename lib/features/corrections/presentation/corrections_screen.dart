@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -42,6 +43,7 @@ class CorrectionsScreen extends StatelessWidget {
                   title: 'Original',
                   text: response.originalText,
                   corrections: response.corrections,
+                  rangeSelector: (item) => (item.startIndex, item.endIndex),
                   phraseSelector: (item) => item.originalPhrase,
                   onTapCorrection: (item) =>
                       _showCorrectionSheet(context, item),
@@ -51,6 +53,8 @@ class CorrectionsScreen extends StatelessWidget {
                   title: 'Corrected',
                   text: response.correctedText,
                   corrections: response.corrections,
+                  rangeSelector: (item) =>
+                      (item.correctedStartIndex, item.correctedEndIndex),
                   phraseSelector: (item) => item.correctedPhrase,
                   onTapCorrection: (item) =>
                       _showCorrectionSheet(context, item),
@@ -161,6 +165,7 @@ class _TextPanel extends StatelessWidget {
     required this.title,
     required this.text,
     required this.corrections,
+    required this.rangeSelector,
     required this.phraseSelector,
     required this.onTapCorrection,
   });
@@ -168,6 +173,7 @@ class _TextPanel extends StatelessWidget {
   final String title;
   final String text;
   final List<CorrectionItem> corrections;
+  final (int?, int?) Function(CorrectionItem item) rangeSelector;
   final String Function(CorrectionItem item) phraseSelector;
   final ValueChanged<CorrectionItem> onTapCorrection;
 
@@ -193,97 +199,171 @@ class _TextPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Wrap(spacing: 4, runSpacing: 8, children: _buildPhraseRuns()),
+          Text.rich(
+            TextSpan(
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 15,
+                height: 24 / 15,
+              ),
+              children: _buildSpans(),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  List<Widget> _buildPhraseRuns() {
-    final remaining = StringBuffer(text);
-    final widgets = <Widget>[];
+  List<InlineSpan> _buildSpans() {
+    final graphemes = text.characters.toList();
+    final highlights = _resolveHighlights(graphemes);
+    final spans = <InlineSpan>[];
+    var cursor = 0;
+
+    for (final highlight in highlights) {
+      if (highlight.start > cursor) {
+        spans.add(
+          TextSpan(text: graphemes.sublist(cursor, highlight.start).join()),
+        );
+      }
+      final highlightedText = graphemes
+          .sublist(highlight.start, highlight.end)
+          .join();
+      spans.add(
+        TextSpan(
+          text: highlightedText,
+          style: TextStyle(
+            color: highlight.item.category.color,
+            fontWeight: FontWeight.w700,
+          ),
+          recognizer: TapGestureRecognizerFactory.build(
+            () => onTapCorrection(highlight.item),
+          ),
+        ),
+      );
+      cursor = highlight.end;
+    }
+
+    if (cursor < graphemes.length) {
+      spans.add(TextSpan(text: graphemes.sublist(cursor).join()));
+    }
+
+    return spans;
+  }
+
+  List<_Highlight> _resolveHighlights(List<String> graphemes) {
+    final highlights = <_Highlight>[];
 
     for (final item in corrections) {
       final phrase = phraseSelector(item);
-      if (phrase.isEmpty) {
+      final range = _locateRange(item, graphemes, phrase);
+      if (range == null) {
         continue;
       }
+      highlights.add(_Highlight(item: item, start: range.$1, end: range.$2));
+    }
 
-      final source = remaining.toString();
-      final index = source.indexOf(phrase);
-      if (index == -1) {
+    highlights.sort((a, b) => a.start.compareTo(b.start));
+
+    final resolved = <_Highlight>[];
+    var lastEnd = 0;
+    for (final highlight in highlights) {
+      if (highlight.start < lastEnd) {
         continue;
       }
+      resolved.add(highlight);
+      lastEnd = highlight.end;
+    }
+    return resolved;
+  }
 
-      final before = source.substring(0, index);
-      if (before.isNotEmpty) {
-        widgets.add(_PlainTextRun(before));
+  (int, int)? _locateRange(
+    CorrectionItem item,
+    List<String> graphemes,
+    String phrase,
+  ) {
+    final (modelStart, modelEnd) = rangeSelector(item);
+
+    if (modelStart != null &&
+        modelEnd != null &&
+        modelStart >= 0 &&
+        modelEnd >= modelStart &&
+        modelEnd <= graphemes.length) {
+      final slice = graphemes.sublist(modelStart, modelEnd).join();
+      if (slice == phrase) {
+        return (modelStart, modelEnd);
       }
+    }
 
-      widgets.add(
-        _HighlightedRun(
-          text: phrase,
-          color: item.category.color,
-          onTap: () => onTapCorrection(item),
-        ),
+    if (phrase.isEmpty) {
+      return null;
+    }
+
+    final phraseGraphemes = phrase.characters.toList();
+    final exactMatches = _findMatches(graphemes, phraseGraphemes);
+    if (exactMatches.isNotEmpty) {
+      final anchor = modelStart ?? 0;
+      final best = exactMatches.reduce(
+        (a, b) =>
+            (a - anchor).abs() <= (b - anchor).abs() ? a : b,
       );
-      remaining
-        ..clear()
-        ..write(source.substring(index + phrase.length));
+      return (best, best + phraseGraphemes.length);
     }
 
-    if (remaining.isNotEmpty) {
-      widgets.add(_PlainTextRun(remaining.toString()));
+    final lowerHaystack = graphemes
+        .map((grapheme) => grapheme.toLowerCase())
+        .toList();
+    final lowerNeedle = phraseGraphemes
+        .map((grapheme) => grapheme.toLowerCase())
+        .toList();
+    final fallbackMatches = _findMatches(lowerHaystack, lowerNeedle);
+    if (fallbackMatches.isEmpty) {
+      return null;
     }
 
-    return widgets;
-  }
-}
-
-class _PlainTextRun extends StatelessWidget {
-  const _PlainTextRun(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: AppColors.textPrimary,
-        fontSize: 15,
-        height: 24 / 15,
-      ),
+    final anchor = modelStart ?? 0;
+    final best = fallbackMatches.reduce(
+      (a, b) => (a - anchor).abs() <= (b - anchor).abs() ? a : b,
     );
+    return (best, best + phraseGraphemes.length);
+  }
+
+  static List<int> _findMatches(List<String> haystack, List<String> needle) {
+    if (needle.isEmpty || needle.length > haystack.length) {
+      return const [];
+    }
+    final matches = <int>[];
+    for (var start = 0; start <= haystack.length - needle.length; start++) {
+      var matched = true;
+      for (var offset = 0; offset < needle.length; offset++) {
+        if (haystack[start + offset] != needle[offset]) {
+          matched = false;
+          break;
+        }
+      }
+      if (matched) {
+        matches.add(start);
+      }
+    }
+    return matches;
   }
 }
 
-class _HighlightedRun extends StatelessWidget {
-  const _HighlightedRun({
-    required this.text,
-    required this.color,
-    required this.onTap,
+class _Highlight {
+  const _Highlight({
+    required this.item,
+    required this.start,
+    required this.end,
   });
 
-  final String text;
-  final Color color;
-  final VoidCallback onTap;
+  final CorrectionItem item;
+  final int start;
+  final int end;
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 15,
-          fontWeight: FontWeight.w700,
-          height: 24 / 15,
-        ),
-      ),
-    );
+class TapGestureRecognizerFactory {
+  static TapGestureRecognizer build(VoidCallback onTap) {
+    return TapGestureRecognizer()..onTap = onTap;
   }
 }
 

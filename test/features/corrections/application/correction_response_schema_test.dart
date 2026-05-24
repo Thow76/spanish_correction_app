@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_response_schema.dart';
 
 void main() {
-  test('defines corrections as anchored ranges instead of echoed phrases', () {
+  test('requires anchored ranges and an echoed original_phrase', () {
     final properties =
         correctionResponseJsonSchema['properties'] as Map<String, Object?>;
     final corrections = properties['corrections'] as Map<String, Object?>;
@@ -10,11 +10,13 @@ void main() {
     final required = item['required'] as List<Object?>;
     final itemProperties = item['properties'] as Map<String, Object?>;
 
-    expect(required, containsAll(['start_index', 'end_index']));
-    expect(required, isNot(contains('original_phrase')));
+    expect(
+      required,
+      containsAll(['start_index', 'end_index', 'original_phrase']),
+    );
     expect(itemProperties, containsPair('start_index', isA<Map>()));
     expect(itemProperties, containsPair('end_index', isA<Map>()));
-    expect(itemProperties, isNot(contains('original_phrase')));
+    expect(itemProperties, containsPair('original_phrase', isA<Map>()));
     expect(
       correctionResponseIndexingRules,
       contains(
@@ -23,7 +25,9 @@ void main() {
     );
     expect(
       correctionResponseIndexingRules,
-      contains('Correction items must not include an original_phrase field.'),
+      contains(
+        'original_phrase must equal the exact substring of the submitted text between start_index and end_index, character-for-character.',
+      ),
     );
   });
 

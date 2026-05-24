@@ -19,6 +19,7 @@ const correctionResponseJsonSchema = <String, Object?>{
         'required': [
           'start_index',
           'end_index',
+          'original_phrase',
           'corrected_phrase',
           'category',
           'short_explanation',
@@ -33,6 +34,11 @@ const correctionResponseJsonSchema = <String, Object?>{
             'type': 'integer',
             'description':
                 'Zero-based exclusive end index in user-perceived characters. For insertions, this must equal start_index.',
+          },
+          'original_phrase': {
+            'type': 'string',
+            'description':
+                'The exact substring of the submitted text between start_index and end_index. Empty string for zero-length insertion ranges. Must match the indexed slice exactly so the app can verify the range.',
           },
           'corrected_phrase': {
             'type': 'string',
@@ -68,6 +74,7 @@ const correctionResponseJsonShape = '''
     {
       "start_index": 0,
       "end_index": 0,
+      "original_phrase": "string",
       "corrected_phrase": "string",
       "category": "string",
       "short_explanation": "string"
@@ -81,6 +88,7 @@ const correctionResponseIndexingRules = [
   'end_index is zero-based and exclusive.',
   'For insertions, start_index and end_index are the same cursor position.',
   'Indexes are measured in user-perceived characters, not bytes.',
-  'The app derives the original phrase from the submitted text range.',
-  'Correction items must not include an original_phrase field.',
+  'original_phrase must equal the exact substring of the submitted text between start_index and end_index, character-for-character.',
+  'For zero-length insertion ranges, original_phrase must be an empty string.',
+  'The app rejects any correction whose original_phrase does not match the indexed slice, so use this field to verify your own indexes before responding.',
 ];
