@@ -80,44 +80,72 @@ class CorrectionsScreen extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+      builder: (sheetContext) {
+        final mediaQuery = MediaQuery.of(sheetContext);
+        final sheetHeight = mediaQuery.size.height - mediaQuery.padding.top;
+
+        return SizedBox(
+          height: sheetHeight,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                item.correctedPhrase,
-                style: TextStyle(
-                  color: item.category.color,
-                  fontFamily: 'Sora',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w600,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    icon: const Icon(Icons.close, color: AppColors.textPrimary),
+                  ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              _CategoryPill(item: item),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                item.shortExplanation,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 15,
-                  height: 24 / 15,
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  children: [
+                    Text(
+                      item.correctedPhrase,
+                      style: TextStyle(
+                        color: item.category.color,
+                        fontFamily: 'Sora',
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _CategoryPill(item: item),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                      item.shortExplanation,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 15,
+                        height: 24 / 15,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    onSaveCorrection(item);
-                  },
-                  icon: const Icon(Icons.bookmark_add_outlined),
-                  label: const Text('Save for Later'),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  16,
+                  24,
+                  24 + mediaQuery.padding.bottom,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(sheetContext).pop();
+                      onSaveCorrection(item);
+                    },
+                    icon: const Icon(Icons.bookmark_add_outlined),
+                    label: const Text('Save for Later'),
+                  ),
                 ),
               ),
             ],

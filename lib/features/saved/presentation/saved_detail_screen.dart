@@ -54,18 +54,20 @@ class SavedDetailScreen extends StatelessWidget {
                 _CategoryPill(correction: correction),
                 const SizedBox(height: AppSpacing.xl),
                 _Section(
-                  title: 'Short explanation',
-                  body: correction.shortExplanation,
+                  title: "Why it's wrong",
+                  body: _fallbackText(correction.explanation.whyItsWrong),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 _Section(
-                  title: 'Original sentence',
-                  body: correction.originalSentence,
+                  title: 'In context',
+                  body: _fallbackText(correction.explanation.inContext),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 _Section(
-                  title: 'Detailed explanation',
-                  body: correction.explanation.whyItsWrong,
+                  title: 'Alternatives',
+                  body: correction.explanation.alternatives.isEmpty
+                      ? 'No alternatives saved for this correction.'
+                      : correction.explanation.alternatives.join('\n'),
                 ),
               ],
             ),
@@ -79,6 +81,11 @@ class SavedDetailScreen extends StatelessWidget {
     final day = value.day.toString().padLeft(2, '0');
     final month = value.month.toString().padLeft(2, '0');
     return '$day/$month/${value.year}';
+  }
+
+  String _fallbackText(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? 'No detail saved for this section.' : trimmed;
   }
 }
 
