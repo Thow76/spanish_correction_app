@@ -11,18 +11,6 @@ class CorrectionResponse {
   final String correctedText;
   final List<CorrectionItem> corrections;
 
-  CorrectionResponse copyWith({
-    String? originalText,
-    String? correctedText,
-    List<CorrectionItem>? corrections,
-  }) {
-    return CorrectionResponse(
-      originalText: originalText ?? this.originalText,
-      correctedText: correctedText ?? this.correctedText,
-      corrections: corrections ?? this.corrections,
-    );
-  }
-
   factory CorrectionResponse.fromJson(
     Map<String, Object?> json, {
     bool allowLegacyCategories = true,
