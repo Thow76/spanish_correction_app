@@ -34,6 +34,31 @@ class CorrectionResponse {
     );
   }
 
+  factory CorrectionResponse.fromAnchoredJson(
+    Map<String, Object?> json, {
+    required String submittedText,
+    bool allowLegacyCategories = true,
+  }) {
+    final rawCorrections = json['corrections'];
+
+    return CorrectionResponse(
+      originalText: submittedText,
+      correctedText: json['corrected_text'] as String? ?? '',
+      corrections: rawCorrections is List
+          ? rawCorrections
+                .whereType<Map<String, Object?>>()
+                .map(
+                  (json) => CorrectionItem.fromAnchoredJson(
+                    json,
+                    submittedText: submittedText,
+                    allowLegacyCategories: allowLegacyCategories,
+                  ),
+                )
+                .toList()
+          : const [],
+    );
+  }
+
   Map<String, Object?> toJson() {
     return {
       'original_text': originalText,

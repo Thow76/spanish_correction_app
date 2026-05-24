@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 import 'error_category.dart';
 
 class CorrectionItem {
@@ -6,12 +8,16 @@ class CorrectionItem {
     required this.correctedPhrase,
     required this.category,
     required this.shortExplanation,
+    this.startIndex,
+    this.endIndex,
   });
 
   final String originalPhrase;
   final String correctedPhrase;
   final ErrorCategory category;
   final String shortExplanation;
+  final int? startIndex;
+  final int? endIndex;
 
   factory CorrectionItem.fromJson(
     Map<String, Object?> json, {
@@ -24,15 +30,61 @@ class CorrectionItem {
           ? ErrorCategory.fromLabel(json['category'] as String? ?? '')
           : ErrorCategory.fromApiLabel(json['category'] as String? ?? ''),
       shortExplanation: json['short_explanation'] as String? ?? '',
+      startIndex: json['start_index'] as int?,
+      endIndex: json['end_index'] as int?,
+    );
+  }
+
+  factory CorrectionItem.fromAnchoredJson(
+    Map<String, Object?> json, {
+    required String submittedText,
+    bool allowLegacyCategories = true,
+  }) {
+    final startIndex = json['start_index'];
+    final endIndex = json['end_index'];
+    if (startIndex is! int || endIndex is! int) {
+      throw const FormatException('Missing correction range indexes.');
+    }
+
+    return CorrectionItem(
+      originalPhrase: _sliceSubmittedText(
+        submittedText,
+        startIndex: startIndex,
+        endIndex: endIndex,
+      ),
+      correctedPhrase: json['corrected_phrase'] as String? ?? '',
+      category: allowLegacyCategories
+          ? ErrorCategory.fromLabel(json['category'] as String? ?? '')
+          : ErrorCategory.fromApiLabel(json['category'] as String? ?? ''),
+      shortExplanation: json['short_explanation'] as String? ?? '',
+      startIndex: startIndex,
+      endIndex: endIndex,
     );
   }
 
   Map<String, Object?> toJson() {
     return {
       'original_phrase': originalPhrase,
+      if (startIndex != null) 'start_index': startIndex,
+      if (endIndex != null) 'end_index': endIndex,
       'corrected_phrase': correctedPhrase,
       'category': category.label,
       'short_explanation': shortExplanation,
     };
+  }
+
+  static String _sliceSubmittedText(
+    String submittedText, {
+    required int startIndex,
+    required int endIndex,
+  }) {
+    final characters = submittedText.characters;
+    if (startIndex < 0 ||
+        endIndex <= startIndex ||
+        endIndex > characters.length) {
+      throw FormatException('Invalid correction range $startIndex..$endIndex.');
+    }
+
+    return characters.skip(startIndex).take(endIndex - startIndex).toString();
   }
 }

@@ -84,4 +84,74 @@ void main() {
 
     expect(response.corrections.single.category, ErrorCategory.grammar);
   });
+
+  test('anchored parsing derives original phrases from submitted text', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'C mo est s? Qu tal?',
+        'corrected_text': '¿Cómo estás? ¿Qué tal?',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 11,
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+        ],
+      },
+      submittedText: 'Cómo estás? Qué tal?',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.originalText, 'Cómo estás? Qué tal?');
+    expect(response.corrections.single.originalPhrase, 'Cómo estás?');
+    expect(response.corrections.single.startIndex, 0);
+    expect(response.corrections.single.endIndex, 11);
+  });
+
+  test('anchored parsing slices user-perceived characters', () {
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Café bien',
+        'corrected_text': 'Café bueno',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 4,
+            'corrected_phrase': 'Café',
+            'category': 'Spelling',
+            'short_explanation': 'The accent belongs on the e.',
+          },
+        ],
+      },
+      submittedText: 'Café bien',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.corrections.single.originalPhrase, 'Café');
+  });
+
+  test('anchored parsing rejects invalid ranges', () {
+    expect(
+      () => CorrectionResponse.fromAnchoredJson(
+        {
+          'original_text': 'Hola',
+          'corrected_text': 'Hola',
+          'corrections': [
+            {
+              'start_index': 0,
+              'end_index': 8,
+              'corrected_phrase': 'Hola',
+              'category': 'Other',
+              'short_explanation': 'Invalid range.',
+            },
+          ],
+        },
+        submittedText: 'Hola',
+        allowLegacyCategories: false,
+      ),
+      throwsFormatException,
+    );
+  });
 }
