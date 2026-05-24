@@ -29,7 +29,9 @@ class SubmitCorrectionUseCase {
     }
 
     try {
-      final response = await _correctionService.correctText(trimmedText);
+      final response = (await _correctionService.correctText(
+        trimmedText,
+      )).copyWith(originalText: trimmedText);
       await _repositoryController.addSubmission(
         CorrectionSubmission(
           id: _createId('submission'),

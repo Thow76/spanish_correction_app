@@ -559,6 +559,8 @@ class _MicControl extends StatelessWidget {
 
   String _formatTimer(int value) {
     final safeValue = value.clamp(0, 60);
-    return '0:${safeValue.toString().padLeft(2, '0')}';
+    final minutes = safeValue ~/ 60;
+    final seconds = safeValue % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }

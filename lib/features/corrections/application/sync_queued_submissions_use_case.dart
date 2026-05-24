@@ -20,9 +20,9 @@ class SyncQueuedSubmissionsUseCase {
 
     for (final queuedSubmission in queuedSubmissions) {
       try {
-        final response = await _correctionService.correctText(
+        final response = (await _correctionService.correctText(
           queuedSubmission.text,
-        );
+        )).copyWith(originalText: queuedSubmission.text);
         await _repositoryController.addSubmission(
           CorrectionSubmission(
             id: 'submission-${DateTime.now().microsecondsSinceEpoch}',
