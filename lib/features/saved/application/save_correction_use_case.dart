@@ -1,3 +1,4 @@
+import '../../../core/enums/language.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
 import '../../corrections/domain/correction_item.dart';
@@ -31,6 +32,7 @@ class SaveCorrectionUseCase {
       correctedPhrase: correction.correctedPhrase,
       originalPhrase: correction.originalPhrase,
       correctedSentence: correctedSentence,
+      language: Language.spanish,
     );
 
     await _repositoryController.addSavedCorrection(savedCorrection);

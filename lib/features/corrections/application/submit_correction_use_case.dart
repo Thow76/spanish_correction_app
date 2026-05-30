@@ -1,3 +1,4 @@
+import '../../../core/enums/language.dart';
 import '../../../shared/network/network_status_service.dart';
 import '../../history/domain/correction_submission.dart';
 import '../domain/correction_response.dart';
@@ -35,6 +36,7 @@ class SubmitCorrectionUseCase {
           id: _createId('submission'),
           response: response,
           createdAt: DateTime.now(),
+          language: Language.spanish,
         ),
       );
       return SubmitCorrectionResult.completed(response);
@@ -54,6 +56,7 @@ class SubmitCorrectionUseCase {
         id: _createId('queued'),
         text: text,
         createdAt: DateTime.now(),
+        language: Language.spanish,
       ),
     );
   }

@@ -1,3 +1,4 @@
+import '../../../core/enums/language.dart';
 import '../../corrections/domain/error_category.dart';
 import 'saved_explanation.dart';
 
@@ -12,6 +13,7 @@ class SavedCorrection {
     required this.correctedPhrase,
     required this.originalPhrase,
     required this.correctedSentence,
+    required this.language,
   });
 
   final String id;
@@ -23,6 +25,33 @@ class SavedCorrection {
   final String correctedPhrase;
   final String originalPhrase;
   final String correctedSentence;
+  final Language language;
+
+  SavedCorrection copyWith({
+    String? id,
+    ErrorCategory? category,
+    String? shortExplanation,
+    String? originalSentence,
+    SavedExplanation? explanation,
+    DateTime? savedAt,
+    String? correctedPhrase,
+    String? originalPhrase,
+    String? correctedSentence,
+    Language? language,
+  }) {
+    return SavedCorrection(
+      id: id ?? this.id,
+      category: category ?? this.category,
+      shortExplanation: shortExplanation ?? this.shortExplanation,
+      originalSentence: originalSentence ?? this.originalSentence,
+      explanation: explanation ?? this.explanation,
+      savedAt: savedAt ?? this.savedAt,
+      correctedPhrase: correctedPhrase ?? this.correctedPhrase,
+      originalPhrase: originalPhrase ?? this.originalPhrase,
+      correctedSentence: correctedSentence ?? this.correctedSentence,
+      language: language ?? this.language,
+    );
+  }
 
   factory SavedCorrection.fromJson(Map<String, Object?> json) {
     final rawExplanation = json['explanation'];
@@ -42,6 +71,7 @@ class SavedCorrection {
       correctedPhrase: json['corrected_phrase'] as String? ?? '',
       originalPhrase: json['original_phrase'] as String? ?? '',
       correctedSentence: json['corrected_sentence'] as String? ?? '',
+      language: Language.fromJson(json['language'] as String?),
     );
   }
 
@@ -56,6 +86,7 @@ class SavedCorrection {
       'corrected_phrase': correctedPhrase,
       'original_phrase': originalPhrase,
       'corrected_sentence': correctedSentence,
+      'language': language.toJson(),
     };
   }
 }

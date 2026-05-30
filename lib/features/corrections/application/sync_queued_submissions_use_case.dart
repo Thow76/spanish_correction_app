@@ -1,3 +1,4 @@
+import '../../../core/enums/language.dart';
 import '../../history/domain/correction_submission.dart';
 import 'correction_repository_controller.dart';
 import 'correction_service.dart';
@@ -28,6 +29,7 @@ class SyncQueuedSubmissionsUseCase {
             id: 'submission-${DateTime.now().microsecondsSinceEpoch}',
             response: response,
             createdAt: DateTime.now(),
+            language: Language.spanish,
           ),
         );
         await _repositoryController.removeQueuedSubmission(queuedSubmission.id);

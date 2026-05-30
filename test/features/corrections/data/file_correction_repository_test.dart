@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/features/corrections/data/file_correction_repository.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
@@ -56,6 +57,7 @@ void main() {
       correctedPhrase: 'fui',
       originalPhrase: 'fue',
       correctedSentence: 'Ayer fui al mercado.',
+      language: Language.spanish,
     );
 
     await repository.addSavedCorrection(savedCorrection);
@@ -73,6 +75,7 @@ void main() {
         id: 'queued-1',
         text: 'Ayer yo fue al mercado.',
         createdAt: DateTime(2026, 5, 24, 10),
+        language: Language.spanish,
       ),
     );
     await repository.enqueueSubmission(
@@ -80,6 +83,7 @@ void main() {
         id: 'queued-2',
         text: 'Compre frutas fresco.',
         createdAt: DateTime(2026, 5, 24, 11),
+        language: Language.spanish,
       ),
     );
 
@@ -100,6 +104,7 @@ CorrectionSubmission _submission(int index) {
   return CorrectionSubmission(
     id: 'submission-$index',
     createdAt: DateTime(2026, 5, 24, 12, index),
+    language: Language.spanish,
     response: CorrectionResponse(
       originalText: 'Ayer yo fue al mercado. $index',
       correctedText: 'Ayer fui al mercado. $index',
