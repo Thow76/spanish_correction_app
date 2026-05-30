@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+import '../../../core/enums/language.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/app_header.dart';
@@ -22,12 +23,14 @@ class WriteScreen extends StatefulWidget {
     required this.submitCorrectionUseCase,
     required this.saveCorrectionUseCase,
     required this.transcriptionService,
+    required this.language,
     super.key,
   });
 
   final SubmitCorrectionUseCase submitCorrectionUseCase;
   final SaveCorrectionUseCase saveCorrectionUseCase;
   final TranscriptionService transcriptionService;
+  final Language language;
 
   @override
   State<WriteScreen> createState() => _WriteScreenState();

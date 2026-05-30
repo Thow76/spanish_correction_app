@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../core/enums/language.dart';
 import '../features/corrections/application/correction_repository_controller.dart';
 import '../features/corrections/application/correction_service.dart';
 import '../features/corrections/data/file_correction_repository.dart';
 import '../features/corrections/data/gemini_correction_service.dart';
 import '../features/corrections/data/open_ai_correction_service.dart';
+import '../features/language_selection/language_selection_screen.dart';
 import '../features/navigation/presentation/app_shell.dart';
 import '../features/write/application/transcription_service.dart';
 import '../features/write/data/open_ai_whisper_transcription_service.dart';
@@ -25,6 +27,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   late final CorrectionRepositoryController _repositoryController;
   late final NetworkStatusService _networkStatusService;
   late final TranscriptionService _transcriptionService;
+  Language? _selectedLanguage;
 
   @override
   void initState() {
@@ -43,6 +46,20 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedLanguage = _selectedLanguage;
+
+    if (selectedLanguage == null) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Corrector de Espanol',
+        theme: buildAppTheme(),
+        home: LanguageSelectionScreen(
+          onLanguageSelected: (lang) =>
+              setState(() => _selectedLanguage = lang),
+        ),
+      );
+    }
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Corrector de Espanol',
@@ -52,6 +69,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
         repositoryController: _repositoryController,
         networkStatusService: _networkStatusService,
         transcriptionService: _transcriptionService,
+        language: selectedLanguage,
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/enums/language.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/network/network_status_service.dart';
 import '../../corrections/application/correction_repository_controller.dart';
@@ -20,6 +21,7 @@ class AppShell extends StatefulWidget {
     required this.repositoryController,
     required this.networkStatusService,
     required this.transcriptionService,
+    required this.language,
     super.key,
   });
 
@@ -27,6 +29,7 @@ class AppShell extends StatefulWidget {
   final CorrectionRepositoryController repositoryController;
   final NetworkStatusService networkStatusService;
   final TranscriptionService transcriptionService;
+  final Language language;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -74,12 +77,17 @@ class _AppShellState extends State<AppShell> {
         submitCorrectionUseCase: submitCorrectionUseCase,
         saveCorrectionUseCase: saveCorrectionUseCase,
         transcriptionService: widget.transcriptionService,
+        language: widget.language,
       ),
       HistoryScreen(
         repositoryController: widget.repositoryController,
         saveCorrectionUseCase: saveCorrectionUseCase,
+        language: widget.language,
       ),
-      SavedScreen(repositoryController: widget.repositoryController),
+      SavedScreen(
+        repositoryController: widget.repositoryController,
+        language: widget.language,
+      ),
     ];
 
     return Scaffold(

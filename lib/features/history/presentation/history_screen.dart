@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/enums/language.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/app_header.dart';
@@ -14,11 +15,13 @@ class HistoryScreen extends StatefulWidget {
   const HistoryScreen({
     required this.repositoryController,
     required this.saveCorrectionUseCase,
+    required this.language,
     super.key,
   });
 
   final CorrectionRepositoryController repositoryController;
   final SaveCorrectionUseCase saveCorrectionUseCase;
+  final Language language;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();

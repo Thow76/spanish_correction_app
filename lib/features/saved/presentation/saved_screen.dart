@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/enums/language.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/app_header.dart';
@@ -10,9 +11,14 @@ import '../domain/saved_correction.dart';
 import 'saved_detail_screen.dart';
 
 class SavedScreen extends StatefulWidget {
-  const SavedScreen({required this.repositoryController, super.key});
+  const SavedScreen({
+    required this.repositoryController,
+    required this.language,
+    super.key,
+  });
 
   final CorrectionRepositoryController repositoryController;
+  final Language language;
 
   @override
   State<SavedScreen> createState() => _SavedScreenState();
