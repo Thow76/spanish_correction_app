@@ -49,6 +49,12 @@ class _WriteScreenState extends State<WriteScreen> {
   bool _isTranscribing = false;
   int _recordingSecondsRemaining = _recordingLimitSeconds;
 
+  // Returns the Spanish string for Language.spanish, Portuguese for Language.portuguese.
+  String _str(String es, String pt) => switch (widget.language) {
+    Language.spanish => es,
+    Language.portuguese => pt,
+  };
+
   @override
   void dispose() {
     _recordingTimer?.cancel();
@@ -72,11 +78,14 @@ class _WriteScreenState extends State<WriteScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
               const SizedBox(height: 36),
-              const AppHeader(title: 'Corregir'),
+              AppHeader(title: _str('Corregir', 'Corrigir')),
               const SizedBox(height: AppSpacing.sm),
-              const Text(
-                "Write or record - we'll handle the rest.",
-                style: TextStyle(
+              Text(
+                _str(
+                  "Write or record - we'll handle the rest.",
+                  'Escreva ou grave — nós cuidamos do resto.',
+                ),
+                style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 16,
                   height: 24 / 16,
@@ -86,6 +95,10 @@ class _WriteScreenState extends State<WriteScreen> {
               _TextInputPanel(
                 controller: _controller,
                 onChanged: _handleTextChanged,
+                hintText: _str(
+                  'Type or paste your Spanish text here...',
+                  'Digite ou cole seu texto em português aqui...',
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
               _CharacterCounter(
@@ -95,17 +108,22 @@ class _WriteScreenState extends State<WriteScreen> {
                 color: progressColor,
               ),
               const SizedBox(height: AppSpacing.xl),
-              const _DividerLabel(),
+              _DividerLabel(label: _str('or', 'ou')),
               const SizedBox(height: AppSpacing.md),
               _MicControl(
                 onTap: _isTranscribing ? null : _handleMicTap,
                 isRecording: _isRecording,
                 isTranscribing: _isTranscribing,
                 secondsRemaining: _recordingSecondsRemaining,
+                idleLabel: _str('Tap to record', 'Toque para gravar'),
+                activeLabel: _str('Tap to stop', 'Toque para parar'),
+                transcribingLabel: _str('Transcribing...', 'Transcrevendo...'),
               ),
               const SizedBox(height: AppSpacing.xxl),
               PrimaryActionButton(
-                label: _isReviewing ? 'Reviewing' : 'Corregir',
+                label: _isReviewing
+                    ? _str('Reviewing', 'Revisando')
+                    : _str('Corregir', 'Corrigir'),
                 isLoading: _isReviewing,
                 onPressed: count == 0 || _isRecording || _isTranscribing
                     ? null
@@ -126,7 +144,7 @@ class _WriteScreenState extends State<WriteScreen> {
 
     if (count == _characterLimit && !_hasShownLimitMessage) {
       _hasShownLimitMessage = true;
-      _showSnackBar('Character limit reached');
+      _showSnackBar(_str('Character limit reached', 'Limite de caracteres atingido'));
     }
 
     setState(() {});
@@ -156,13 +174,19 @@ class _WriteScreenState extends State<WriteScreen> {
       }
 
       if (result.wasQueued) {
-        _showSnackBar('No internet available. Submission queued for sync.');
+        _showSnackBar(_str(
+          'No internet available. Submission queued for sync.',
+          'Sem internet. Envio salvo para sincronização.',
+        ));
         return;
       }
 
       final response = result.response;
       if (response == null) {
-        _showSnackBar('Something went wrong. Please try again.');
+        _showSnackBar(_str(
+          'Something went wrong. Please try again.',
+          'Algo deu errado. Tente novamente.',
+        ));
         return;
       }
 
@@ -186,7 +210,10 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar('Something went wrong. Please try again.');
+      _showSnackBar(_str(
+        'Something went wrong. Please try again.',
+        'Algo deu errado. Tente novamente.',
+      ));
     } finally {
       if (mounted) {
         setState(() => _isReviewing = false);
@@ -206,7 +233,10 @@ class _WriteScreenState extends State<WriteScreen> {
     try {
       final hasPermission = await _audioRecorder.hasPermission();
       if (!hasPermission) {
-        _showSnackBar('Microphone permission is required to record audio.');
+        _showSnackBar(_str(
+          'Microphone permission is required to record audio.',
+          'É necessária permissão para o microfone.',
+        ));
         return;
       }
 
@@ -250,7 +280,10 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar('Unable to transcribe audio - please try again.');
+      _showSnackBar(_str(
+        'Unable to transcribe audio - please try again.',
+        'Não foi possível transcrever o áudio. Tente novamente.',
+      ));
     }
   }
 
@@ -271,7 +304,10 @@ class _WriteScreenState extends State<WriteScreen> {
     try {
       final audioPath = await _audioRecorder.stop();
       if (showLimitMessage && mounted) {
-        _showSnackBar('Recording limit reached');
+        _showSnackBar(_str(
+          'Recording limit reached',
+          'Limite de gravação atingido',
+        ));
       }
 
       if (audioPath == null) {
@@ -305,7 +341,10 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar('Unable to transcribe audio - please try again.');
+      _showSnackBar(_str(
+        'Unable to transcribe audio - please try again.',
+        'Não foi possível transcrever o áudio. Tente novamente.',
+      ));
     } finally {
       if (mounted) {
         setState(() {
@@ -330,7 +369,7 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar('Saved for later');
+      _showSnackBar(_str('Saved for later', 'Salvo para depois'));
     } on CorrectionServiceException catch (error) {
       if (!mounted) {
         return;
@@ -340,7 +379,10 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar('Something went wrong. Please try again.');
+      _showSnackBar(_str(
+        'Something went wrong. Please try again.',
+        'Algo deu errado. Tente novamente.',
+      ));
     }
   }
 
@@ -348,11 +390,15 @@ class _WriteScreenState extends State<WriteScreen> {
     return switch (error.reason) {
       CorrectionFailureReason.missingConfiguration =>
         'Gemini API key is missing. Run with --dart-define=GEMINI_API_KEY=...',
-      CorrectionFailureReason.networkUnavailable =>
+      CorrectionFailureReason.networkUnavailable => _str(
         'No internet available. Please check your connection.',
+        'Sem conexão com a internet.',
+      ),
       CorrectionFailureReason.apiFailure ||
-      CorrectionFailureReason.invalidResponse =>
+      CorrectionFailureReason.invalidResponse => _str(
         'Something went wrong. Please try again.',
+        'Algo deu errado. Tente novamente.',
+      ),
     };
   }
 
@@ -360,20 +406,29 @@ class _WriteScreenState extends State<WriteScreen> {
     return switch (error.reason) {
       TranscriptionFailureReason.missingConfiguration =>
         'OpenAI API key is missing. Run with --dart-define=OPENAI_API_KEY=...',
-      TranscriptionFailureReason.networkUnavailable =>
+      TranscriptionFailureReason.networkUnavailable => _str(
         'No internet available. Please check your connection.',
+        'Sem conexão com a internet.',
+      ),
       TranscriptionFailureReason.apiFailure ||
-      TranscriptionFailureReason.invalidResponse =>
+      TranscriptionFailureReason.invalidResponse => _str(
         'Unable to transcribe audio - please try again.',
+        'Não foi possível transcrever o áudio. Tente novamente.',
+      ),
     };
   }
 }
 
 class _TextInputPanel extends StatelessWidget {
-  const _TextInputPanel({required this.controller, required this.onChanged});
+  const _TextInputPanel({
+    required this.controller,
+    required this.onChanged,
+    required this.hintText,
+  });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final String hintText;
 
   @override
   Widget build(BuildContext context) {
@@ -407,10 +462,10 @@ class _TextInputPanel extends StatelessWidget {
           fontSize: 15,
           height: 24 / 15,
         ),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           border: InputBorder.none,
-          hintText: 'Type or paste your Spanish text here...',
-          hintStyle: TextStyle(color: AppColors.textSecondary),
+          hintText: hintText,
+          hintStyle: const TextStyle(color: AppColors.textSecondary),
         ),
       ),
     );
@@ -459,18 +514,20 @@ class _CharacterCounter extends StatelessWidget {
 }
 
 class _DividerLabel extends StatelessWidget {
-  const _DividerLabel();
+  const _DividerLabel({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
-        Expanded(child: Divider(color: AppColors.textDisabled)),
+        const Expanded(child: Divider(color: AppColors.textDisabled)),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          child: Text('or', style: TextStyle(color: AppColors.textSecondary)),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: Text(label, style: const TextStyle(color: AppColors.textSecondary)),
         ),
-        Expanded(child: Divider(color: AppColors.textDisabled)),
+        const Expanded(child: Divider(color: AppColors.textDisabled)),
       ],
     );
   }
@@ -482,21 +539,27 @@ class _MicControl extends StatelessWidget {
     required this.isRecording,
     required this.isTranscribing,
     required this.secondsRemaining,
+    required this.idleLabel,
+    required this.activeLabel,
+    required this.transcribingLabel,
   });
 
   final VoidCallback? onTap;
   final bool isRecording;
   final bool isTranscribing;
   final int secondsRemaining;
+  final String idleLabel;
+  final String activeLabel;
+  final String transcribingLabel;
 
   @override
   Widget build(BuildContext context) {
     final color = isRecording ? AppColors.coral : AppColors.cyan;
     final label = isTranscribing
-        ? 'Transcribing...'
+        ? transcribingLabel
         : isRecording
-        ? 'Tap to stop'
-        : 'Tap to record';
+        ? activeLabel
+        : idleLabel;
 
     return Center(
       child: Column(
