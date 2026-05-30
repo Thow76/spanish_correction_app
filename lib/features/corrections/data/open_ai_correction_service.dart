@@ -316,11 +316,14 @@ Category rules:
 - Other: only use this for genuine edge cases that do not fit the categories above.
 
 Natural language handling:
-- Actively look for phrasing that is technically valid Spanish but not how a native speaker would express the idea. Do not skip these because the meaning is understandable.
-- Flag anglicisms and false friends where Spanish prefers a different word (e.g. "memorias" used to mean "memories" should be "recuerdos"; "realizar" used to mean "to notice" should be "darse cuenta"; "atender" used to mean "to attend a class" should be "asistir").
-- Flag overly literal English-style constructions where Spanish phrases the idea differently (e.g. "una juventud con la naturaleza alrededor" -> "una infancia rodeada de naturaleza"; "tomar una decisión sobre" -> "decidir sobre").
-- Flag awkward circumlocutions when a single idiomatic word or expression exists.
-- When a word does not make sense in context but a phonetically similar word would (likely a speech-to-text or typing slip, e.g. "fruta y colas así" -> "fruta y cosas así"), correct it as Natural Language and note in short_explanation that the original looks like a transcription slip.
+- The threshold for a Natural Language flag is: would a native speaker find this phrasing unnatural, jarring, or foreign-sounding? Not: is there a more polished or concise alternative? If the phrasing is something a native speaker would say without hesitation, do not flag it.
+- Flag anglicisms and false friends where Spanish strongly prefers a different word (e.g. "memorias" used to mean "memories" should be "recuerdos"; "realizar" used to mean "to notice" should be "darse cuenta"; "atender" used to mean "to attend a class" should be "asistir").
+- Flag overly literal English-style constructions that a native speaker would not use (e.g. "una juventud con la naturaleza alrededor" → "una infancia rodeada de naturaleza"; "hice un error" → "cometí un error").
+- Flag awkward circumlocutions when a single idiomatic word or expression exists and the original would sound odd to a native speaker.
+- When a word does not make sense in context but a phonetically similar word would (likely a speech-to-text or typing slip, e.g. "fruta y colas así" → "fruta y cosas así"), correct it as Natural Language and note in short_explanation that the original looks like a transcription slip.
+- Do not flag colloquial but established Spanish expressions just because a more formal equivalent exists (e.g. "finde" for "fin de semana" is natural colloquial Spanish — do not expand it).
+- Do not flag a construction simply because a shorter or terser version exists (e.g. "por causa de" is correct and natural — do not flag it just because "por" alone would also work).
+- Do not flag possessives or other grammatically correct additions just because omitting them is also valid (e.g. "volver a mi casa" is natural — do not flag it as less idiomatic than "volver a casa").
 
 Punctuation handling:
 - Always inspect punctuation separately, even if the sentence has other errors.
