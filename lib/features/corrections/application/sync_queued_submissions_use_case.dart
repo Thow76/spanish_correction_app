@@ -1,4 +1,3 @@
-import '../../../core/enums/language.dart';
 import '../../history/domain/correction_submission.dart';
 import 'correction_repository_controller.dart';
 import 'correction_service.dart';
@@ -23,13 +22,14 @@ class SyncQueuedSubmissionsUseCase {
       try {
         final response = await _correctionService.correctText(
           queuedSubmission.text,
+          queuedSubmission.language,
         );
         await _repositoryController.addSubmission(
           CorrectionSubmission(
             id: 'submission-${DateTime.now().microsecondsSinceEpoch}',
             response: response,
             createdAt: DateTime.now(),
-            language: Language.spanish,
+            language: queuedSubmission.language,
           ),
         );
         await _repositoryController.removeQueuedSubmission(queuedSubmission.id);

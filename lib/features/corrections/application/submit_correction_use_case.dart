@@ -20,29 +20,32 @@ class SubmitCorrectionUseCase {
   final CorrectionRepositoryController _repositoryController;
   final NetworkStatusService _networkStatusService;
 
-  Future<SubmitCorrectionResult> call(String text) async {
+  Future<SubmitCorrectionResult> call(String text, Language language) async {
     final trimmedText = text.trim();
     final hasConnection = await _networkStatusService.hasConnection;
 
     if (!hasConnection) {
-      await _queueSubmission(trimmedText);
+      await _queueSubmission(trimmedText, language);
       return const SubmitCorrectionResult.queued();
     }
 
     try {
-      final response = await _correctionService.correctText(trimmedText);
+      final response = await _correctionService.correctText(
+        trimmedText,
+        language,
+      );
       await _repositoryController.addSubmission(
         CorrectionSubmission(
           id: _createId('submission'),
           response: response,
           createdAt: DateTime.now(),
-          language: Language.spanish,
+          language: language,
         ),
       );
       return SubmitCorrectionResult.completed(response);
     } on CorrectionServiceException catch (error) {
       if (error.reason == CorrectionFailureReason.networkUnavailable) {
-        await _queueSubmission(trimmedText);
+        await _queueSubmission(trimmedText, language);
         return const SubmitCorrectionResult.queued();
       }
 
@@ -50,13 +53,13 @@ class SubmitCorrectionUseCase {
     }
   }
 
-  Future<void> _queueSubmission(String text) {
+  Future<void> _queueSubmission(String text, Language language) {
     return _repositoryController.enqueueSubmission(
       QueuedSubmission(
         id: _createId('queued'),
         text: text,
         createdAt: DateTime.now(),
-        language: Language.spanish,
+        language: language,
       ),
     );
   }

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import '../../../core/enums/language.dart';
+import '../../../core/services/prompt_builder.dart';
 import '../application/transcription_service.dart';
 import '../application/transcription_service_exception.dart';
 
@@ -17,7 +19,7 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
   final HttpClient _httpClient;
 
   @override
-  Future<String> transcribeSpanishAudio(String audioPath) async {
+  Future<String> transcribeAudio(String audioPath, Language language) async {
     _ensureConfigured();
 
     final audioFile = File(audioPath);
@@ -28,7 +30,7 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
       );
     }
 
-    final boundary = 'spanish-correction-${Random().nextInt(1 << 32)}';
+    final boundary = 'language-correction-${Random().nextInt(1 << 32)}';
 
     try {
       final request = await _httpClient
@@ -43,7 +45,12 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
         );
 
       _writeTextField(request, boundary, 'model', 'whisper-1');
-      _writeTextField(request, boundary, 'language', 'es');
+      _writeTextField(
+        request,
+        boundary,
+        'language',
+        PromptBuilder.whisperLanguageCode(language),
+      );
       _writeTextField(request, boundary, 'response_format', 'json');
       _writeTextField(
         request,
@@ -119,7 +126,9 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
     String value,
   ) {
     request.add(utf8.encode('--$boundary\r\n'));
-    request.add(utf8.encode('Content-Disposition: form-data; name="$name"\r\n\r\n'));
+    request.add(
+      utf8.encode('Content-Disposition: form-data; name="$name"\r\n\r\n'),
+    );
     request.add(utf8.encode('$value\r\n'));
   }
 

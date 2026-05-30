@@ -18,9 +18,11 @@ class SaveCorrectionUseCase {
     required CorrectionItem correction,
     required String originalSentence,
     required String correctedSentence,
+    required Language language,
   }) async {
     final explanation = await _correctionService.generateStructuredExplanation(
       correction,
+      language,
     );
     final savedCorrection = SavedCorrection(
       id: 'saved-${DateTime.now().microsecondsSinceEpoch}',
@@ -32,7 +34,7 @@ class SaveCorrectionUseCase {
       correctedPhrase: correction.correctedPhrase,
       originalPhrase: correction.originalPhrase,
       correctedSentence: correctedSentence,
-      language: Language.spanish,
+      language: language,
     );
 
     await _repositoryController.addSavedCorrection(savedCorrection);

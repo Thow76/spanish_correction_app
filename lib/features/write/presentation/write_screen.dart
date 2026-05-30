@@ -148,6 +148,7 @@ class _WriteScreenState extends State<WriteScreen> {
     try {
       final result = await widget.submitCorrectionUseCase(
         _controller.text.trim(),
+        widget.language,
       );
 
       if (!mounted) {
@@ -281,7 +282,7 @@ class _WriteScreenState extends State<WriteScreen> {
       }
 
       final transcript = await widget.transcriptionService
-          .transcribeSpanishAudio(audioPath);
+          .transcribeAudio(audioPath, widget.language);
 
       if (!mounted) {
         return;
@@ -324,6 +325,7 @@ class _WriteScreenState extends State<WriteScreen> {
         correction: item,
         originalSentence: _controller.text.trim(),
         correctedSentence: correctedSentence,
+        language: widget.language,
       );
       if (!mounted) {
         return;

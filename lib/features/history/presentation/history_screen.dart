@@ -138,6 +138,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   correction: correction,
                   originalSentence: submission.response.originalText,
                   correctedSentence: submission.response.correctedText,
+                  language: submission.language,
                 );
                 if (!context.mounted) {
                   return;

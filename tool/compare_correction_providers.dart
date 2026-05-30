@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/app/app_config.dart';
+import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service_exception.dart';
 import 'package:spanish_correction_app/features/corrections/data/gemini_correction_service.dart';
@@ -143,7 +144,7 @@ class _ProviderRun {
     final stopwatch = Stopwatch()..start();
 
     try {
-      final response = await service.correctText(phrase);
+      final response = await service.correctText(phrase, Language.spanish);
       stopwatch.stop();
       return _ComparisonResult.success(
         provider: name,
