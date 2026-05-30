@@ -45,12 +45,18 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
       _writeTextField(request, boundary, 'model', 'whisper-1');
       _writeTextField(request, boundary, 'language', 'es');
       _writeTextField(request, boundary, 'response_format', 'json');
+      _writeTextField(
+        request,
+        boundary,
+        'prompt',
+        'Hola, ¿cómo estás? Me llamo María. El niño jugó rápidamente en el jardín. Sí, también está aquí.',
+      );
       await _writeFileField(
         request,
         boundary,
         'file',
         audioFile,
-        contentType: 'audio/mp4',
+        contentType: 'audio/wav',
       );
       request.write('--$boundary--\r\n');
 
@@ -112,9 +118,9 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
     String name,
     String value,
   ) {
-    request.write('--$boundary\r\n');
-    request.write('Content-Disposition: form-data; name="$name"\r\n\r\n');
-    request.write('$value\r\n');
+    request.add(utf8.encode('--$boundary\r\n'));
+    request.add(utf8.encode('Content-Disposition: form-data; name="$name"\r\n\r\n'));
+    request.add(utf8.encode('$value\r\n'));
   }
 
   Future<void> _writeFileField(
@@ -126,7 +132,7 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
   }) async {
     request.write('--$boundary\r\n');
     request.write(
-      'Content-Disposition: form-data; name="$name"; filename="recording.m4a"\r\n',
+      'Content-Disposition: form-data; name="$name"; filename="recording.wav"\r\n',
     );
     request.write('Content-Type: $contentType\r\n\r\n');
     await request.addStream(file.openRead());

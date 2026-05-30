@@ -208,13 +208,13 @@ class _WriteScreenState extends State<WriteScreen> {
 
       final temporaryDirectory = await getTemporaryDirectory();
       final audioPath =
-          '${temporaryDirectory.path}/spanish-recording-${DateTime.now().microsecondsSinceEpoch}.m4a';
+          '${temporaryDirectory.path}/spanish-recording-${DateTime.now().microsecondsSinceEpoch}.wav';
 
       await _audioRecorder.start(
         const RecordConfig(
-          encoder: AudioEncoder.aacLc,
+          encoder: AudioEncoder.wav,
           numChannels: 1,
-          sampleRate: 44100,
+          sampleRate: 16000,
         ),
         path: audioPath,
       );
