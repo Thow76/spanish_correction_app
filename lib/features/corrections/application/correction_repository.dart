@@ -1,21 +1,22 @@
+import '../../../core/enums/language.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/domain/saved_correction.dart';
 import '../domain/queued_submission.dart';
 
 abstract interface class CorrectionRepository {
-  Future<List<CorrectionSubmission>> loadRecentSubmissions();
+  Future<List<CorrectionSubmission>> getRecentSubmissions({Language? language});
 
   Future<void> addSubmission(CorrectionSubmission submission);
 
   Future<void> removeSubmission(String id);
 
-  Future<List<SavedCorrection>> loadSavedCorrections();
+  Future<List<SavedCorrection>> getSavedCorrections({Language? language});
 
   Future<void> addSavedCorrection(SavedCorrection correction);
 
   Future<void> removeSavedCorrection(String id);
 
-  Future<List<QueuedSubmission>> loadQueuedSubmissions();
+  Future<List<QueuedSubmission>> getQueuedSubmissions({Language? language});
 
   Future<void> enqueueSubmission(QueuedSubmission submission);
 

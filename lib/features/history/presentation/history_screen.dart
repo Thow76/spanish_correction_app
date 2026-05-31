@@ -34,7 +34,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void initState() {
     super.initState();
     widget.repositoryController.addListener(_handleRepositoryChanged);
-    widget.repositoryController.loadHistory();
+    widget.repositoryController.setActiveLanguage(widget.language);
   }
 
   @override
@@ -62,11 +62,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: CircularProgressIndicator(color: AppColors.cyan),
                 )
               else if (submissions.isEmpty)
-                const EmptyStatePanel(
+                EmptyStatePanel(
                   icon: Icons.history,
-                  title: 'No reviewed text yet',
-                  message:
+                  title: switch (widget.language) {
+                    Language.spanish => 'No reviewed text yet',
+                    Language.portuguese => 'Nenhum texto revisado',
+                  },
+                  message: switch (widget.language) {
+                    Language.spanish =>
                       'Recent submissions will appear here after you review Spanish text.',
+                    Language.portuguese =>
+                      'Os envios recentes aparecerão aqui depois que você revisar texto em português.',
+                  },
                 )
               else
                 ..._groupSubmissions(submissions).entries.map(

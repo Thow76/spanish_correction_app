@@ -35,7 +35,7 @@ void main() {
       await repository.addSubmission(_submission(index));
     }
 
-    final submissions = await repository.loadRecentSubmissions();
+    final submissions = await repository.getRecentSubmissions();
 
     expect(submissions, hasLength(20));
     expect(submissions.first.id, 'submission-21');
@@ -62,7 +62,7 @@ void main() {
 
     await repository.addSavedCorrection(savedCorrection);
 
-    final savedCorrections = await repository.loadSavedCorrections();
+    final savedCorrections = await repository.getSavedCorrections();
 
     expect(savedCorrections, hasLength(1));
     expect(savedCorrections.single.id, 'saved-1');
@@ -87,14 +87,14 @@ void main() {
       ),
     );
 
-    expect((await repository.loadQueuedSubmissions()).map((item) => item.id), [
+    expect((await repository.getQueuedSubmissions()).map((item) => item.id), [
       'queued-1',
       'queued-2',
     ]);
 
     await repository.removeQueuedSubmission('queued-1');
 
-    expect((await repository.loadQueuedSubmissions()).map((item) => item.id), [
+    expect((await repository.getQueuedSubmissions()).map((item) => item.id), [
       'queued-2',
     ]);
   });

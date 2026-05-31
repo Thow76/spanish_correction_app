@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/enums/language.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/domain/saved_correction.dart';
 import '../application/correction_repository.dart';
@@ -11,15 +12,22 @@ import '../domain/queued_submission.dart';
 class FileCorrectionRepository implements CorrectionRepository {
   FileCorrectionRepository({File? file}) : _file = file;
 
-  static const _fileName = 'spanish_correction_store.json';
+  static const _fileName = 'correction_store.json';
+  static const _oldFileName = 'spanish_correction_store.json';
   static const _recentLimit = 20;
 
   final File? _file;
 
   @override
-  Future<List<CorrectionSubmission>> loadRecentSubmissions() async {
+  Future<List<CorrectionSubmission>> getRecentSubmissions({
+    Language? language,
+  }) async {
     final state = await _readState();
-    return List.unmodifiable(state.recentSubmissions);
+    final all = state.recentSubmissions;
+    final filtered = language == null
+        ? all
+        : all.where((s) => s.language == language).toList();
+    return List.unmodifiable(filtered.take(_recentLimit).toList());
   }
 
   @override
@@ -48,9 +56,15 @@ class FileCorrectionRepository implements CorrectionRepository {
   }
 
   @override
-  Future<List<SavedCorrection>> loadSavedCorrections() async {
+  Future<List<SavedCorrection>> getSavedCorrections({
+    Language? language,
+  }) async {
     final state = await _readState();
-    return List.unmodifiable(state.savedCorrections);
+    final all = state.savedCorrections;
+    final filtered = language == null
+        ? all
+        : all.where((c) => c.language == language).toList();
+    return List.unmodifiable(filtered);
   }
 
   @override
@@ -79,9 +93,15 @@ class FileCorrectionRepository implements CorrectionRepository {
   }
 
   @override
-  Future<List<QueuedSubmission>> loadQueuedSubmissions() async {
+  Future<List<QueuedSubmission>> getQueuedSubmissions({
+    Language? language,
+  }) async {
     final state = await _readState();
-    return List.unmodifiable(state.queuedSubmissions);
+    final all = state.queuedSubmissions;
+    final filtered = language == null
+        ? all
+        : all.where((s) => s.language == language).toList();
+    return List.unmodifiable(filtered);
   }
 
   @override
@@ -142,7 +162,17 @@ class FileCorrectionRepository implements CorrectionRepository {
     }
 
     final directory = await getApplicationDocumentsDirectory();
-    return File('${directory.path}/$_fileName');
+    final newFile = File('${directory.path}/$_fileName');
+
+    if (!await newFile.exists()) {
+      final oldFile = File('${directory.path}/$_oldFileName');
+      if (await oldFile.exists()) {
+        await oldFile.copy(newFile.path);
+        await oldFile.delete();
+      }
+    }
+
+    return newFile;
   }
 }
 

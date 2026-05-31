@@ -32,7 +32,7 @@ class _SavedScreenState extends State<SavedScreen> {
   void initState() {
     super.initState();
     widget.repositoryController.addListener(_handleRepositoryChanged);
-    widget.repositoryController.loadSavedCorrections();
+    widget.repositoryController.setActiveLanguage(widget.language);
   }
 
   @override
@@ -74,11 +74,18 @@ class _SavedScreenState extends State<SavedScreen> {
                 const SizedBox(height: AppSpacing.xl),
               ],
               if (savedCorrections.isEmpty)
-                const EmptyStatePanel(
+                EmptyStatePanel(
                   icon: Icons.bookmark_border,
-                  title: 'No saved corrections',
-                  message:
+                  title: switch (widget.language) {
+                    Language.spanish => 'No saved corrections',
+                    Language.portuguese => 'Nenhuma correção salva',
+                  },
+                  message: switch (widget.language) {
+                    Language.spanish =>
                       'Tap a highlighted correction and save it to build your review list.',
+                    Language.portuguese =>
+                      'Toque em uma correção destacada e salve-a para criar sua lista de revisão.',
+                  },
                 )
               else if (groupedCorrections.isEmpty)
                 EmptyStatePanel(
