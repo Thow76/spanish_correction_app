@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/enums/language.dart';
 import '../../../shared/design/app_colors.dart';
@@ -15,6 +16,8 @@ import '../../saved/presentation/saved_screen.dart';
 import '../../write/application/transcription_service.dart';
 import '../../write/presentation/write_screen.dart';
 
+const _keySkipLanguageSelection = 'skip_language_selection';
+
 class AppShell extends StatefulWidget {
   const AppShell({
     required this.correctionService,
@@ -22,6 +25,7 @@ class AppShell extends StatefulWidget {
     required this.networkStatusService,
     required this.transcriptionService,
     required this.language,
+    required this.onChangeLanguage,
     super.key,
   });
 
@@ -30,6 +34,7 @@ class AppShell extends StatefulWidget {
   final NetworkStatusService networkStatusService;
   final TranscriptionService transcriptionService;
   final Language language;
+  final VoidCallback onChangeLanguage;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -39,6 +44,7 @@ class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   StreamSubscription<bool>? _connectionSubscription;
   bool _isSyncingQueue = false;
+  bool _skipLanguageSelection = false;
 
   @override
   void initState() {
@@ -53,6 +59,17 @@ class _AppShellState extends State<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncQueuedSubmissions();
     });
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _skipLanguageSelection =
+            prefs.getBool(_keySkipLanguageSelection) ?? false;
+      });
+    }
   }
 
   @override
@@ -91,6 +108,21 @@ class _AppShellState extends State<AppShell> {
     ];
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.settings_outlined,
+              color: AppColors.textSecondary,
+            ),
+            onPressed: _openSettings,
+          ),
+        ],
+      ),
       body: screens[_selectedIndex],
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
@@ -136,6 +168,65 @@ class _AppShellState extends State<AppShell> {
           ],
         ),
       ),
+    );
+  }
+
+  void _openSettings() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    title: const Text(
+                      'Change language',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.textSecondary,
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      widget.onChangeLanguage();
+                    },
+                  ),
+                  SwitchListTile(
+                    title: const Text(
+                      'Skip language selection on startup',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    value: _skipLanguageSelection,
+                    activeThumbColor: AppColors.cyan,
+                    activeTrackColor: AppColors.cyan.withValues(alpha: 0.4),
+                    onChanged: (value) async {
+                      setState(() => _skipLanguageSelection = value);
+                      setSheetState(() {});
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool(_keySkipLanguageSelection, value);
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

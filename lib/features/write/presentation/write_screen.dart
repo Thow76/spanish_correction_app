@@ -71,67 +71,79 @@ class _WriteScreenState extends State<WriteScreen> {
     final progressColor = isNearLimit ? AppColors.coral : AppColors.cyan;
 
     return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 390),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            children: [
-              const SizedBox(height: 36),
-              AppHeader(title: _str('Corregir', 'Corrigir')),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                _str(
-                  "Write or record - we'll handle the rest.",
-                  'Escreva ou grave — nós cuidamos do resto.',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 390),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 36),
+                    AppHeader(title: _str('Corregir', 'Corrigir')),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      _str(
+                        "Write or record - we'll handle the rest.",
+                        'Escreva ou grave — nós cuidamos do resto.',
+                      ),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 16,
+                        height: 24 / 16,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    Expanded(
+                      child: _TextInputPanel(
+                        controller: _controller,
+                        onChanged: _handleTextChanged,
+                        hintText: _str(
+                          'Type or paste your Spanish text here...',
+                          'Digite ou cole seu texto em português aqui...',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _CharacterCounter(
+                      count: count,
+                      limit: _characterLimit,
+                      progress: progress,
+                      color: progressColor,
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    _DividerLabel(label: _str('or', 'ou')),
+                    const SizedBox(height: AppSpacing.md),
+                    _MicControl(
+                      onTap: _isTranscribing ? null : _handleMicTap,
+                      isRecording: _isRecording,
+                      isTranscribing: _isTranscribing,
+                      secondsRemaining: _recordingSecondsRemaining,
+                      idleLabel: _str('Tap to record', 'Toque para gravar'),
+                      activeLabel: _str('Tap to stop', 'Toque para parar'),
+                      transcribingLabel:
+                          _str('Transcribing...', 'Transcrevendo...'),
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                    PrimaryActionButton(
+                      label: _isReviewing
+                          ? _str('Reviewing', 'Revisando')
+                          : _str('Corregir', 'Corrigir'),
+                      isLoading: _isReviewing,
+                      onPressed: count == 0 || _isRecording || _isTranscribing
+                          ? null
+                          : _reviewText,
+                    ),
+                  ],
                 ),
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 16,
-                  height: 24 / 16,
-                ),
               ),
-              const SizedBox(height: AppSpacing.xl),
-              _TextInputPanel(
-                controller: _controller,
-                onChanged: _handleTextChanged,
-                hintText: _str(
-                  'Type or paste your Spanish text here...',
-                  'Digite ou cole seu texto em português aqui...',
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              _CharacterCounter(
-                count: count,
-                limit: _characterLimit,
-                progress: progress,
-                color: progressColor,
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              _DividerLabel(label: _str('or', 'ou')),
-              const SizedBox(height: AppSpacing.md),
-              _MicControl(
-                onTap: _isTranscribing ? null : _handleMicTap,
-                isRecording: _isRecording,
-                isTranscribing: _isTranscribing,
-                secondsRemaining: _recordingSecondsRemaining,
-                idleLabel: _str('Tap to record', 'Toque para gravar'),
-                activeLabel: _str('Tap to stop', 'Toque para parar'),
-                transcribingLabel: _str('Transcribing...', 'Transcrevendo...'),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              PrimaryActionButton(
-                label: _isReviewing
-                    ? _str('Reviewing', 'Revisando')
-                    : _str('Corregir', 'Corrigir'),
-                isLoading: _isReviewing,
-                onPressed: count == 0 || _isRecording || _isTranscribing
-                    ? null
-                    : _reviewText,
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -434,7 +446,6 @@ class _TextInputPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
-      height: 278,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.cyan.withValues(alpha: 0.12),
