@@ -15,4 +15,9 @@ abstract interface class CorrectionService {
     CorrectionItem correction,
     Language language,
   );
+
+  Future<String> generatePromptPhrase({
+    required String correctedSentence,
+    required Language language,
+  });
 }

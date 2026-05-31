@@ -10,6 +10,8 @@ void main() {
       'short_explanation': 'This phrasing sounds unnatural.',
       'original_sentence': 'Hace calor de perros.',
       'corrected_phrase': 'mucho calor',
+      'corrected_sentence': 'Hace mucho calor.',
+      'prompt_phrase': 'It is very hot.',
       'saved_at': '2026-05-24T12:30:00.000',
       'explanation': {
         'why_its_wrong': 'The original expression is a literal calque.',
@@ -28,6 +30,8 @@ void main() {
       'hacía mucho calor',
       'hacía un calor sofocante',
     ]);
+    expect(correction.promptPhrase, 'It is very hot.');
+    expect(correction.toJson()['prompt_phrase'], 'It is very hot.');
   });
 
   test('parses legacy long_explanation JSON', () {
@@ -48,5 +52,6 @@ void main() {
     );
     expect(correction.explanation.inContext, isEmpty);
     expect(correction.explanation.alternatives, isEmpty);
+    expect(correction.promptPhrase, isEmpty);
   });
 }

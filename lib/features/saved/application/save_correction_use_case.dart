@@ -24,6 +24,16 @@ class SaveCorrectionUseCase {
       correction,
       language,
     );
+    var promptPhrase = '';
+    try {
+      promptPhrase = await _correctionService.generatePromptPhrase(
+        correctedSentence: correctedSentence,
+        language: language,
+      );
+    } catch (_) {
+      promptPhrase = '';
+    }
+
     final savedCorrection = SavedCorrection(
       id: 'saved-${DateTime.now().microsecondsSinceEpoch}',
       category: correction.category,
@@ -34,6 +44,7 @@ class SaveCorrectionUseCase {
       correctedPhrase: correction.correctedPhrase,
       originalPhrase: correction.originalPhrase,
       correctedSentence: correctedSentence,
+      promptPhrase: promptPhrase,
       language: language,
     );
 

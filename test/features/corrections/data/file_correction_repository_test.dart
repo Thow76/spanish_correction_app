@@ -57,6 +57,7 @@ void main() {
       correctedPhrase: 'fui',
       originalPhrase: 'fue',
       correctedSentence: 'Ayer fui al mercado.',
+      promptPhrase: 'Yesterday I went to the market.',
       language: Language.spanish,
     );
 

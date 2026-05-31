@@ -4,14 +4,13 @@ import '../../features/corrections/application/correction_response_schema.dart';
 class PromptBuilder {
   PromptBuilder._();
 
-  static String correctionSystemPrompt(Language language) =>
-      switch (language) {
-        Language.spanish => _correctionPromptSpanish,
-        Language.portuguese => _correctionPromptSpanish.replaceAll(
-          'Spanish',
-          'Brazilian Portuguese',
-        ),
-      };
+  static String correctionSystemPrompt(Language language) => switch (language) {
+    Language.spanish => _correctionPromptSpanish,
+    Language.portuguese => _correctionPromptSpanish.replaceAll(
+      'Spanish',
+      'Brazilian Portuguese',
+    ),
+  };
 
   static String structuredExplanationSystemPrompt(Language language) =>
       switch (language) {
@@ -25,21 +24,36 @@ class PromptBuilder {
         Language.portuguese => _longExplanationPromptPortuguese,
       };
 
+  static String promptPhraseSystemPrompt(Language language) {
+    final sourceLanguage = switch (language) {
+      Language.spanish => 'Spanish',
+      Language.portuguese => 'Brazilian Portuguese',
+    };
+
+    return '''
+You translate $sourceLanguage sentences into English.
+
+Translate the given $sourceLanguage sentence into one natural English sentence.
+Return plain text only. Do not return JSON, quotes, Markdown, or commentary.
+''';
+  }
+
   static String correctionUserContent(Language language, String text) =>
       switch (language) {
         Language.spanish => 'Review this Spanish text:\n\n$text',
-        Language.portuguese => 'Review this Brazilian Portuguese text:\n\n$text',
+        Language.portuguese =>
+          'Review this Brazilian Portuguese text:\n\n$text',
       };
 
-  static String whisperLanguageCode(Language language) =>
-      switch (language) {
-        Language.spanish => 'es',
-        Language.portuguese => 'pt',
-      };
+  static String whisperLanguageCode(Language language) => switch (language) {
+    Language.spanish => 'es',
+    Language.portuguese => 'pt',
+  };
 
   // ── Spanish prompts (verbatim from gemini_correction_service.dart) ─────────
 
-  static final _correctionPromptSpanish = '''
+  static final _correctionPromptSpanish =
+      '''
 You are a Spanish correction engine for a mobile language-learning app.
 
 Return only valid JSON with this exact shape:

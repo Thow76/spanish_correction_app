@@ -62,7 +62,8 @@ class GeminiCorrectionService implements CorrectionService {
 
     return _generateContent(
       systemInstruction: PromptBuilder.longExplanationSystemPrompt(language),
-      userText: '''
+      userText:
+          '''
 Original phrase: ${correction.originalPhrase}
 Corrected phrase: ${correction.correctedPhrase}
 Category: ${correction.category.label}
@@ -80,9 +81,11 @@ Short explanation: ${correction.shortExplanation}
     _ensureConfigured();
 
     final responseText = await _generateContent(
-      systemInstruction:
-          PromptBuilder.structuredExplanationSystemPrompt(language),
-      userText: '''
+      systemInstruction: PromptBuilder.structuredExplanationSystemPrompt(
+        language,
+      ),
+      userText:
+          '''
 Original phrase: ${correction.originalPhrase}
 Corrected phrase: ${correction.correctedPhrase}
 Category: ${correction.category.label}
@@ -103,6 +106,21 @@ Short explanation: ${correction.shortExplanation}
         'Gemini returned an invalid structured explanation: $error',
       );
     }
+  }
+
+  @override
+  Future<String> generatePromptPhrase({
+    required String correctedSentence,
+    required Language language,
+  }) async {
+    _ensureConfigured();
+
+    final responseText = await _generateContent(
+      systemInstruction: PromptBuilder.promptPhraseSystemPrompt(language),
+      userText: correctedSentence,
+      responseMimeType: 'text/plain',
+    );
+    return responseText.trim();
   }
 
   Future<String> _generateContent({

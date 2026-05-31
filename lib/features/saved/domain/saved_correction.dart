@@ -13,6 +13,7 @@ class SavedCorrection {
     required this.correctedPhrase,
     required this.originalPhrase,
     required this.correctedSentence,
+    required this.promptPhrase,
     required this.language,
   });
 
@@ -25,6 +26,7 @@ class SavedCorrection {
   final String correctedPhrase;
   final String originalPhrase;
   final String correctedSentence;
+  final String promptPhrase;
   final Language language;
 
   SavedCorrection copyWith({
@@ -37,6 +39,7 @@ class SavedCorrection {
     String? correctedPhrase,
     String? originalPhrase,
     String? correctedSentence,
+    String? promptPhrase,
     Language? language,
   }) {
     return SavedCorrection(
@@ -49,6 +52,7 @@ class SavedCorrection {
       correctedPhrase: correctedPhrase ?? this.correctedPhrase,
       originalPhrase: originalPhrase ?? this.originalPhrase,
       correctedSentence: correctedSentence ?? this.correctedSentence,
+      promptPhrase: promptPhrase ?? this.promptPhrase,
       language: language ?? this.language,
     );
   }
@@ -71,6 +75,7 @@ class SavedCorrection {
       correctedPhrase: json['corrected_phrase'] as String? ?? '',
       originalPhrase: json['original_phrase'] as String? ?? '',
       correctedSentence: json['corrected_sentence'] as String? ?? '',
+      promptPhrase: json['prompt_phrase'] as String? ?? '',
       language: Language.fromJson(json['language'] as String?),
     );
   }
@@ -86,6 +91,7 @@ class SavedCorrection {
       'corrected_phrase': correctedPhrase,
       'original_phrase': originalPhrase,
       'corrected_sentence': correctedSentence,
+      'prompt_phrase': promptPhrase,
       'language': language.toJson(),
     };
   }

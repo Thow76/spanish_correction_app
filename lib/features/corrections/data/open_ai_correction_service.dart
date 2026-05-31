@@ -64,7 +64,8 @@ class OpenAiCorrectionService implements CorrectionService {
 
     return _createResponse(
       systemInstruction: PromptBuilder.longExplanationSystemPrompt(language),
-      userText: '''
+      userText:
+          '''
 Original phrase: ${correction.originalPhrase}
 Corrected phrase: ${correction.correctedPhrase}
 Category: ${correction.category.label}
@@ -81,9 +82,11 @@ Short explanation: ${correction.shortExplanation}
     _ensureConfigured();
 
     final responseText = await _createResponse(
-      systemInstruction:
-          PromptBuilder.structuredExplanationSystemPrompt(language),
-      userText: '''
+      systemInstruction: PromptBuilder.structuredExplanationSystemPrompt(
+        language,
+      ),
+      userText:
+          '''
 Original phrase: ${correction.originalPhrase}
 Corrected phrase: ${correction.correctedPhrase}
 Category: ${correction.category.label}
@@ -105,6 +108,20 @@ Short explanation: ${correction.shortExplanation}
         'OpenAI returned an invalid structured explanation: $error',
       );
     }
+  }
+
+  @override
+  Future<String> generatePromptPhrase({
+    required String correctedSentence,
+    required Language language,
+  }) async {
+    _ensureConfigured();
+
+    final responseText = await _createResponse(
+      systemInstruction: PromptBuilder.promptPhraseSystemPrompt(language),
+      userText: correctedSentence,
+    );
+    return responseText.trim();
   }
 
   Future<String> _createResponse({

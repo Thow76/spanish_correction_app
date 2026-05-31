@@ -11,6 +11,7 @@ import '../../corrections/application/correction_service.dart';
 import '../../corrections/application/submit_correction_use_case.dart';
 import '../../corrections/application/sync_queued_submissions_use_case.dart';
 import '../../history/presentation/history_screen.dart';
+import '../../learn/presentation/learn_screen.dart';
 import '../../saved/application/save_correction_use_case.dart';
 import '../../saved/presentation/saved_screen.dart';
 import '../../write/application/transcription_service.dart';
@@ -110,6 +111,10 @@ class _AppShellState extends State<AppShell> {
         repositoryController: widget.repositoryController,
         language: widget.language,
       ),
+      LearnScreen(
+        repositoryController: widget.repositoryController,
+        language: widget.language,
+      ),
     ];
 
     return Scaffold(
@@ -169,6 +174,11 @@ class _AppShellState extends State<AppShell> {
               icon: Icon(Icons.bookmark_border),
               selectedIcon: Icon(Icons.bookmark),
               label: 'Saved',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.school_outlined),
+              selectedIcon: Icon(Icons.school),
+              label: 'Learn',
             ),
           ],
         ),
