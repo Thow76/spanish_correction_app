@@ -59,7 +59,7 @@ class _SavedScreenState extends State<SavedScreen> {
             padding: const EdgeInsets.fromLTRB(16, 48, 16, 24),
             children: [
               const AppHeader(title: 'Saved'),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.xl),
               if (savedCorrections.isNotEmpty) ...[
                 _FilterBar(
                   selectedCategory: _selectedCategory,
@@ -78,13 +78,13 @@ class _SavedScreenState extends State<SavedScreen> {
                   icon: Icons.bookmark_border,
                   title: switch (widget.language) {
                     Language.spanish => 'No saved corrections',
-                    Language.portuguese => 'Nenhuma correção salva',
+                    Language.portuguese => 'No saved corrections',
                   },
                   message: switch (widget.language) {
                     Language.spanish =>
                       'Tap a highlighted correction and save it to build your review list.',
                     Language.portuguese =>
-                      'Toque em uma correção destacada e salve-a para criar sua lista de revisão.',
+                      'Tap a highlighted correction and save it to build your review list.',
                   },
                 )
               else if (groupedCorrections.isEmpty)

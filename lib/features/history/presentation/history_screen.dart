@@ -66,13 +66,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   icon: Icons.history,
                   title: switch (widget.language) {
                     Language.spanish => 'No reviewed text yet',
-                    Language.portuguese => 'Nenhum texto revisado',
+                    Language.portuguese => 'No reviewed text yet',
                   },
                   message: switch (widget.language) {
                     Language.spanish =>
                       'Recent submissions will appear here after you review Spanish text.',
                     Language.portuguese =>
-                      'Os envios recentes aparecerão aqui depois que você revisar texto em português.',
+                      'Recent submissions will appear here after you review Portuguese text.',
                   },
                 )
               else

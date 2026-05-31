@@ -79,18 +79,14 @@ class _WriteScreenState extends State<WriteScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 390),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                padding: const EdgeInsets.fromLTRB(16, 48, 16, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 36),
-                    AppHeader(title: _str('Corregir', 'Corrigir')),
+                    const AppHeader(title: 'Correct'),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      _str(
-                        "Write or record - we'll handle the rest.",
-                        'Escreva ou grave — nós cuidamos do resto.',
-                      ),
+                      "Write or record - we'll handle the rest.",
                       style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 16,
@@ -104,7 +100,7 @@ class _WriteScreenState extends State<WriteScreen> {
                         onChanged: _handleTextChanged,
                         hintText: _str(
                           'Type or paste your Spanish text here...',
-                          'Digite ou cole seu texto em português aqui...',
+                          'Type or paste your Portuguese text here...',
                         ),
                       ),
                     ),
@@ -116,23 +112,20 @@ class _WriteScreenState extends State<WriteScreen> {
                       color: progressColor,
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    _DividerLabel(label: _str('or', 'ou')),
+                    const _DividerLabel(label: 'or'),
                     const SizedBox(height: AppSpacing.md),
                     _MicControl(
                       onTap: _isTranscribing ? null : _handleMicTap,
                       isRecording: _isRecording,
                       isTranscribing: _isTranscribing,
                       secondsRemaining: _recordingSecondsRemaining,
-                      idleLabel: _str('Tap to record', 'Toque para gravar'),
-                      activeLabel: _str('Tap to stop', 'Toque para parar'),
-                      transcribingLabel:
-                          _str('Transcribing...', 'Transcrevendo...'),
+                      idleLabel: 'Tap to record',
+                      activeLabel: 'Tap to stop',
+                      transcribingLabel: 'Transcribing...',
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                     PrimaryActionButton(
-                      label: _isReviewing
-                          ? _str('Reviewing', 'Revisando')
-                          : _str('Corregir', 'Corrigir'),
+                      label: _isReviewing ? 'Reviewing' : 'Correct',
                       isLoading: _isReviewing,
                       onPressed: count == 0 || _isRecording || _isTranscribing
                           ? null
@@ -156,7 +149,7 @@ class _WriteScreenState extends State<WriteScreen> {
 
     if (count == _characterLimit && !_hasShownLimitMessage) {
       _hasShownLimitMessage = true;
-      _showSnackBar(_str('Character limit reached', 'Limite de caracteres atingido'));
+      _showSnackBar('Character limit reached');
     }
 
     setState(() {});
@@ -186,19 +179,13 @@ class _WriteScreenState extends State<WriteScreen> {
       }
 
       if (result.wasQueued) {
-        _showSnackBar(_str(
-          'No internet available. Submission queued for sync.',
-          'Sem internet. Envio salvo para sincronização.',
-        ));
+        _showSnackBar('No internet available. Submission queued for sync.');
         return;
       }
 
       final response = result.response;
       if (response == null) {
-        _showSnackBar(_str(
-          'Something went wrong. Please try again.',
-          'Algo deu errado. Tente novamente.',
-        ));
+        _showSnackBar('Something went wrong. Please try again.');
         return;
       }
 
@@ -222,10 +209,7 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar(_str(
-        'Something went wrong. Please try again.',
-        'Algo deu errado. Tente novamente.',
-      ));
+      _showSnackBar('Something went wrong. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isReviewing = false);
@@ -245,10 +229,7 @@ class _WriteScreenState extends State<WriteScreen> {
     try {
       final hasPermission = await _audioRecorder.hasPermission();
       if (!hasPermission) {
-        _showSnackBar(_str(
-          'Microphone permission is required to record audio.',
-          'É necessária permissão para o microfone.',
-        ));
+        _showSnackBar('Microphone permission is required to record audio.');
         return;
       }
 
@@ -292,10 +273,7 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar(_str(
-        'Unable to transcribe audio - please try again.',
-        'Não foi possível transcrever o áudio. Tente novamente.',
-      ));
+      _showSnackBar('Unable to transcribe audio - please try again.');
     }
   }
 
@@ -316,10 +294,7 @@ class _WriteScreenState extends State<WriteScreen> {
     try {
       final audioPath = await _audioRecorder.stop();
       if (showLimitMessage && mounted) {
-        _showSnackBar(_str(
-          'Recording limit reached',
-          'Limite de gravação atingido',
-        ));
+        _showSnackBar('Recording limit reached');
       }
 
       if (audioPath == null) {
@@ -353,10 +328,7 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar(_str(
-        'Unable to transcribe audio - please try again.',
-        'Não foi possível transcrever o áudio. Tente novamente.',
-      ));
+      _showSnackBar('Unable to transcribe audio - please try again.');
     } finally {
       if (mounted) {
         setState(() {
@@ -381,7 +353,7 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar(_str('Saved for later', 'Salvo para depois'));
+      _showSnackBar('Saved for later');
     } on CorrectionServiceException catch (error) {
       if (!mounted) {
         return;
@@ -391,10 +363,7 @@ class _WriteScreenState extends State<WriteScreen> {
       if (!mounted) {
         return;
       }
-      _showSnackBar(_str(
-        'Something went wrong. Please try again.',
-        'Algo deu errado. Tente novamente.',
-      ));
+      _showSnackBar('Something went wrong. Please try again.');
     }
   }
 
@@ -402,15 +371,11 @@ class _WriteScreenState extends State<WriteScreen> {
     return switch (error.reason) {
       CorrectionFailureReason.missingConfiguration =>
         'Gemini API key is missing. Run with --dart-define=GEMINI_API_KEY=...',
-      CorrectionFailureReason.networkUnavailable => _str(
+      CorrectionFailureReason.networkUnavailable =>
         'No internet available. Please check your connection.',
-        'Sem conexão com a internet.',
-      ),
       CorrectionFailureReason.apiFailure ||
-      CorrectionFailureReason.invalidResponse => _str(
+      CorrectionFailureReason.invalidResponse =>
         'Something went wrong. Please try again.',
-        'Algo deu errado. Tente novamente.',
-      ),
     };
   }
 
@@ -418,15 +383,11 @@ class _WriteScreenState extends State<WriteScreen> {
     return switch (error.reason) {
       TranscriptionFailureReason.missingConfiguration =>
         'OpenAI API key is missing. Run with --dart-define=OPENAI_API_KEY=...',
-      TranscriptionFailureReason.networkUnavailable => _str(
+      TranscriptionFailureReason.networkUnavailable =>
         'No internet available. Please check your connection.',
-        'Sem conexão com a internet.',
-      ),
       TranscriptionFailureReason.apiFailure ||
-      TranscriptionFailureReason.invalidResponse => _str(
+      TranscriptionFailureReason.invalidResponse =>
         'Unable to transcribe audio - please try again.',
-        'Não foi possível transcrever o áudio. Tente novamente.',
-      ),
     };
   }
 }
