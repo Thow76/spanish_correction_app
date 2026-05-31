@@ -89,12 +89,17 @@ class _AppShellState extends State<AppShell> {
       correctionService: widget.correctionService,
       repositoryController: widget.repositoryController,
     );
+    // Read above the Scaffold: here MediaQuery still carries the real keyboard
+    // inset (the Scaffold zeroes it for its body), and reading it rebuilds this
+    // widget when the keyboard animates in/out.
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final screens = [
       WriteScreen(
         submitCorrectionUseCase: submitCorrectionUseCase,
         saveCorrectionUseCase: saveCorrectionUseCase,
         transcriptionService: widget.transcriptionService,
         language: widget.language,
+        keyboardVisible: keyboardVisible,
       ),
       HistoryScreen(
         repositoryController: widget.repositoryController,

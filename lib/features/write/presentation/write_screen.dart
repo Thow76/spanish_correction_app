@@ -24,6 +24,7 @@ class WriteScreen extends StatefulWidget {
     required this.saveCorrectionUseCase,
     required this.transcriptionService,
     required this.language,
+    required this.keyboardVisible,
     super.key,
   });
 
@@ -31,6 +32,7 @@ class WriteScreen extends StatefulWidget {
   final SaveCorrectionUseCase saveCorrectionUseCase;
   final TranscriptionService transcriptionService;
   final Language language;
+  final bool keyboardVisible;
 
   @override
   State<WriteScreen> createState() => _WriteScreenState();
@@ -65,6 +67,7 @@ class _WriteScreenState extends State<WriteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardVisible = widget.keyboardVisible;
     final count = _controller.text.characters.length;
     final progress = count / _characterLimit;
     final isNearLimit = count >= 560;
@@ -79,7 +82,7 @@ class _WriteScreenState extends State<WriteScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 390),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 48, 16, 24),
+                padding: EdgeInsets.fromLTRB(16, 48, 16, keyboardVisible ? 0 : 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -111,19 +114,22 @@ class _WriteScreenState extends State<WriteScreen> {
                       progress: progress,
                       color: progressColor,
                     ),
-                    const SizedBox(height: AppSpacing.xl),
-                    const _DividerLabel(label: 'or'),
-                    const SizedBox(height: AppSpacing.md),
-                    _MicControl(
-                      onTap: _isTranscribing ? null : _handleMicTap,
-                      isRecording: _isRecording,
-                      isTranscribing: _isTranscribing,
-                      secondsRemaining: _recordingSecondsRemaining,
-                      idleLabel: 'Tap to record',
-                      activeLabel: 'Tap to stop',
-                      transcribingLabel: 'Transcribing...',
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
+                    if (!keyboardVisible) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      const _DividerLabel(label: 'or'),
+                      const SizedBox(height: AppSpacing.md),
+                      _MicControl(
+                        onTap: _isTranscribing ? null : _handleMicTap,
+                        isRecording: _isRecording,
+                        isTranscribing: _isTranscribing,
+                        secondsRemaining: _recordingSecondsRemaining,
+                        idleLabel: 'Tap to record',
+                        activeLabel: 'Tap to stop',
+                        transcribingLabel: 'Transcribing...',
+                      ),
+                      const SizedBox(height: AppSpacing.xxl),
+                    ] else
+                      const SizedBox(height: AppSpacing.xl),
                     PrimaryActionButton(
                       label: _isReviewing ? 'Reviewing' : 'Correct',
                       isLoading: _isReviewing,
