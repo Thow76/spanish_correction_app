@@ -113,6 +113,7 @@ class _AppShellState extends State<AppShell> {
       ),
       LearnScreen(
         repositoryController: widget.repositoryController,
+        transcriptionService: widget.transcriptionService,
         language: widget.language,
       ),
     ];
