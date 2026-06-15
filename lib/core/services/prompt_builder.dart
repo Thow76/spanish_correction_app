@@ -47,6 +47,15 @@ class PromptBuilder {
         Language.portuguese => _structuredExplanationPromptPortuguese,
       };
 
+  // Walkthrough question prompt template for the given language, with the
+  // {{targetSentence}}, {{userAttempt}}, {{englishSource}}, and {{corrections}}
+  // placeholders still un-substituted. Callers interpolate the four inputs.
+  static String walkthroughQuestionPromptTemplate(Language language) =>
+      switch (language) {
+        Language.spanish => _walkthroughQuestionPromptSpanish,
+        Language.portuguese => _walkthroughQuestionPromptPortuguese,
+      };
+
   static String longExplanationSystemPrompt(Language language) =>
       switch (language) {
         Language.spanish => _longExplanationPromptSpanish,
