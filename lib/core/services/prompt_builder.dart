@@ -4,6 +4,38 @@ import '../../features/corrections/application/correction_response_schema.dart';
 class PromptBuilder {
   PromptBuilder._();
 
+  // Shared JSON shape for the walkthrough question prompt, interpolated into
+  // both the Spanish and Portuguese walkthrough templates so the output
+  // contract is defined in exactly one place.
+  static const String walkthroughQuestionJsonShape = '''
+{
+  // Echo of the target sentence input, returned verbatim so the app can
+  // verify the chunks reconstruct the sentence it asked about.
+  "target_sentence": "string",
+  // 3-5 question objects, one per chunk of the target sentence. Returned in
+  // ascending chunk_position order starting at 0 and contiguous (0, 1, 2, ...);
+  // do not skip, reorder, or pre-sort by anything other than chunk_position.
+  "questions": [
+    {
+      // Natural English phrase fragment the learner is translating.
+      "english_stem": "string",
+      // The correct target-language translation of the stem. Drawn verbatim
+      // from the target sentence: identical case, accents, and spacing, with no
+      // trailing sentence-level punctuation (no '.', '?', '!').
+      "correct_translation": "string",
+      // Exactly 2 plausible wrong answers. Each must be distinct from
+      // correct_translation and from the other distractor. The UI shuffles
+      // correct_translation together with these two options at render time, so
+      // do NOT pre-shuffle them or signal which option is correct in any way
+      // other than the field name.
+      "distractors": ["string", "string"],
+      // Zero-indexed position of this chunk within the target sentence.
+      "chunk_position": 0
+    }
+  ]
+}
+''';
+
   static String correctionSystemPrompt(Language language) => switch (language) {
     Language.spanish => _correctionPromptSpanish,
     Language.portuguese => _correctionPromptPortuguese,
@@ -137,6 +169,63 @@ Rules:
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
 ''';
 
+  // v1 serves KEEP PRACTICING walkthroughs only. v2 will add a scoreTier input
+  // and conditional difficulty tuning (harder, closer distractors for higher
+  // tiers) so the same prompt can also serve GOOD-tier walkthroughs.
+  static final String _walkthroughQuestionPromptSpanish =
+      '''
+You are a Spanish language teacher building a multiple-choice walkthrough activity for a learner who got a translation wrong. Your job is to decompose a target Spanish sentence into ordered chunks and turn each chunk into one multiple-choice question, guiding the learner to the correct sentence one piece at a time.
+
+You receive four inputs:
+- targetSentence: the correct Spanish sentence to decompose. This is the ground truth and the source of every correct answer.
+  {{targetSentence}}
+- userAttempt: the learner's own translation attempt, used to see where they diverged from the target.
+  {{userAttempt}}
+- englishSource: the English phrase the learner was asked to translate; the meaning each chunk should convey.
+  {{englishSource}}
+- corrections: the assessment corrections for the attempt (original_phrase, corrected_phrase, category, short_explanation), used to know which parts the learner got wrong and what they wrote.
+  {{corrections}}
+
+Return only valid JSON with this exact shape:
+$walkthroughQuestionJsonShape
+
+Decomposition rules:
+- Echo targetSentence verbatim in target_sentence.
+- Break targetSentence into 3 to 5 chunks. Each chunk is a meaningful phrase-level unit a learner would translate as one piece, not an isolated word.
+- Verb phrases stay together with their auxiliaries ("voy a" is one chunk, not "voy" + "a").
+- Prepositional phrases stay together with their preposition and object ("el sábado", "a casa").
+- Articles stay attached to their nouns ("el pelo" is not split).
+- Clitic and object pronouns stay attached to their verb ("cortarme", "me cortaron" are single chunks).
+- Contractions are single chunks and are never split ("al", "del").
+- Reflexive constructions stay whole, with the reflexive marker kept on its verb ("cortarme el pelo").
+- Every word in targetSentence must belong to exactly one chunk. Chunks must be contiguous and non-overlapping, and concatenating them in chunk_position order must reproduce targetSentence (allowing for normal spacing). Do not drop, duplicate, or split any word across chunks.
+- Return questions in ascending chunk_position order, contiguous and starting at 0.
+- Two-chunk exception: prefer two chunks over a forced split only when the sentence is short enough that no valid third boundary exists without breaking a verb phrase, a preposition + object, an article + noun, or a contraction. Never split any of those just to reach three chunks.
+
+English stems:
+- For each chunk, set english_stem to a natural English phrase for that chunk's meaning. Stay faithful to the wording of englishSource where it aligns cleanly with the chunk. Do not produce a literal word-for-word gloss of the Spanish.
+
+Correct answers:
+- Set correct_translation to the chunk drawn verbatim from targetSentence: identical case and accents, with no trailing sentence-level punctuation (no period, question mark, or exclamation mark).
+
+Distractor rules:
+- Provide exactly two distractors per question. They must be distinct from correct_translation and from each other.
+- Distractors must reflect real Spanish-learner errors — wrong-but-plausible forms a student at this level could genuinely produce because they look right. Draw from patterns such as:
+  - Person / conjugation confusion: the right verb in the wrong person or number.
+  - Wrong preposition or article use: inserting a preposition where Spanish uses a bare article, dropping or misusing an article, calques of English structure.
+  - Calques and Spanglish hybrids: structures carried over from English.
+  - False friends and unnatural word choices a learner might reach for.
+  - Tense or mood slips: an adjacent but wrong form (e.g. present for an intended future, indicative for an intended subjunctive).
+- Do NOT generate distractors that are random unrelated vocabulary, wrong by part of speech, grammatically impossible strings no learner would form, or words drawn from another language entirely.
+- Ground distractors in the attempt: when userAttempt or corrections show the learner wrote a wrong form for a given chunk, prefer that actual wrong form as one of the two distractors for that chunk. When the attempt offers nothing relevant to a chunk (it is too far from the target, empty, or unrelated), fall back to generic error-pattern distractors from the list above.
+
+Spanish distractor examples:
+- "I am going" -> correct_translation "voy"; distractors like "va" (person confusion, third person for intended first) and "vamos" (number confusion, plural for intended singular).
+- "on Saturday" -> correct_translation "el sábado"; distractors like "en el sábado" (wrong preposition, inserting "en" where Spanish uses the bare article) and "en sábado" (calque of English "on Saturday", wrong preposition plus missing article).
+
+Return only the JSON object described above. Do not include Markdown, code fences, commentary, or any text outside the JSON.
+''';
+
   // ── Portuguese prompts ─────────────────────────────────────────────────────
 
   static final _correctionPromptPortuguese =
@@ -238,5 +327,63 @@ Rules:
 - alternatives contains one to three alternative phrasings. Use an empty array if there are no useful alternatives.
 - Keep every field concise and learner-friendly.
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
+''';
+
+  // v1 serves KEEP PRACTICING walkthroughs only. v2 will add a scoreTier input
+  // and conditional difficulty tuning (harder, closer distractors for higher
+  // tiers) so the same prompt can also serve GOOD-tier walkthroughs.
+  static final String _walkthroughQuestionPromptPortuguese =
+      '''
+You are a Brazilian Portuguese language teacher building a multiple-choice walkthrough activity for a learner who got a translation wrong. Your job is to decompose a target Brazilian Portuguese sentence into ordered chunks and turn each chunk into one multiple-choice question, guiding the learner to the correct sentence one piece at a time.
+
+You receive four inputs:
+- targetSentence: the correct Brazilian Portuguese sentence to decompose. This is the ground truth and the source of every correct answer.
+  {{targetSentence}}
+- userAttempt: the learner's own translation attempt, used to see where they diverged from the target.
+  {{userAttempt}}
+- englishSource: the English phrase the learner was asked to translate; the meaning each chunk should convey.
+  {{englishSource}}
+- corrections: the assessment corrections for the attempt (original_phrase, corrected_phrase, category, short_explanation), used to know which parts the learner got wrong and what they wrote.
+  {{corrections}}
+
+Return only valid JSON with this exact shape:
+$walkthroughQuestionJsonShape
+
+Decomposition rules:
+- Echo targetSentence verbatim in target_sentence.
+- Break targetSentence into 3 to 5 chunks. Each chunk is a meaningful phrase-level unit a learner would translate as one piece, not an isolated word.
+- Verb phrases stay together with their auxiliaries ("vou levar" is one chunk, not "vou" + "levar").
+- Prepositional phrases stay together with their preposition and object ("no sábado", "para casa").
+- Articles stay attached to their nouns ("o cabelo" is not split).
+- Clitic and object pronouns stay attached to their verb, including hyphenated forms ("cortar-se" is one chunk).
+- Contractions are single chunks and are never split ("no", "na", "do", "da", "à", "ao", "pelo", "pela", "num", "numa").
+- Reflexive constructions stay whole, with the reflexive marker kept on its verb ("cortar-se").
+- Every word in targetSentence must belong to exactly one chunk. Chunks must be contiguous and non-overlapping, and concatenating them in chunk_position order must reproduce targetSentence (allowing for normal spacing). Do not drop, duplicate, or split any word across chunks.
+- Return questions in ascending chunk_position order, contiguous and starting at 0.
+- Two-chunk exception: prefer two chunks over a forced split only when the sentence is short enough that no valid third boundary exists without breaking a verb phrase, a preposition + object, an article + noun, or a contraction. Never split any of those just to reach three chunks.
+
+English stems:
+- For each chunk, set english_stem to a natural English phrase for that chunk's meaning. Stay faithful to the wording of englishSource where it aligns cleanly with the chunk. Do not produce a literal word-for-word gloss of the Portuguese.
+
+Correct answers:
+- Set correct_translation to the chunk drawn verbatim from targetSentence: identical case and accents (including ã, õ, ç, á, é, ê, í, ó, ô, ú), with no trailing sentence-level punctuation (no period, question mark, or exclamation mark).
+
+Distractor rules:
+- Provide exactly two distractors per question. They must be distinct from correct_translation and from each other.
+- Distractors must reflect real Brazilian-Portuguese-learner errors — wrong-but-plausible forms a student at this level could genuinely produce because they look right. Draw from patterns such as:
+  - Person / conjugation confusion: the right verb in the wrong person or number.
+  - Wrong preposition or article contraction: failing to contract (e.g. "em o sábado" instead of "no sábado"), contracting wrongly, or dropping the article (e.g. "em sábado").
+  - Calques and Spanglish / Portuñol hybrids: structures carried over from English, or Spanish words and forms grafted into Portuguese.
+  - False friends and Natural Language errors of the kind the correction prompt flags — understandable but non-native word choices.
+  - Tense or mood slips: an adjacent but wrong form (e.g. present for an intended future, indicative for an intended subjunctive).
+- Do NOT generate distractors that are random unrelated vocabulary, wrong by part of speech, grammatically impossible strings no learner would form, or words drawn from another language entirely (except where a Spanish/Portuñol hybrid is the realistic learner error being tested).
+- Ground distractors in the attempt: when userAttempt or corrections show the learner wrote a wrong form for a given chunk, prefer that actual wrong form as one of the two distractors for that chunk. When the attempt offers nothing relevant to a chunk (it is too far from the target, empty, or unrelated), fall back to generic error-pattern distractors from the list above.
+
+Brazilian Portuguese distractor examples:
+- "I am going" -> correct_translation "Vou"; distractors like "Vai" (person confusion, third person for intended first) and "Estou indo" (a more verbose alternative the learner might over-reach for).
+- "to get my hair cut" -> correct_translation "cortar o cabelo"; distractors like "cojer cortar o cabelo" (Portuñol hybrid grafting the Spanish verb "coger" into the Portuguese phrase) and "para um corto do cabelo" (calque of English "for a haircut" with an invented noun form).
+- "on Saturday" -> correct_translation "no sábado"; distractors like "em o sábado" (uncontracted, failing to contract "em + o" into "no") and "em sábado" (missing article, calque of English "on Saturday").
+
+Return only the JSON object described above. Do not include Markdown, code fences, commentary, or any text outside the JSON.
 ''';
 }
