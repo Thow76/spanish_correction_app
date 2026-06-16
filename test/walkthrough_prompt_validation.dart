@@ -12,11 +12,24 @@
 // with Platform.environment overrides for OPENAI_API_KEY / the model), so it
 // runs out of the box against OpenAI.
 //
-// PROMPT 3.2 SCOPE: battery populated, harness body + logging helpers
-// implemented, report generated. Remaining prompts:
-//   3.3 — (this prompt already wires the call; 3.3 may swap in a dedicated
-//          walkthrough service if Section 4 introduces one).
-//   3.4 — review the generated report.
+// Output path and divergence mode are controlled with --dart-define (flutter
+// test does not pass argv to the test main):
+//   WALKTHROUGH_OUTPUT             output report path (default: the run 1 path)
+//   WALKTHROUGH_DIVERGENCE_AGAINST when set, after writing the current run,
+//                                  read that earlier run report and write a
+//                                  divergence report comparing the two
+//   WALKTHROUGH_DIVERGENCE_OUT     divergence report path
+//
+// Run 2 + divergence in a single execution (run 1 file is read, never touched):
+//   flutter test test/walkthrough_prompt_validation.dart --timeout none \
+//     --dart-define=WALKTHROUGH_OUTPUT=docs/walkthrough_prompt_validation_run2.md \
+//     --dart-define=WALKTHROUGH_DIVERGENCE_AGAINST=docs/walkthrough_prompt_validation.md
+//
+// PROMPT 3.3 SCOPE: re-run the identical battery a second time and produce a
+// divergence report measuring stability of chunk decomposition and grounding
+// across the two runs. The battery, prompts, and per-run logging structure are
+// unchanged from 3.2. Remaining prompt:
+//   3.4 — judge prompt readiness against the stability threshold.
 //
 // ── Tracks ──────────────────────────────────────────────────────────────────
 //
@@ -540,8 +553,30 @@ final List<TestCase> testBattery = [
   ),
 ];
 
-/// Path the harness writes its review report to.
+/// Default path for a single run's report (run 1).
 const String reportPath = 'docs/walkthrough_prompt_validation.md';
+
+/// Output path for the run produced by this execution. Override via
+/// `--dart-define=WALKTHROUGH_OUTPUT=...`; defaults to the run 1 path so the
+/// 3.2 single-run invocation is unchanged.
+const String outputPath = String.fromEnvironment(
+  'WALKTHROUGH_OUTPUT',
+  defaultValue: reportPath,
+);
+
+/// When set, after the current run is written the harness reads that earlier
+/// run's report and writes a divergence report comparing the two. The earlier
+/// run file is only read, never modified.
+const String divergenceAgainst = String.fromEnvironment(
+  'WALKTHROUGH_DIVERGENCE_AGAINST',
+  defaultValue: '',
+);
+
+/// Output path for the divergence report.
+const String divergenceOutputPath = String.fromEnvironment(
+  'WALKTHROUGH_DIVERGENCE_OUT',
+  defaultValue: 'docs/walkthrough_prompt_validation_divergence.md',
+);
 
 void main() {
   test('walkthrough prompt validation harness', () async {
@@ -550,10 +585,10 @@ void main() {
       'OPENAI_API_KEY',
       defaultValue: config.openAiApiKey,
     );
-    // TODO(3.3 / Section 4): swap this raw OpenAI call for a dedicated
-    // walkthrough service once Section 4 introduces the WalkthroughQuestion
-    // model and its service. The call below mirrors OpenAiCorrectionService's
-    // /v1/responses pattern so no new client abstraction is introduced.
+    // TODO(Section 4): swap this raw OpenAI call for a dedicated walkthrough
+    // service once Section 4 introduces the WalkthroughQuestion model and its
+    // service. The call mirrors OpenAiCorrectionService's /v1/responses pattern
+    // so no new client abstraction is introduced.
     final model = _readEnvironment(
       'OPENAI_WALKTHROUGH_MODEL',
       defaultValue: _readEnvironment(
@@ -569,51 +604,84 @@ void main() {
       );
     }
 
-    final client = HttpClient();
-    final body = StringBuffer();
+    final currentRun = await _runBattery(
+      apiKey: apiKey,
+      model: model,
+      output: outputPath,
+    );
 
-    try {
-      for (final tc in testBattery) {
-        // ignore: avoid_print
-        print('Running ${tc.id} (${tc.track.name}, ${tc.language.name})...');
-
-        final prompt = _buildPrompt(tc);
-        ParsedResponse parsed;
-        try {
-          final raw = await _callWalkthroughPrompt(
-            client: client,
-            apiKey: apiKey,
-            model: model,
-            prompt: prompt,
-          );
-          parsed = _parseResponse(raw);
-        } catch (error) {
-          parsed = ParsedResponse(
-            rawResponse: '',
-            parseError: 'API call failed: $error',
-          );
-        }
-
-        writeTestCaseHeader(body, tc);
-        writeInputs(body, tc);
-        writeGeneratedQuestions(body, parsed);
-        writeGroundingTable(body, tc, parsed.questions);
-        writeNotesPlaceholder(body);
-      }
-    } finally {
-      client.close(force: true);
+    if (divergenceAgainst.isNotEmpty) {
+      // Run 1 is read from its committed report — never re-run or overwritten —
+      // so the divergence compares the reviewed run 1 against this fresh run.
+      final priorRun = _parseRunFile(divergenceAgainst);
+      _writeDivergenceReport(
+        run1: priorRun,
+        run2: currentRun,
+        run1Path: divergenceAgainst,
+        run2Path: outputPath,
+        out: divergenceOutputPath,
+      );
+      // ignore: avoid_print
+      print('Wrote $divergenceOutputPath');
     }
-
-    final report = StringBuffer()
-      ..write(_buildHeader(model: model))
-      ..write(_buildSummary())
-      ..write('\n')
-      ..write(body.toString());
-
-    File(reportPath).writeAsStringSync(report.toString());
-    // ignore: avoid_print
-    print('Wrote $reportPath');
   }, timeout: const Timeout(Duration(minutes: 10)));
+}
+
+/// Runs the full battery once, writes the markdown report to [output], and
+/// returns the parsed response per test-case id for in-memory comparison.
+Future<Map<String, ParsedResponse>> _runBattery({
+  required String apiKey,
+  required String model,
+  required String output,
+}) async {
+  final client = HttpClient();
+  final body = StringBuffer();
+  final results = <String, ParsedResponse>{};
+
+  try {
+    for (final tc in testBattery) {
+      // ignore: avoid_print
+      print('Running ${tc.id} (${tc.track.name}, ${tc.language.name})...');
+
+      final prompt = _buildPrompt(tc);
+      ParsedResponse parsed;
+      try {
+        final raw = await _callWalkthroughPrompt(
+          client: client,
+          apiKey: apiKey,
+          model: model,
+          prompt: prompt,
+        );
+        parsed = _parseResponse(raw);
+      } catch (error) {
+        parsed = ParsedResponse(
+          rawResponse: '',
+          parseError: 'API call failed: $error',
+        );
+      }
+      results[tc.id] = parsed;
+
+      writeTestCaseHeader(body, tc);
+      writeInputs(body, tc);
+      writeGeneratedQuestions(body, parsed);
+      writeGroundingTable(body, tc, parsed.questions);
+      writeNotesPlaceholder(body);
+    }
+  } finally {
+    client.close(force: true);
+  }
+
+  final report = StringBuffer()
+    ..write(_buildHeader(model: model))
+    ..write(_buildSummary())
+    ..write('\n')
+    ..write(body.toString());
+
+  File(output).writeAsStringSync(report.toString());
+  // ignore: avoid_print
+  print('Wrote $output');
+
+  return results;
 }
 
 // ── Prompt assembly ─────────────────────────────────────────────────────────
@@ -1062,4 +1130,364 @@ String _cell(String value) => value.replaceAll('|', '\\|');
 String _readEnvironment(String key, {String defaultValue = ''}) {
   final value = Platform.environment[key]?.trim();
   return value == null || value.isEmpty ? defaultValue : value;
+}
+
+// ── Run 2 / divergence support ──────────────────────────────────────────────
+//
+// The divergence step reconstructs an earlier run's parsed questions from its
+// report's fenced JSON blocks and re-derives grounding with the same _grounded
+// logic used live, so both runs are scored identically. The earlier run file is
+// only read.
+
+/// Reconstructs the parsed response per test-case id from a written report.
+Map<String, ParsedResponse> _parseRunFile(String path) {
+  final content = File(path).readAsStringSync();
+  return {
+    for (final tc in testBattery)
+      tc.id: _extractCaseFromReport(content, tc.id, path),
+  };
+}
+
+ParsedResponse _extractCaseFromReport(String content, String id, String path) {
+  final headerIdx = content.indexOf('## $id — ');
+  if (headerIdx == -1) {
+    return ParsedResponse(
+      rawResponse: '',
+      parseError: 'Case $id not found in $path.',
+    );
+  }
+  final nextCase = content.indexOf('\n## ', headerIdx + 1);
+  final section = content.substring(
+    headerIdx,
+    nextCase == -1 ? content.length : nextCase,
+  );
+
+  final gqIdx = section.indexOf('### Generated questions');
+  if (gqIdx == -1) {
+    return ParsedResponse(
+      rawResponse: '',
+      parseError: 'No "Generated questions" section for $id in $path.',
+    );
+  }
+  final nextSub = section.indexOf('\n### ', gqIdx + 1);
+  final gq = section.substring(
+    gqIdx,
+    nextSub == -1 ? section.length : nextSub,
+  );
+
+  if (gq.contains('**Parse error:**')) {
+    return ParsedResponse(
+      rawResponse: '',
+      parseError: 'Run reported a parse error for $id.',
+    );
+  }
+
+  final fenceStart = gq.indexOf('```json');
+  if (fenceStart == -1) {
+    return ParsedResponse(
+      rawResponse: '',
+      parseError: 'No JSON block for $id in $path.',
+    );
+  }
+  final jsonStart = gq.indexOf('\n', fenceStart) + 1;
+  final fenceEnd = gq.indexOf('```', jsonStart);
+  return _parseResponse(gq.substring(jsonStart, fenceEnd));
+}
+
+/// Sorted chunk strings (correct_translation by ascending chunk_position).
+List<String> _chunks(ParsedResponse run) {
+  final sorted = [...run.questions]
+    ..sort((a, b) => a.chunkPosition.compareTo(b.chunkPosition));
+  return [for (final q in sorted) q.correctTranslation];
+}
+
+/// Distractors produced for [position], or empty if no such chunk exists.
+List<String> _distractorsAt(ParsedResponse run, int position) {
+  for (final q in run.questions) {
+    if (q.chunkPosition == position) return q.distractors;
+  }
+  return const [];
+}
+
+/// Per grounded chunk_position (non-null grounding expectation), whether the
+/// expected wrong form was grounded in this run's distractors.
+Map<int, bool> _groundingResults(TestCase tc, ParsedResponse run) {
+  final results = <int, bool>{};
+  tc.groundingExpectations.forEach((position, expected) {
+    if (expected == null) return;
+    results[position] = _grounded(expected, _distractorsAt(run, position));
+  });
+  return results;
+}
+
+bool _listEquals(List<String> a, List<String> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool _mapEquals(Map<int, bool> a, Map<int, bool> b) {
+  if (a.length != b.length) return false;
+  for (final entry in a.entries) {
+    if (b[entry.key] != entry.value) return false;
+  }
+  return true;
+}
+
+/// Computed comparison of one test case across two runs.
+class _CaseComparison {
+  _CaseComparison(this.tc, this.run1, this.run2);
+
+  final TestCase tc;
+  final ParsedResponse run1;
+  final ParsedResponse run2;
+
+  bool get p1ok => !run1.parseFailed;
+  bool get p2ok => !run2.parseFailed;
+
+  int get count1 => run1.questions.length;
+  int get count2 => run2.questions.length;
+  List<String> get chunks1 => _chunks(run1);
+  List<String> get chunks2 => _chunks(run2);
+
+  /// Number of grounded chunks the test author expects (denominator of the
+  /// "X of M" pass count); 0 for fallback cases.
+  int get groundedCount =>
+      tc.groundingExpectations.values.where((v) => v != null).length;
+
+  Map<int, bool> get grounding1 => _groundingResults(tc, run1);
+  Map<int, bool> get grounding2 => _groundingResults(tc, run2);
+
+  String get chunkCountMatch {
+    if (!p1ok || !p2ok) return 'n/a';
+    return count1 == count2 ? 'yes' : 'no';
+  }
+
+  String get groundingMatch {
+    if (groundedCount == 0) return 'n/a';
+    if (!p1ok || !p2ok) return 'n/a';
+    return _mapEquals(grounding1, grounding2) ? 'yes' : 'no';
+  }
+
+  String get parseMatch => p1ok == p2ok ? 'yes' : 'no';
+
+  /// Overall divergence flag: yes if any of the three match columns is "no".
+  bool get diverged =>
+      chunkCountMatch == 'no' ||
+      groundingMatch == 'no' ||
+      parseMatch == 'no';
+
+  bool get decompositionIdentical =>
+      p1ok && p2ok && _listEquals(chunks1, chunks2);
+
+  String passCount({required bool runOne}) {
+    if (groundedCount == 0) return 'n/a';
+    final ok = runOne ? p1ok : p2ok;
+    if (!ok) return 'n/a';
+    final results = runOne ? grounding1 : grounding2;
+    final passed = results.values.where((v) => v).length;
+    return '$passed of $groundedCount';
+  }
+}
+
+void _writeDivergenceReport({
+  required Map<String, ParsedResponse> run1,
+  required Map<String, ParsedResponse> run2,
+  required String run1Path,
+  required String run2Path,
+  required String out,
+}) {
+  final comparisons = [
+    for (final tc in testBattery)
+      _CaseComparison(
+        tc,
+        run1[tc.id] ??
+            ParsedResponse(rawResponse: '', parseError: 'Missing in run 1.'),
+        run2[tc.id] ??
+            ParsedResponse(rawResponse: '', parseError: 'Missing in run 2.'),
+      ),
+  ];
+
+  final buffer = StringBuffer()
+    ..writeln('# Walkthrough Prompt Validation — Run Divergence')
+    ..writeln()
+    ..writeln(
+      'Compares two runs of the identical ${testBattery.length}-case battery '
+      'to check the stability of chunk decomposition and grounding behavior '
+      'across non-deterministic LLM outputs.',
+    )
+    ..writeln()
+    ..writeln('- Run 1 (reviewed): `$run1Path`')
+    ..writeln('- Run 2: `$run2Path`')
+    ..writeln('- Generated (UTC): ${DateTime.now().toUtc().toIso8601String()}')
+    ..writeln();
+
+  _writeDivergenceSummaryTable(buffer, comparisons);
+  buffer.writeln();
+
+  for (final c in comparisons.where((c) => c.diverged)) {
+    _writeDivergenceCaseSection(buffer, c);
+  }
+
+  _writeStabilitySummary(buffer, comparisons);
+
+  File(out).writeAsStringSync(buffer.toString());
+}
+
+void _writeDivergenceSummaryTable(
+  StringBuffer out,
+  List<_CaseComparison> comparisons,
+) {
+  out
+    ..writeln('## Summary')
+    ..writeln()
+    ..writeln(
+      '| Test case | R1 chunks | R2 chunks | Chunk count match | '
+      'R1 grounding | R2 grounding | Grounding match | Parse match | '
+      'Divergence |',
+    )
+    ..writeln(
+      '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    );
+
+  for (final c in comparisons) {
+    final r1Chunks = c.p1ok ? '${c.count1}' : '—';
+    final r2Chunks = c.p2ok ? '${c.count2}' : '—';
+    out.writeln(
+      '| ${c.tc.id} | $r1Chunks | $r2Chunks | ${c.chunkCountMatch} | '
+      '${c.passCount(runOne: true)} | ${c.passCount(runOne: false)} | '
+      '${c.groundingMatch} | ${c.parseMatch} | '
+      '${c.diverged ? 'yes' : 'no'} |',
+    );
+  }
+}
+
+void _writeDivergenceCaseSection(StringBuffer out, _CaseComparison c) {
+  final axes = <String>[
+    if (c.chunkCountMatch == 'no') 'chunk count',
+    if (c.groundingMatch == 'no') 'grounding',
+    if (c.parseMatch == 'no') 'parse',
+  ];
+
+  out
+    ..writeln('## ${c.tc.id}')
+    ..writeln()
+    ..writeln('Diverged on: ${axes.join(', ')}.')
+    ..writeln();
+
+  // Chunks side by side.
+  out
+    ..writeln('| chunk_position | run 1 chunk | run 2 chunk |')
+    ..writeln('| --- | --- | --- |');
+  final maxChunks = c.count1 > c.count2 ? c.count1 : c.count2;
+  for (var i = 0; i < maxChunks; i++) {
+    final r1 = i < c.chunks1.length ? c.chunks1[i] : '—';
+    final r2 = i < c.chunks2.length ? c.chunks2[i] : '—';
+    out.writeln('| $i | ${_cell(r1)} | ${_cell(r2)} |');
+  }
+  out.writeln();
+
+  // Grounding detail for affected positions.
+  if (c.groundingMatch == 'no') {
+    out
+      ..writeln(
+        '| chunk_position | expected wrong form | run 1 distractors | '
+        'run 2 distractors | run 1 pass | run 2 pass |',
+      )
+      ..writeln('| --- | --- | --- | --- | --- | --- |');
+    final positions = c.grounding1.keys.toList()..sort();
+    for (final pos in positions) {
+      if (c.grounding1[pos] == c.grounding2[pos]) continue;
+      final expected = c.tc.groundingExpectations[pos]!;
+      final d1 = _distractorsAt(c.run1, pos);
+      final d2 = _distractorsAt(c.run2, pos);
+      out.writeln(
+        '| $pos | ${_cell(expected)} | '
+        '${_cell(d1.isEmpty ? '—' : d1.join(', '))} | '
+        '${_cell(d2.isEmpty ? '—' : d2.join(', '))} | '
+        '${c.grounding1[pos]! ? 'PASS' : 'FAIL'} | '
+        '${c.grounding2[pos]! ? 'PASS' : 'FAIL'} |',
+      );
+    }
+    out.writeln();
+  }
+
+  out
+    ..writeln(_observation(c))
+    ..writeln();
+}
+
+/// Factual, non-interpretive description of the difference between the runs.
+String _observation(_CaseComparison c) {
+  if (c.parseMatch == 'no') {
+    final failed = c.p1ok ? 'Run 2' : 'Run 1';
+    final ok = c.p1ok ? 'run 1' : 'run 2';
+    return '$failed failed to parse where $ok parsed.';
+  }
+
+  final parts = <String>[];
+  if (c.count1 != c.count2) {
+    parts.add(
+      'Run 2 produced a ${c.count2}-chunk decomposition where run 1 produced '
+      '${c.count1}.',
+    );
+  } else if (!_listEquals(c.chunks1, c.chunks2)) {
+    final diffs = [
+      for (var i = 0; i < c.count1; i++)
+        if (c.chunks1[i] != c.chunks2[i]) i,
+    ];
+    parts.add(
+      'Chunk count identical (${c.count1}); chunk boundaries differed at '
+      'position(s) ${diffs.join(', ')}.',
+    );
+  } else {
+    parts.add('Chunk boundaries identical.');
+  }
+
+  if (c.groundingMatch == 'no') {
+    final positions = [
+      for (final pos in c.grounding1.keys)
+        if (c.grounding1[pos] != c.grounding2[pos]) pos,
+    ]..sort();
+    parts.add('Grounding pass differed on chunk(s) ${positions.join(', ')}.');
+  }
+
+  return parts.join(' ');
+}
+
+void _writeStabilitySummary(
+  StringBuffer out,
+  List<_CaseComparison> comparisons,
+) {
+  final total = comparisons.length;
+  final identicalDecomp =
+      comparisons.where((c) => c.decompositionIdentical).length;
+  final groundingCases =
+      comparisons.where((c) => c.tc.track == WalkthroughTrack.grounding);
+  final groundingStable =
+      groundingCases.where((c) => c.groundingMatch == 'yes').length;
+  final bothParsed = comparisons.where((c) => c.p1ok && c.p2ok).length;
+  final zeroDivergence = comparisons.where((c) => !c.diverged).length;
+
+  out
+    ..writeln('## Stability summary')
+    ..writeln()
+    ..writeln('- Total test cases run: $total')
+    ..writeln(
+      '- Test cases with identical chunk decomposition across runs: '
+      '$identicalDecomp of $total',
+    )
+    ..writeln(
+      '- Test cases where grounding behavior was stable across runs: '
+      '$groundingStable of ${groundingCases.length}',
+    )
+    ..writeln(
+      '- Test cases where both runs parsed successfully: $bothParsed of $total',
+    )
+    ..writeln(
+      '- Test cases with zero divergence on any axis: $zeroDivergence of $total',
+    )
+    ..writeln();
 }
