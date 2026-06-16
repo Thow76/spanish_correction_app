@@ -219,14 +219,25 @@ Correct answers:
 
 Distractor rules:
 - Provide exactly two distractors per question. They must be distinct from correct_translation and from each other.
+Error pattern list:
 - Distractors must reflect real Spanish-learner errors — wrong-but-plausible forms a student at this level could genuinely produce because they look right. Draw from patterns such as:
   - Person / conjugation confusion: the right verb in the wrong person or number.
   - Wrong preposition or article use: inserting a preposition where Spanish uses a bare article, dropping or misusing an article, calques of English structure.
   - Calques and Spanglish hybrids: structures carried over from English.
   - False friends and unnatural word choices a learner might reach for.
   - Tense or mood slips: an adjacent but wrong form (e.g. present for an intended future, indicative for an intended subjunctive).
+Anti-pattern list:
 - Do NOT generate distractors that are random unrelated vocabulary, wrong by part of speech, grammatically impossible strings no learner would form, or words drawn from another language entirely.
-- Ground distractors in the attempt: when userAttempt or corrections show the learner wrote a wrong form for a given chunk, prefer that actual wrong form as one of the two distractors for that chunk. When the attempt offers nothing relevant to a chunk (it is too far from the target, empty, or unrelated), fall back to generic error-pattern distractors from the list above.
+Grounding rules:
+- Before drafting distractors for any chunk, decide which of the three cases below the userAttempt falls into. The case determines whether words from the attempt may appear as distractors at all, and for which chunks.
+- Case 1 — Attempt is off-topic (no grounding anywhere): the attempt addresses an entirely different idea from the target, or is empty, or is too unrelated to align. No word from the attempt may appear as a distractor for any chunk. Use generic distractors from the error pattern list for every chunk.
+  - Worked example: target "El tren llega a las ocho." against userAttempt "Me gusta mucho el café por la mañana." The attempt is about liking coffee, an entirely different idea, so Case 1 applies. Do NOT lift "Me", "gusta", "mucho", "café", or "mañana" into any distractor. For chunk 0 ("El tren"), use generic distractors from the error pattern list such as "Los trenes" (number confusion) and "El treno" (Spanglish/hybrid form) — never "Me gusta" or any word carried over from the attempt.
+- Case 2 — Attempt partially overlaps (ground only the aligned chunks): the attempt addresses the same idea as the target, but the user's wording only corresponds to some chunks. For chunks where the user's wording aligns and contains an error, use that wrong form as one distractor for that chunk. For chunks where the user's wording is correct or doesn't correspond to that chunk, use generic distractors from the error pattern list.
+  - Worked example: target "Voy a la tienda mañana." against userAttempt "Voy a la tienda en mañana." Same idea, so this is Case 2. Chunk 0 ("Voy") and chunk 1 ("a la tienda") are correct in the attempt, so use generic distractors there (e.g. "Va", person confusion, for chunk 0). Chunk 2 ("mañana") carries the real error "en mañana", so use "en mañana" as one of its two distractors and a generic form (e.g. "por la mañana") as the other.
+- Case 3 — Attempt is close but wrong throughout (ground broadly): the attempt addresses the same idea and the user's wording aligns to most or all chunks, but contains errors throughout. Ground each chunk's distractors in the user's wrong form for that chunk where one exists.
+  - Worked example: target "Ella va a comer en el restaurante." against userAttempt "Ella va a come en la restaurante." Same idea, wording aligns across chunks, so this is Case 3. For chunk "comer" use the user's wrong form "come" (infinitive/mood slip) as one distractor; for chunk "en el restaurante" use the user's wrong form "en la restaurante" (wrong article gender) as one distractor. Pair each with a generic form from the error pattern list.
+Final check:
+- Before finalising each question, check each distractor against the question's correct_translation. If any distractor is identical to correct_translation (after normalising whitespace), replace it with a different plausible wrong form drawn from the error pattern list, then check again. The two distractors and correct_translation must all be distinct strings.
 
 Spanish distractor examples:
 - "I am going" -> correct_translation "voy"; distractors like "va" (person confusion, third person for intended first) and "vamos" (number confusion, plural for intended singular).
@@ -379,14 +390,25 @@ Correct answers:
 
 Distractor rules:
 - Provide exactly two distractors per question. They must be distinct from correct_translation and from each other.
+Error pattern list:
 - Distractors must reflect real Brazilian-Portuguese-learner errors — wrong-but-plausible forms a student at this level could genuinely produce because they look right. Draw from patterns such as:
   - Person / conjugation confusion: the right verb in the wrong person or number.
   - Wrong preposition or article contraction: failing to contract (e.g. "em o sábado" instead of "no sábado"), contracting wrongly, or dropping the article (e.g. "em sábado").
   - Calques and Spanglish / Portuñol hybrids: structures carried over from English, or Spanish words and forms grafted into Portuguese.
   - False friends and Natural Language errors of the kind the correction prompt flags — understandable but non-native word choices.
   - Tense or mood slips: an adjacent but wrong form (e.g. present for an intended future, indicative for an intended subjunctive).
+Anti-pattern list:
 - Do NOT generate distractors that are random unrelated vocabulary, wrong by part of speech, grammatically impossible strings no learner would form, or words drawn from another language entirely (except where a Spanish/Portuñol hybrid is the realistic learner error being tested).
-- Ground distractors in the attempt: when userAttempt or corrections show the learner wrote a wrong form for a given chunk, prefer that actual wrong form as one of the two distractors for that chunk. When the attempt offers nothing relevant to a chunk (it is too far from the target, empty, or unrelated), fall back to generic error-pattern distractors from the list above.
+Grounding rules:
+- Before drafting distractors for any chunk, decide which of the three cases below the userAttempt falls into. The case determines whether words from the attempt may appear as distractors at all, and for which chunks.
+- Case 1 — Attempt is off-topic (no grounding anywhere): the attempt addresses an entirely different idea from the target, or is empty, or is too unrelated to align. No word from the attempt may appear as a distractor for any chunk. Use generic distractors from the error pattern list for every chunk.
+  - Worked example: target "O trem chega às oito." against userAttempt "Eu gosto muito de café na manhã." The attempt is about liking coffee in the morning, an entirely different idea, so Case 1 applies. None of "Eu", "gosto", "gosta", "café", or "manhã" may appear in any distractor. For chunk 0 ("O trem"), use generic distractors from the error pattern list such as "O treno" (Portuñol hybrid) and "Os trens" (number confusion) — never "Eu" or "gosta" lifted from the attempt.
+- Case 2 — Attempt partially overlaps (ground only the aligned chunks): the attempt addresses the same idea as the target, but the user's wording only corresponds to some chunks. For chunks where the user's wording aligns and contains an error, use that wrong form as one distractor for that chunk. For chunks where the user's wording is correct or doesn't correspond to that chunk, use generic distractors from the error pattern list.
+  - Worked example: target "Vou cortar o cabelo no sábado." against userAttempt "Vou cortar o cabelo em sábado." Same idea, so this is Case 2. Chunk 0 ("Vou") and chunk 1 ("cortar o cabelo") are correct in the attempt, so use generic distractors there (e.g. "Vai", person confusion, for chunk 0). Chunk 2 ("no sábado") carries the real error "em sábado", so use "em sábado" as one of its two distractors and pair it with a generic form (e.g. "em o sábado", uncontracted).
+- Case 3 — Attempt is close but wrong throughout (ground broadly): the attempt addresses the same idea and the user's wording aligns to most or all chunks, but contains errors throughout. Ground each chunk's distractors in the user's wrong form for that chunk where one exists.
+  - Worked example: target "Ela vai comer no restaurante." against userAttempt "Ela vai come em o restaurante." Same idea, wording aligns across chunks, so this is Case 3. For chunk "comer" use the user's wrong form "come" (infinitive/mood slip) as one distractor; for chunk "no restaurante" use the user's wrong form "em o restaurante" (uncontracted preposition + article) as one distractor. Pair each with a generic form from the error pattern list.
+Final check:
+- Before finalising each question, check each distractor against the question's correct_translation. If any distractor is identical to correct_translation (after normalising whitespace), replace it with a different plausible wrong form drawn from the error pattern list, then check again. The two distractors and correct_translation must all be distinct strings.
 
 Brazilian Portuguese distractor examples:
 - "I am going" -> correct_translation "Vou"; distractors like "Vai" (person confusion, third person for intended first) and "Estou indo" (a more verbose alternative the learner might over-reach for).
