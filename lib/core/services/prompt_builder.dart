@@ -237,11 +237,18 @@ Grounding rules:
 - Case 3 — Attempt is close but wrong throughout (ground broadly): the attempt addresses the same idea and the user's wording aligns to most or all chunks, but contains errors throughout. Ground each chunk's distractors in the user's wrong form for that chunk where one exists.
   - Worked example: target "Ella va a comer en el restaurante." against userAttempt "Ella va a come en la restaurante." Same idea, wording aligns across chunks, so this is Case 3. For chunk "comer" use the user's wrong form "come" (infinitive/mood slip) as one distractor; for chunk "en el restaurante" use the user's wrong form "en la restaurante" (wrong article gender) as one distractor. Pair each with a generic form from the error pattern list.
 Final check:
-- Before finalising each question, check each distractor against the question's correct_translation. If any distractor is identical to correct_translation (after normalising whitespace), replace it with a different plausible wrong form drawn from the error pattern list, then check again. The two distractors and correct_translation must all be distinct strings.
+- Before finalising each question, perform three checks in order:
+  1. Check each distractor against the question's correct_translation. If any distractor is identical to correct_translation (after normalising whitespace), replace it with a different plausible wrong form drawn from the error pattern list.
+  2. Check the two distractors against each other. If they are identical to each other (after normalising whitespace), replace one of them with a different plausible wrong form drawn from the error pattern list.
+  3. Check each distractor for cross-language contamination. If any distractor is a word or phrase drawn from a language other than Spanish (no Italian, no English, no Portuguese), replace it with a different plausible wrong form drawn from the error pattern list.
+- After replacing any distractor, repeat all three checks until they all pass. The two distractors and correct_translation must all be distinct strings, the two distractors must not be identical to each other, and both distractors must be in Spanish.
 
-Spanish distractor examples:
-- "I am going" -> correct_translation "voy"; distractors like "va" (person confusion, third person for intended first) and "vamos" (number confusion, plural for intended singular).
-- "on Saturday" -> correct_translation "el sábado"; distractors like "en el sábado" (wrong preposition, inserting "en" where Spanish uses the bare article) and "en sábado" (calque of English "on Saturday", wrong preposition plus missing article).
+Illustrative distractor patterns — for guidance only, not for direct reuse:
+
+The examples below show the kind of distractors to generate for chunks of similar shape. They are not pre-approved answers for these specific chunks. If a real chunk in a question matches one of these examples, still generate distractors fresh based on the Grounding rules above — use the learner's actual wrong form where one exists, or generic forms from the error pattern list. Use these examples as models of distractor style and learner-error realism, not as substitutes for the distractors you should generate.
+
+- For "I am going" -> correct "voy": the kind of distractor that fits is person/conjugation confusion — a third-person form where first person is intended, or a plural form where singular is intended.
+- For "on Saturday" -> correct "el sábado": the kind of distractor that fits is a wrong-preposition pattern — inserting "en" where Spanish uses the bare article, or calquing the English "on Saturday" structure.
 
 Return only the JSON object described above. Do not include Markdown, code fences, commentary, or any text outside the JSON.
 ''';
@@ -408,12 +415,19 @@ Grounding rules:
 - Case 3 — Attempt is close but wrong throughout (ground broadly): the attempt addresses the same idea and the user's wording aligns to most or all chunks, but contains errors throughout. Ground each chunk's distractors in the user's wrong form for that chunk where one exists.
   - Worked example: target "Ela vai comer no restaurante." against userAttempt "Ela vai come em o restaurante." Same idea, wording aligns across chunks, so this is Case 3. For chunk "comer" use the user's wrong form "come" (infinitive/mood slip) as one distractor; for chunk "no restaurante" use the user's wrong form "em o restaurante" (uncontracted preposition + article) as one distractor. Pair each with a generic form from the error pattern list.
 Final check:
-- Before finalising each question, check each distractor against the question's correct_translation. If any distractor is identical to correct_translation (after normalising whitespace), replace it with a different plausible wrong form drawn from the error pattern list, then check again. The two distractors and correct_translation must all be distinct strings.
+- Before finalising each question, perform three checks in order:
+  1. Check each distractor against the question's correct_translation. If any distractor is identical to correct_translation (after normalising whitespace), replace it with a different plausible wrong form drawn from the error pattern list.
+  2. Check the two distractors against each other. If they are identical to each other (after normalising whitespace), replace one of them with a different plausible wrong form drawn from the error pattern list.
+  3. Check each distractor for cross-language contamination. If any distractor is a word or phrase drawn from a language other than Brazilian Portuguese (no Italian, no English, no Spanish), with one exception: a documented Portuñol hybrid grafting a Spanish verb or form into the Portuguese phrase is a permitted distractor pattern. Replace any other cross-language distractor with a different plausible wrong form drawn from the error pattern list.
+- After replacing any distractor, repeat all three checks until they all pass. The two distractors and correct_translation must all be distinct strings, the two distractors must not be identical to each other, and both distractors must be in Brazilian Portuguese (with the documented Portuñol hybrid exception preserved).
 
-Brazilian Portuguese distractor examples:
-- "I am going" -> correct_translation "Vou"; distractors like "Vai" (person confusion, third person for intended first) and "Estou indo" (a more verbose alternative the learner might over-reach for).
-- "to get my hair cut" -> correct_translation "cortar o cabelo"; distractors like "cojer cortar o cabelo" (Portuñol hybrid grafting the Spanish verb "coger" into the Portuguese phrase) and "para um corto do cabelo" (calque of English "for a haircut" with an invented noun form).
-- "on Saturday" -> correct_translation "no sábado"; distractors like "em o sábado" (uncontracted, failing to contract "em + o" into "no") and "em sábado" (missing article, calque of English "on Saturday").
+Illustrative distractor patterns — for guidance only, not for direct reuse:
+
+The examples below show the kind of distractors to generate for chunks of similar shape. They are not pre-approved answers for these specific chunks. If a real chunk in a question matches one of these examples, still generate distractors fresh based on the Grounding rules above — use the learner's actual wrong form where one exists, or generic forms from the error pattern list. Use these examples as models of distractor style and learner-error realism, not as substitutes for the distractors you should generate.
+
+- For "I am going" -> correct "Vou": the kind of distractor that fits is person/conjugation confusion — a third-person form where first person is intended — or a more verbose alternative form the learner might over-reach for.
+- For "to get my hair cut" -> correct "cortar o cabelo": the kind of distractor that fits is a Portuñol hybrid (e.g. one grafting a Spanish verb such as "coger" into the Portuguese phrase) or a calque of an English "for a haircut" structure with an invented noun form.
+- For "on Saturday" -> correct "no sábado": the kind of distractor that fits is an uncontracted preposition-plus-article form, or a missing-article calque of the English "on Saturday" structure.
 
 Return only the JSON object described above. Do not include Markdown, code fences, commentary, or any text outside the JSON.
 ''';
