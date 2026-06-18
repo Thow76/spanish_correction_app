@@ -7,14 +7,21 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../../core/enums/language.dart';
+import '../../../core/models/walkthrough_exceptions.dart';
+import '../../../core/models/walkthrough_question.dart';
+import '../../../core/services/walkthrough_service.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
+import '../../../shared/text/correction_highlight_spans.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../../../shared/widgets/empty_state_panel.dart';
 import '../../../shared/widgets/primary_action_button.dart';
 import '../../corrections/application/correction_repository_controller.dart';
+import '../../corrections/application/correction_service.dart';
+import '../../corrections/domain/correction_item.dart';
 import '../../write/application/transcription_service.dart';
 import '../../write/application/transcription_service_exception.dart';
+import '../application/grade_retranslation_use_case.dart';
 import '../domain/game_question.dart';
 import '../domain/game_session.dart';
 
@@ -22,12 +29,16 @@ class PromptTranslationGameScreen extends StatefulWidget {
   const PromptTranslationGameScreen({
     required this.repositoryController,
     required this.transcriptionService,
+    required this.correctionService,
+    required this.walkthroughService,
     required this.language,
     super.key,
   });
 
   final CorrectionRepositoryController repositoryController;
   final TranscriptionService transcriptionService;
+  final CorrectionService correctionService;
+  final WalkthroughService walkthroughService;
   final Language language;
 
   @override
@@ -35,7 +46,7 @@ class PromptTranslationGameScreen extends StatefulWidget {
       _PromptTranslationGameScreenState();
 }
 
-enum _GamePhase { prompt, reveal, summary }
+enum _GamePhase { prompt, reveal, walkthrough, walkthroughQuestion, summary }
 
 class _PromptTranslationGameScreenState
     extends State<PromptTranslationGameScreen> {
@@ -45,6 +56,7 @@ class _PromptTranslationGameScreenState
   final _answerController = TextEditingController();
   final _audioRecorder = AudioRecorder();
   final _random = Random();
+  late final GradeRetranslationUseCase _grader;
   Timer? _recordingTimer;
   GameSession? _session;
   _GamePhase _phase = _GamePhase.prompt;
@@ -54,6 +66,22 @@ class _PromptTranslationGameScreenState
   bool _isTranscribing = false;
   int _recordingSecondsRemaining = _recordingLimitSeconds;
 
+  // AI grade of the current re-translation (Chunk 2 use case). The AI proposes
+  // a verdict; the user disposes via the retained self-mark. Reset per attempt.
+  bool _isGrading = false;
+  RetranslationGrade? _grade;
+  Object? _gradeError;
+
+  // Walkthrough intro state (Section 6a). Offered after a KEEP PRACTICING
+  // attempt is scored. [_walkthroughQuestion] is the question captured at entry
+  // — the session pointer has already advanced past it by then, so the intro and
+  // the Yes-path service inputs read from this capture, not _session. The fetch
+  // state is reset by [_advanceToNext] on the No path (and at session start).
+  GameQuestion? _walkthroughQuestion;
+  bool _isFetchingWalkthrough = false;
+  WalkthroughException? _walkthroughError;
+  List<WalkthroughQuestion>? _walkthroughQuestions;
+
   String _str(String es, String pt) => switch (widget.language) {
     Language.spanish => es,
     Language.portuguese => pt,
@@ -62,6 +90,9 @@ class _PromptTranslationGameScreenState
   @override
   void initState() {
     super.initState();
+    _grader = GradeRetranslationUseCase(
+      correctionService: widget.correctionService,
+    );
     _startSession();
   }
 
@@ -126,8 +157,25 @@ class _PromptTranslationGameScreenState
                     _GamePhase.reveal => _RevealPhase(
                       question: _session!.currentQuestion,
                       submittedAnswer: _submittedAnswer,
-                      onCorrect: () => _recordRating(isCorrect: true),
-                      onIncorrect: () => _recordRating(isCorrect: false),
+                      isGrading: _isGrading,
+                      grade: _grade,
+                      gradeFailed: _gradeError != null,
+                      onCorrect: () => _handleSelfMark(isCorrect: true),
+                      onIncorrect: () => _handleSelfMark(isCorrect: false),
+                      str: _str,
+                    ),
+                    _GamePhase.walkthrough => _WalkthroughIntroPhase(
+                      attempt: _submittedAnswer,
+                      corrections: _grade?.corrections ?? const [],
+                      isFetching: _isFetchingWalkthrough,
+                      error: _walkthroughError,
+                      onYes: _startWalkthrough,
+                      onNo: _advanceToNext,
+                      str: _str,
+                    ),
+                    _GamePhase.walkthroughQuestion => _WalkthroughQuestionStub(
+                      questionCount: _walkthroughQuestions?.length ?? 0,
+                      onContinue: _advanceToNext,
                       str: _str,
                     ),
                     _GamePhase.summary => _SummaryPhase(
@@ -151,6 +199,13 @@ class _PromptTranslationGameScreenState
       _phase = _GamePhase.prompt;
       _submittedAnswer = '';
       _answerController.clear();
+      _grade = null;
+      _gradeError = null;
+      _isGrading = false;
+      _walkthroughQuestion = null;
+      _isFetchingWalkthrough = false;
+      _walkthroughError = null;
+      _walkthroughQuestions = null;
     });
 
     await widget.repositoryController.setActiveLanguage(widget.language);
@@ -182,20 +237,215 @@ class _PromptTranslationGameScreenState
     });
   }
 
-  void _revealAnswer() {
+  Future<void> _revealAnswer() async {
+    final answer = _answerController.text.trim();
+    final question = _session!.currentQuestion;
     setState(() {
-      _submittedAnswer = _answerController.text.trim();
+      _submittedAnswer = answer;
       _phase = _GamePhase.reveal;
+      _grade = null;
+      _gradeError = null;
+      _isGrading = true;
+    });
+
+    try {
+      final grade = await _grader.call(
+        attempt: answer,
+        savedErrorCategory: question.source.category,
+        language: widget.language,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _grade = grade;
+        _isGrading = false;
+      });
+    } catch (error) {
+      // No retry-in-place here (that is Section 6a): degrade gracefully to the
+      // plain self-mark when the grade is unavailable.
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _gradeError = error;
+        _isGrading = false;
+      });
+    }
+  }
+
+  /// Routes a self-mark through the AI verdict. When the user agrees with the
+  /// AI (or there is no verdict to disagree with), it records directly. When
+  /// the user contradicts the AI verdict, the override is gated behind a dialog
+  /// that surfaces what the AI objected to.
+  Future<void> _handleSelfMark({required bool isCorrect}) async {
+    final grade = _grade;
+    if (grade != null && isCorrect != grade.isWellDone) {
+      final confirmed = await _confirmOverride(
+        grade: grade,
+        userClaimsCorrect: isCorrect,
+      );
+      if (confirmed != true) {
+        return;
+      }
+    }
+    _recordRating(isCorrect: isCorrect);
+  }
+
+  Future<bool?> _confirmOverride({
+    required RetranslationGrade grade,
+    required bool userClaimsCorrect,
+  }) {
+    final category = grade.judgedCategory.label;
+    final reasoning = userClaimsCorrect
+        ? _str(
+            'La IA marcó en tu categoría de enfoque ($category): '
+            '${_describeErrors(grade)}.',
+            'A IA apontou na sua categoria em foco ($category): '
+            '${_describeErrors(grade)}.',
+          )
+        : _str(
+            'La IA no encontró errores en tu categoría de enfoque ($category).',
+            'A IA não encontrou erros na sua categoria em foco ($category).',
+          );
+    final confirmLabel = userClaimsCorrect
+        ? _str('Marcar como correcto', 'Marcar como correto')
+        : _str('Marcar para practicar', 'Marcar para praticar');
+
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(
+          _str('Anular a la IA', 'Substituir a IA'),
+          style: const TextStyle(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          reasoning,
+          style: const TextStyle(color: AppColors.textSecondary, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(_str('Cancelar', 'Cancelar')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _describeErrors(RetranslationGrade grade) {
+    return grade.categoryErrors
+        .map((error) => '"${error.originalPhrase}" → "${error.correctedPhrase}"')
+        .join(', ');
+  }
+
+  /// Records the score for the current attempt, then either offers the
+  /// walkthrough intro (KEEP PRACTICING) or advances to the next phrase.
+  ///
+  /// Scoring is bundled into [GameSession.recordAnswer], which ALSO advances
+  /// `currentIndex`. So once this runs the session points at the *next*
+  /// question — the walkthrough therefore captures the just-answered question
+  /// into [_walkthroughQuestion] and keeps [_submittedAnswer]/[_grade] (rather
+  /// than reading the now-advanced `_session.currentQuestion`). The advance-only
+  /// reset is deferred to [_advanceToNext] so the No path never re-scores.
+  void _recordRating({required bool isCorrect}) {
+    final question = _session!.currentQuestion;
+    final grade = _grade;
+    final nextSession = _session!.recordAnswer(isCorrect: isCorrect);
+
+    // Offered purely on the AI tier, independent of how the user self-marked.
+    if (grade != null && grade.isKeepPracticing) {
+      setState(() {
+        _session = nextSession;
+        _walkthroughQuestion = question;
+        _phase = _GamePhase.walkthrough;
+        // _submittedAnswer and _grade are intentionally retained for the intro.
+      });
+      return;
+    }
+
+    setState(() => _session = nextSession);
+    _advanceToNext();
+  }
+
+  /// Advance-only transition: clears the per-attempt state and swaps to the next
+  /// phrase (or the summary). Does NOT call [GameSession.recordAnswer] — the
+  /// score was already recorded by [_recordRating] before any walkthrough intro
+  /// was shown, so the No path reusing this cannot double-count. Pure setState,
+  /// no Navigator.pop (a pop would exit the whole game).
+  void _advanceToNext() {
+    setState(() {
+      _submittedAnswer = '';
+      _answerController.clear();
+      _grade = null;
+      _gradeError = null;
+      _isGrading = false;
+      _walkthroughQuestion = null;
+      _isFetchingWalkthrough = false;
+      _walkthroughError = null;
+      _walkthroughQuestions = null;
+      _phase = _session!.isComplete ? _GamePhase.summary : _GamePhase.prompt;
     });
   }
 
-  void _recordRating({required bool isCorrect}) {
-    final nextSession = _session!.recordAnswer(isCorrect: isCorrect);
+  /// Yes path on the walkthrough intro: fetches the multiple-choice questions.
+  ///
+  /// This is the first live exercise of [WalkthroughService] in the running
+  /// app. On success it transitions to the stub question phase; on failure it
+  /// surfaces the retry-in-place error state (the user stays on the intro). The
+  /// three walkthrough exception types are caught distinctly even though v1
+  /// shows a single user-facing message.
+  Future<void> _startWalkthrough() async {
+    final question = _walkthroughQuestion;
+    final grade = _grade;
+    if (question == null || grade == null) {
+      return;
+    }
+
     setState(() {
-      _session = nextSession;
-      _submittedAnswer = '';
-      _answerController.clear();
-      _phase = nextSession.isComplete ? _GamePhase.summary : _GamePhase.prompt;
+      _isFetchingWalkthrough = true;
+      _walkthroughError = null;
+    });
+
+    try {
+      final questions = await widget.walkthroughService.fetchQuestions(
+        targetSentence: question.expectedAnswer,
+        userAttempt: _submittedAnswer,
+        englishSource: question.promptPhrase,
+        corrections: grade.corrections,
+        language: widget.language,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _walkthroughQuestions = questions;
+        _isFetchingWalkthrough = false;
+        // STUB: the question screen itself is a later section. For now we land
+        // on a placeholder phase that reports how many questions were fetched.
+        _phase = _GamePhase.walkthroughQuestion;
+      });
+    } on WalkthroughApiException catch (error) {
+      _handleWalkthroughFailure(error);
+    } on WalkthroughSchemaException catch (error) {
+      _handleWalkthroughFailure(error);
+    } on WalkthroughValidationException catch (error) {
+      _handleWalkthroughFailure(error);
+    }
+  }
+
+  void _handleWalkthroughFailure(WalkthroughException error) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _walkthroughError = error;
+      _isFetchingWalkthrough = false;
     });
   }
 
@@ -436,6 +686,9 @@ class _RevealPhase extends StatelessWidget {
   const _RevealPhase({
     required this.question,
     required this.submittedAnswer,
+    required this.isGrading,
+    required this.grade,
+    required this.gradeFailed,
     required this.onCorrect,
     required this.onIncorrect,
     required this.str,
@@ -443,12 +696,20 @@ class _RevealPhase extends StatelessWidget {
 
   final GameQuestion question;
   final String submittedAnswer;
+  final bool isGrading;
+  final RetranslationGrade? grade;
+  final bool gradeFailed;
   final VoidCallback onCorrect;
   final VoidCallback onIncorrect;
   final String Function(String es, String pt) str;
 
   @override
   Widget build(BuildContext context) {
+    // Self-mark stays disabled until the AI verdict resolves, so the user
+    // always sees the AI's proposal (and its reasoning) before disposing. If
+    // grading failed there is no verdict to wait on, so marking is enabled.
+    final canSelfMark = !isGrading;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -464,24 +725,444 @@ class _RevealPhase extends StatelessWidget {
           color: AppColors.mint,
         ),
         const SizedBox(height: AppSpacing.md),
+        _VerdictPanel(
+          isGrading: isGrading,
+          grade: grade,
+          gradeFailed: gradeFailed,
+          str: str,
+        ),
+        const SizedBox(height: AppSpacing.md),
         _ContextPanel(text: question.source.shortExplanation),
         const SizedBox(height: AppSpacing.xxl),
+        Text(
+          str('Tu valoración', 'Sua avaliação'),
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
             Expanded(
               child: PrimaryActionButton(
                 label: str('Casi', 'Quase'),
-                onPressed: onIncorrect,
+                onPressed: canSelfMark ? onIncorrect : null,
               ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: PrimaryActionButton(
                 label: str('Lo logré', 'Acertei'),
-                onPressed: onCorrect,
+                onPressed: canSelfMark ? onCorrect : null,
               ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Shows the AI's verdict and its reasoning on the reveal phase, alongside the
+/// retained self-mark below it. The AI proposes; the user disposes.
+class _VerdictPanel extends StatelessWidget {
+  const _VerdictPanel({
+    required this.isGrading,
+    required this.grade,
+    required this.gradeFailed,
+    required this.str,
+  });
+
+  final bool isGrading;
+  final RetranslationGrade? grade;
+  final bool gradeFailed;
+  final String Function(String es, String pt) str;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent;
+    final Widget body;
+
+    if (isGrading) {
+      accent = AppColors.cyan;
+      body = Row(
+        children: [
+          const SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.cyan,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            str('Evaluando con la IA...', 'Avaliando com a IA...'),
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          ),
+        ],
+      );
+    } else if (grade == null) {
+      // Grade unavailable (e.g. offline). Degrade to plain self-mark.
+      accent = AppColors.textSecondary;
+      body = Text(
+        gradeFailed
+            ? str(
+                'Valoración de la IA no disponible. Usa tu propia valoración.',
+                'Avaliação da IA indisponível. Use sua própria avaliação.',
+              )
+            : '',
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+      );
+    } else {
+      final resolved = grade!;
+      final category = resolved.judgedCategory.label;
+      accent = resolved.isWellDone ? AppColors.mint : AppColors.coral;
+      final verdictLabel = resolved.isWellDone
+          ? str('Bien hecho', 'Muito bem')
+          : str('Sigue practicando', 'Continue praticando');
+      final reasoning = resolved.isWellDone
+          ? str(
+              'La categoría de enfoque ($category) está correcta en tu traducción.',
+              'A categoria em foco ($category) está correta na sua tradução.',
+            )
+          : str(
+              'La IA marcó en tu categoría de enfoque ($category): '
+              '${_describeErrors(resolved)}.',
+              'A IA apontou na sua categoria em foco ($category): '
+              '${_describeErrors(resolved)}.',
+            );
+
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                resolved.isWellDone
+                    ? Icons.check_circle_outline
+                    : Icons.error_outline,
+                color: accent,
+                size: 18,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                verdictLabel,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            reasoning,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+              height: 20 / 14,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            str('Valoración de la IA', 'Avaliação da IA'),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          body,
+        ],
+      ),
+    );
+  }
+
+  String _describeErrors(RetranslationGrade grade) {
+    return grade.categoryErrors
+        .map((error) => '"${error.originalPhrase}" → "${error.correctedPhrase}"')
+        .join(', ');
+  }
+}
+
+/// Walkthrough intro (Section 6a), shown after a KEEP PRACTICING attempt is
+/// scored. Renders the user's attempt with its errors highlighted in a single
+/// game accent (coral) — its own surface, separate from the reveal phase's grey
+/// "Tu respuesta" panel — and offers a "Work through it?" Yes/No CTA. Yes drives
+/// [onYes] (fetch, with a loading and retry-in-place error state); No drives the
+/// advance-only [onNo].
+class _WalkthroughIntroPhase extends StatelessWidget {
+  const _WalkthroughIntroPhase({
+    required this.attempt,
+    required this.corrections,
+    required this.isFetching,
+    required this.error,
+    required this.onYes,
+    required this.onNo,
+    required this.str,
+  });
+
+  final String attempt;
+  final List<CorrectionItem> corrections;
+  final bool isFetching;
+  final WalkthroughException? error;
+  final VoidCallback onYes;
+  final VoidCallback onNo;
+  final String Function(String es, String pt) str;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.coral, size: 18),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              str('Sigue practicando', 'Continue praticando'),
+              style: const TextStyle(
+                color: AppColors.coral,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.coral.withValues(alpha: 0.26)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                str('Tu respuesta', 'Sua resposta'),
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text.rich(
+                TextSpan(
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    height: 24 / 16,
+                  ),
+                  children: buildHighlightedSpans(
+                    text: attempt.isEmpty ? '...' : attempt,
+                    corrections: corrections,
+                    color: AppColors.coral,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        _WalkthroughIntroCta(
+          isFetching: isFetching,
+          error: error,
+          onYes: onYes,
+          onNo: onNo,
+          str: str,
+        ),
+      ],
+    );
+  }
+}
+
+/// The CTA region of the walkthrough intro: the Yes/No prompt, the loading
+/// state while [onYes] runs, and the retry-in-place error state.
+class _WalkthroughIntroCta extends StatelessWidget {
+  const _WalkthroughIntroCta({
+    required this.isFetching,
+    required this.error,
+    required this.onYes,
+    required this.onNo,
+    required this.str,
+  });
+
+  final bool isFetching;
+  final WalkthroughException? error;
+  final VoidCallback onYes;
+  final VoidCallback onNo;
+  final String Function(String es, String pt) str;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isFetching) {
+      return Center(
+        child: Column(
+          children: [
+            const SizedBox.square(
+              dimension: 28,
+              child: CircularProgressIndicator(
+                color: AppColors.cyan,
+                strokeWidth: 2,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              str('Preparando el repaso...', 'Preparando a revisão...'),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (error != null) {
+      // Retry-in-place: the user stays on the intro. v1 shows one message for
+      // all three exception types; Reintentar re-runs the same fetch.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            str(
+              'No se pudo preparar el repaso. Inténtalo de nuevo.',
+              'Não foi possível preparar a revisão. Tente novamente.',
+            ),
+            style: const TextStyle(
+              color: AppColors.coral,
+              fontSize: 14,
+              height: 20 / 14,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          PrimaryActionButton(
+            label: str('Reintentar', 'Tentar de novo'),
+            onPressed: onYes,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextButton(
+            onPressed: onNo,
+            child: Text(
+              str('Ahora no', 'Agora não'),
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          str('¿Lo trabajamos paso a paso?', 'Vamos trabalhar isso passo a passo?'),
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            height: 22 / 16,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          children: [
+            Expanded(
+              child: PrimaryActionButton(
+                label: str('Ahora no', 'Agora não'),
+                onPressed: onNo,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: PrimaryActionButton(
+                label: str('Sí, vamos', 'Sim, vamos'),
+                onPressed: onYes,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// STUB (Section 6a): placeholder for the walkthrough question screen, which is
+/// a later section. It only confirms the fetch succeeded (and how many questions
+/// came back) and offers a way back into the game flow so the user is not
+/// trapped. The real multiple-choice screen, answer collection, per-chunk
+/// judging, and any GOOD-tier offer are intentionally NOT built here.
+class _WalkthroughQuestionStub extends StatelessWidget {
+  const _WalkthroughQuestionStub({
+    required this.questionCount,
+    required this.onContinue,
+    required this.str,
+  });
+
+  final int questionCount;
+  final VoidCallback onContinue;
+  final String Function(String es, String pt) str;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.cyan.withValues(alpha: 0.16)),
+          ),
+          child: Column(
+            children: [
+              const Icon(Icons.construction, color: AppColors.cyan, size: 32),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                str(
+                  'Repaso preparado: $questionCount preguntas.\n'
+                  'La pantalla de preguntas llega en una próxima sección.',
+                  'Revisão preparada: $questionCount perguntas.\n'
+                  'A tela de perguntas chega em uma próxima seção.',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                  height: 20 / 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        PrimaryActionButton(
+          label: str('Continuar', 'Continuar'),
+          onPressed: onContinue,
         ),
       ],
     );

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/enums/language.dart';
+import '../../../core/services/walkthrough_service.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../../corrections/application/correction_repository_controller.dart';
+import '../../corrections/application/correction_service.dart';
 import '../../write/application/transcription_service.dart';
 import 'prompt_translation_game_screen.dart';
 import 'widgets/game_tile.dart';
@@ -12,12 +14,16 @@ class LearnScreen extends StatelessWidget {
   const LearnScreen({
     required this.repositoryController,
     required this.transcriptionService,
+    required this.correctionService,
+    required this.walkthroughService,
     required this.language,
     super.key,
   });
 
   final CorrectionRepositoryController repositoryController;
   final TranscriptionService transcriptionService;
+  final CorrectionService correctionService;
+  final WalkthroughService walkthroughService;
   final Language language;
 
   @override
@@ -87,6 +93,8 @@ class LearnScreen extends StatelessWidget {
         builder: (context) => PromptTranslationGameScreen(
           repositoryController: repositoryController,
           transcriptionService: transcriptionService,
+          correctionService: correctionService,
+          walkthroughService: walkthroughService,
           language: language,
         ),
       ),

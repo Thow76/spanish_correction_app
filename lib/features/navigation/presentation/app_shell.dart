@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/enums/language.dart';
+import '../../../core/services/walkthrough_service.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/network/network_status_service.dart';
 import '../../corrections/application/correction_repository_controller.dart';
@@ -25,6 +26,7 @@ class AppShell extends StatefulWidget {
     required this.repositoryController,
     required this.networkStatusService,
     required this.transcriptionService,
+    required this.walkthroughService,
     required this.language,
     required this.onChangeLanguage,
     super.key,
@@ -34,6 +36,7 @@ class AppShell extends StatefulWidget {
   final CorrectionRepositoryController repositoryController;
   final NetworkStatusService networkStatusService;
   final TranscriptionService transcriptionService;
+  final WalkthroughService walkthroughService;
   final Language language;
   final VoidCallback onChangeLanguage;
 
@@ -114,6 +117,8 @@ class _AppShellState extends State<AppShell> {
       LearnScreen(
         repositoryController: widget.repositoryController,
         transcriptionService: widget.transcriptionService,
+        correctionService: widget.correctionService,
+        walkthroughService: widget.walkthroughService,
         language: widget.language,
       ),
     ];

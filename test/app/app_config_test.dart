@@ -35,7 +35,9 @@ void main() {
     final config = AppConfig.fromEnvironment();
 
     expect(config.correctionProvider, CorrectionProvider.openAi);
-    expect(config.openAiCorrectionModel, 'gpt-4.1-mini');
+    expect(config.openAiCorrectionModel, 'gpt-5.5');
+    // Falls back to the correction model when OPENAI_WALKTHROUGH_MODEL is unset.
+    expect(config.openAiWalkthroughModel, 'gpt-5.5');
   });
 
   test('builds Gemini correction service for Gemini provider', () {
@@ -46,6 +48,7 @@ void main() {
         geminiModel: 'gemini-model',
         openAiApiKey: 'openai-key',
         openAiCorrectionModel: 'openai-model',
+        openAiWalkthroughModel: 'walkthrough-model',
       ),
     );
 
@@ -60,6 +63,7 @@ void main() {
         geminiModel: 'gemini-model',
         openAiApiKey: 'openai-key',
         openAiCorrectionModel: 'openai-model',
+        openAiWalkthroughModel: 'walkthrough-model',
       ),
     );
 

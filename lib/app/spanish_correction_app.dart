@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/enums/language.dart';
+import '../core/services/walkthrough_service.dart';
 import '../features/corrections/application/correction_repository_controller.dart';
 import '../features/corrections/application/correction_service.dart';
 import '../features/corrections/data/file_correction_repository.dart';
@@ -32,6 +33,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   late final CorrectionRepositoryController _repositoryController;
   late final NetworkStatusService _networkStatusService;
   late final TranscriptionService _transcriptionService;
+  late final WalkthroughService _walkthroughService;
   Language? _selectedLanguage;
   bool _isInitialising = true;
 
@@ -43,6 +45,10 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
     _correctionService = buildCorrectionService(config);
     _transcriptionService = OpenAiWhisperTranscriptionService(
       apiKey: config.openAiApiKey,
+    );
+    _walkthroughService = WalkthroughService(
+      apiKey: config.openAiApiKey,
+      model: config.openAiWalkthroughModel,
     );
     _repositoryController = CorrectionRepositoryController(
       FileCorrectionRepository(),
@@ -106,6 +112,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
         repositoryController: _repositoryController,
         networkStatusService: _networkStatusService,
         transcriptionService: _transcriptionService,
+        walkthroughService: _walkthroughService,
         language: selectedLanguage,
         onChangeLanguage: () => setState(() => _selectedLanguage = null),
       ),
