@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
+import '../../../shared/text/correction_highlight_spans.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
@@ -215,150 +216,21 @@ class _TextPanel extends StatelessWidget {
   }
 
   List<InlineSpan> _buildSpans() {
-    final graphemes = text.characters.toList();
-    final highlights = _resolveHighlights(graphemes);
-    final spans = <InlineSpan>[];
-    var cursor = 0;
-
-    for (final highlight in highlights) {
-      if (highlight.start > cursor) {
-        spans.add(
-          TextSpan(text: graphemes.sublist(cursor, highlight.start).join()),
-        );
-      }
-      final highlightedText = graphemes
-          .sublist(highlight.start, highlight.end)
-          .join();
-      spans.add(
-        TextSpan(
-          text: highlightedText,
-          style: TextStyle(
-            color: highlight.item.category.color,
-            fontWeight: FontWeight.w700,
-          ),
-          recognizer: TapGestureRecognizerFactory.build(
-            () => onTapCorrection(highlight.item),
-          ),
-        ),
-      );
-      cursor = highlight.end;
-    }
-
-    if (cursor < graphemes.length) {
-      spans.add(TextSpan(text: graphemes.sublist(cursor).join()));
-    }
-
-    return spans;
-  }
-
-  List<_Highlight> _resolveHighlights(List<String> graphemes) {
-    final highlights = <_Highlight>[];
-
-    for (final item in corrections) {
-      final phrase = phraseSelector(item);
-      final range = _locateRange(item, graphemes, phrase);
-      if (range == null) {
-        continue;
-      }
-      highlights.add(_Highlight(item: item, start: range.$1, end: range.$2));
-    }
-
-    highlights.sort((a, b) => a.start.compareTo(b.start));
-
-    final resolved = <_Highlight>[];
-    var lastEnd = 0;
-    for (final highlight in highlights) {
-      if (highlight.start < lastEnd) {
-        continue;
-      }
-      resolved.add(highlight);
-      lastEnd = highlight.end;
-    }
-    return resolved;
-  }
-
-  (int, int)? _locateRange(
-    CorrectionItem item,
-    List<String> graphemes,
-    String phrase,
-  ) {
-    final (modelStart, modelEnd) = rangeSelector(item);
-
-    if (modelStart != null &&
-        modelEnd != null &&
-        modelStart >= 0 &&
-        modelEnd >= modelStart &&
-        modelEnd <= graphemes.length) {
-      final slice = graphemes.sublist(modelStart, modelEnd).join();
-      if (slice == phrase) {
-        return (modelStart, modelEnd);
-      }
-    }
-
-    if (phrase.isEmpty) {
-      return null;
-    }
-
-    final phraseGraphemes = phrase.characters.toList();
-    final exactMatches = _findMatches(graphemes, phraseGraphemes);
-    if (exactMatches.isNotEmpty) {
-      final anchor = modelStart ?? 0;
-      final best = exactMatches.reduce(
-        (a, b) =>
-            (a - anchor).abs() <= (b - anchor).abs() ? a : b,
-      );
-      return (best, best + phraseGraphemes.length);
-    }
-
-    final lowerHaystack = graphemes
-        .map((grapheme) => grapheme.toLowerCase())
-        .toList();
-    final lowerNeedle = phraseGraphemes
-        .map((grapheme) => grapheme.toLowerCase())
-        .toList();
-    final fallbackMatches = _findMatches(lowerHaystack, lowerNeedle);
-    if (fallbackMatches.isEmpty) {
-      return null;
-    }
-
-    final anchor = modelStart ?? 0;
-    final best = fallbackMatches.reduce(
-      (a, b) => (a - anchor).abs() <= (b - anchor).abs() ? a : b,
+    // Range resolution and span assembly are shared with the Traducir frases
+    // walkthrough (buildHighlightedSpans). This screen keeps its two distinct
+    // behaviours by passing them in: per-error-category colours and a
+    // tap-to-open-detail recognizer.
+    return buildHighlightedSpans(
+      text: text,
+      corrections: corrections,
+      color: AppColors.textPrimary,
+      rangeSelector: rangeSelector,
+      phraseSelector: phraseSelector,
+      colorOf: (item) => item.category.color,
+      recognizerOf: (item) =>
+          TapGestureRecognizerFactory.build(() => onTapCorrection(item)),
     );
-    return (best, best + phraseGraphemes.length);
   }
-
-  static List<int> _findMatches(List<String> haystack, List<String> needle) {
-    if (needle.isEmpty || needle.length > haystack.length) {
-      return const [];
-    }
-    final matches = <int>[];
-    for (var start = 0; start <= haystack.length - needle.length; start++) {
-      var matched = true;
-      for (var offset = 0; offset < needle.length; offset++) {
-        if (haystack[start + offset] != needle[offset]) {
-          matched = false;
-          break;
-        }
-      }
-      if (matched) {
-        matches.add(start);
-      }
-    }
-    return matches;
-  }
-}
-
-class _Highlight {
-  const _Highlight({
-    required this.item,
-    required this.start,
-    required this.end,
-  });
-
-  final CorrectionItem item;
-  final int start;
-  final int end;
 }
 
 class TapGestureRecognizerFactory {
