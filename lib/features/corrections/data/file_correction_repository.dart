@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/enums/language.dart';
+import '../../../core/models/walkthrough_activity.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/domain/saved_correction.dart';
 import '../application/correction_repository.dart';
@@ -126,6 +128,45 @@ class FileCorrectionRepository implements CorrectionRepository {
   }
 
   @override
+  Future<List<WalkthroughActivity>> getWalkthroughActivities({
+    Language? language,
+  }) async {
+    final state = await _readState();
+    final all = state.walkthroughActivities;
+    final filtered = language == null
+        ? all
+        : all.where((a) => a.language == language).toList();
+    return List.unmodifiable(filtered);
+  }
+
+  @override
+  Future<void> addWalkthroughActivity(WalkthroughActivity activity) async {
+    final state = await _readState();
+    final nextActivities = [
+      activity,
+      ...state.walkthroughActivities.where(
+        (item) => item.sourcePhraseId != activity.sourcePhraseId,
+      ),
+    ];
+
+    await _writeState(state.copyWith(walkthroughActivities: nextActivities));
+  }
+
+  @override
+  Future<void> removeWalkthroughActivity(String sourcePhraseId) async {
+    final state = await _readState();
+    final nextActivities = state.walkthroughActivities
+        .where((activity) => activity.sourcePhraseId != sourcePhraseId)
+        .toList();
+
+    if (nextActivities.length == state.walkthroughActivities.length) {
+      return;
+    }
+
+    await _writeState(state.copyWith(walkthroughActivities: nextActivities));
+  }
+
+  @override
   Future<void> clear() async {
     await _writeState(const _CorrectionStoreState.empty());
   }
@@ -181,16 +222,19 @@ class _CorrectionStoreState {
     required this.recentSubmissions,
     required this.savedCorrections,
     required this.queuedSubmissions,
+    required this.walkthroughActivities,
   });
 
   const _CorrectionStoreState.empty()
     : recentSubmissions = const [],
       savedCorrections = const [],
-      queuedSubmissions = const [];
+      queuedSubmissions = const [],
+      walkthroughActivities = const [];
 
   final List<CorrectionSubmission> recentSubmissions;
   final List<SavedCorrection> savedCorrections;
   final List<QueuedSubmission> queuedSubmissions;
+  final List<WalkthroughActivity> walkthroughActivities;
 
   factory _CorrectionStoreState.fromJson(Map<String, Object?> json) {
     return _CorrectionStoreState(
@@ -206,6 +250,10 @@ class _CorrectionStoreState {
         json['queued_submissions'],
         QueuedSubmission.fromJson,
       ),
+      walkthroughActivities: _readList(
+        json['walkthrough_activities'],
+        WalkthroughActivity.fromJson,
+      ),
     );
   }
 
@@ -213,11 +261,14 @@ class _CorrectionStoreState {
     List<CorrectionSubmission>? recentSubmissions,
     List<SavedCorrection>? savedCorrections,
     List<QueuedSubmission>? queuedSubmissions,
+    List<WalkthroughActivity>? walkthroughActivities,
   }) {
     return _CorrectionStoreState(
       recentSubmissions: recentSubmissions ?? this.recentSubmissions,
       savedCorrections: savedCorrections ?? this.savedCorrections,
       queuedSubmissions: queuedSubmissions ?? this.queuedSubmissions,
+      walkthroughActivities:
+          walkthroughActivities ?? this.walkthroughActivities,
     );
   }
 
@@ -232,6 +283,9 @@ class _CorrectionStoreState {
       'queued_submissions': queuedSubmissions
           .map((submission) => submission.toJson())
           .toList(),
+      'walkthrough_activities': walkthroughActivities
+          .map((activity) => activity.toJson())
+          .toList(),
     };
   }
 
@@ -243,6 +297,19 @@ class _CorrectionStoreState {
       return [];
     }
 
-    return value.whereType<Map<String, Object?>>().map(fromJson).toList();
+    // Skip non-map entries (as before) and, additionally, any map-shaped entry
+    // whose fromJson throws. The walkthrough models parse strictly and throw on
+    // bad records (e.g. an unrecognised language); without this guard a single
+    // corrupt entry would fail the whole-file read and block every other record
+    // type from loading. Containment matches the older types, which never throw.
+    final result = <T>[];
+    for (final entry in value.whereType<Map<String, Object?>>()) {
+      try {
+        result.add(fromJson(entry));
+      } catch (error) {
+        debugPrint('Skipping malformed $T record in store: $error');
+      }
+    }
+    return result;
   }
 }

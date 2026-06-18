@@ -46,6 +46,10 @@ class SaveCorrectionUseCase {
       correctedSentence: correctedSentence,
       promptPhrase: promptPhrase,
       language: language,
+      startIndex: correction.startIndex,
+      endIndex: correction.endIndex,
+      correctedStartIndex: correction.correctedStartIndex,
+      correctedEndIndex: correction.correctedEndIndex,
     );
 
     await _repositoryController.addSavedCorrection(savedCorrection);

@@ -15,6 +15,10 @@ class SavedCorrection {
     required this.correctedSentence,
     required this.promptPhrase,
     required this.language,
+    this.startIndex,
+    this.endIndex,
+    this.correctedStartIndex,
+    this.correctedEndIndex,
   });
 
   final String id;
@@ -29,6 +33,16 @@ class SavedCorrection {
   final String promptPhrase;
   final Language language;
 
+  /// Character offsets of the error within [originalSentence] /
+  /// [correctedSentence], carried over from the live `CorrectionItem` at save
+  /// time so the span can be re-highlighted precisely. Null for records saved
+  /// before these fields existed (and for any save where the range was absent);
+  /// those fall back to substring matching at render time.
+  final int? startIndex;
+  final int? endIndex;
+  final int? correctedStartIndex;
+  final int? correctedEndIndex;
+
   SavedCorrection copyWith({
     String? id,
     ErrorCategory? category,
@@ -41,6 +55,10 @@ class SavedCorrection {
     String? correctedSentence,
     String? promptPhrase,
     Language? language,
+    int? startIndex,
+    int? endIndex,
+    int? correctedStartIndex,
+    int? correctedEndIndex,
   }) {
     return SavedCorrection(
       id: id ?? this.id,
@@ -54,6 +72,10 @@ class SavedCorrection {
       correctedSentence: correctedSentence ?? this.correctedSentence,
       promptPhrase: promptPhrase ?? this.promptPhrase,
       language: language ?? this.language,
+      startIndex: startIndex ?? this.startIndex,
+      endIndex: endIndex ?? this.endIndex,
+      correctedStartIndex: correctedStartIndex ?? this.correctedStartIndex,
+      correctedEndIndex: correctedEndIndex ?? this.correctedEndIndex,
     );
   }
 
@@ -77,6 +99,10 @@ class SavedCorrection {
       correctedSentence: json['corrected_sentence'] as String? ?? '',
       promptPhrase: json['prompt_phrase'] as String? ?? '',
       language: Language.fromJson(json['language'] as String?),
+      startIndex: json['start_index'] as int?,
+      endIndex: json['end_index'] as int?,
+      correctedStartIndex: json['corrected_start_index'] as int?,
+      correctedEndIndex: json['corrected_end_index'] as int?,
     );
   }
 
@@ -93,6 +119,11 @@ class SavedCorrection {
       'corrected_sentence': correctedSentence,
       'prompt_phrase': promptPhrase,
       'language': language.toJson(),
+      if (startIndex != null) 'start_index': startIndex,
+      if (endIndex != null) 'end_index': endIndex,
+      if (correctedStartIndex != null)
+        'corrected_start_index': correctedStartIndex,
+      if (correctedEndIndex != null) 'corrected_end_index': correctedEndIndex,
     };
   }
 }

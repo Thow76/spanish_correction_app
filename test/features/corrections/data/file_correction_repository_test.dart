@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -99,6 +100,85 @@ void main() {
       'queued-2',
     ]);
   });
+
+  test(
+    'skips a malformed walkthrough activity without dropping other records',
+    () async {
+      Map<String, Object?> activityJson({
+        required String sourcePhraseId,
+        required String language,
+      }) => {
+        'source_phrase_id': sourcePhraseId,
+        'target_sentence': 'voy a la tienda',
+        'language': language,
+        'questions': [
+          {
+            'english_stem': 'I am going',
+            'correct_translation': 'voy',
+            'distractors': ['va', 'vamos'],
+            'chunk_position': 0,
+          },
+        ],
+        'answers': <Object?>[null],
+        'completed_at': null,
+      };
+
+      // One valid activity, one map-shaped but invalid activity (unrecognised
+      // language -> WalkthroughActivity.fromJson throws), alongside valid
+      // entries of every other record type, all in a single store file.
+      final storeJson = {
+        'recent_submissions': [_submission(0).toJson()],
+        'saved_corrections': [_savedCorrection().toJson()],
+        'queued_submissions': [
+          QueuedSubmission(
+            id: 'queued-1',
+            text: 'Ayer yo fue al mercado.',
+            createdAt: DateTime(2026, 5, 24, 10),
+            language: Language.spanish,
+          ).toJson(),
+        ],
+        'walkthrough_activities': [
+          activityJson(sourcePhraseId: 'phrase-1', language: 'spanish'),
+          activityJson(sourcePhraseId: 'phrase-2', language: 'klingon'),
+        ],
+      };
+
+      await File(
+        '${tempDirectory.path}/store.json',
+      ).writeAsString(jsonEncode(storeJson));
+
+      final activities = await repository.getWalkthroughActivities();
+
+      // The malformed activity is skipped; the valid one still loads.
+      expect(activities, hasLength(1));
+      expect(activities.single.sourcePhraseId, 'phrase-1');
+
+      // Every other record type is unaffected by the corrupt walkthrough entry.
+      expect(await repository.getRecentSubmissions(), hasLength(1));
+      expect(await repository.getSavedCorrections(), hasLength(1));
+      expect(await repository.getQueuedSubmissions(), hasLength(1));
+    },
+  );
+}
+
+SavedCorrection _savedCorrection() {
+  return SavedCorrection(
+    id: 'saved-1',
+    category: ErrorCategory.grammar,
+    shortExplanation: 'Use fui for first-person preterite of ir.',
+    originalSentence: 'Ayer yo fue al mercado.',
+    explanation: const SavedExplanation(
+      whyItsWrong: 'The verb ir uses fui for yo in the preterite.',
+      inContext: 'Ayer fui al mercado.',
+      alternatives: ['Fui al mercado ayer.'],
+    ),
+    savedAt: DateTime(2026, 5, 24),
+    correctedPhrase: 'fui',
+    originalPhrase: 'fue',
+    correctedSentence: 'Ayer fui al mercado.',
+    promptPhrase: 'Yesterday I went to the market.',
+    language: Language.spanish,
+  );
 }
 
 CorrectionSubmission _submission(int index) {

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/enums/language.dart';
+import '../../../core/models/walkthrough_activity.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/domain/saved_correction.dart';
 import '../domain/queued_submission.dart';
@@ -14,12 +15,14 @@ class CorrectionRepositoryController extends ChangeNotifier {
   List<CorrectionSubmission> _recentSubmissions = const [];
   List<SavedCorrection> _savedCorrections = const [];
   List<QueuedSubmission> _queuedSubmissions = const [];
+  List<WalkthroughActivity> _walkthroughActivities = const [];
   bool _isLoadingHistory = false;
   Language? _activeLanguage;
 
   List<CorrectionSubmission> get recentSubmissions => _recentSubmissions;
   List<SavedCorrection> get savedCorrections => _savedCorrections;
   List<QueuedSubmission> get queuedSubmissions => _queuedSubmissions;
+  List<WalkthroughActivity> get walkthroughActivities => _walkthroughActivities;
   bool get isLoadingHistory => _isLoadingHistory;
   Language? get activeLanguage => _activeLanguage;
 
@@ -29,6 +32,7 @@ class CorrectionRepositoryController extends ChangeNotifier {
       _refreshRecentSubmissions(),
       _refreshSavedCorrections(),
       _refreshQueuedSubmissions(),
+      _refreshWalkthroughActivities(),
     ]);
     notifyListeners();
   }
@@ -104,6 +108,29 @@ class CorrectionRepositoryController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadWalkthroughActivities() async {
+    _walkthroughActivities = await _repository.getWalkthroughActivities(
+      language: _activeLanguage,
+    );
+    notifyListeners();
+  }
+
+  Future<void> addWalkthroughActivity(WalkthroughActivity activity) async {
+    await _repository.addWalkthroughActivity(activity);
+    _walkthroughActivities = await _repository.getWalkthroughActivities(
+      language: _activeLanguage,
+    );
+    notifyListeners();
+  }
+
+  Future<void> removeWalkthroughActivity(String sourcePhraseId) async {
+    await _repository.removeWalkthroughActivity(sourcePhraseId);
+    _walkthroughActivities = await _repository.getWalkthroughActivities(
+      language: _activeLanguage,
+    );
+    notifyListeners();
+  }
+
   Future<void> _refreshRecentSubmissions() async {
     _recentSubmissions = await _repository.getRecentSubmissions(
       language: _activeLanguage,
@@ -118,5 +145,11 @@ class CorrectionRepositoryController extends ChangeNotifier {
 
   Future<void> _refreshQueuedSubmissions() async {
     _queuedSubmissions = await _repository.getQueuedSubmissions();
+  }
+
+  Future<void> _refreshWalkthroughActivities() async {
+    _walkthroughActivities = await _repository.getWalkthroughActivities(
+      language: _activeLanguage,
+    );
   }
 }
