@@ -17,7 +17,9 @@ class PrimaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isEnabled = onPressed != null && !isLoading;
-    final borderColor = isEnabled ? AppColors.cyan : AppColors.textDisabled;
+    final borderColor = isEnabled
+        ? AppColors.cyan
+        : AppColors.textPrimary.withValues(alpha: 0.12);
     final fillColor = isEnabled
         ? AppColors.cyan.withValues(alpha: 0.12)
         : AppColors.textDisabled.withValues(alpha: 0.12);

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
@@ -14,8 +13,12 @@ import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/text/correction_highlight_spans.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/character_counter.dart';
 import '../../../shared/widgets/empty_state_panel.dart';
+import '../../../shared/widgets/divider_label.dart';
+import '../../../shared/widgets/mic_control.dart';
 import '../../../shared/widgets/primary_action_button.dart';
+import '../../../shared/widgets/text_input_panel.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
 import '../../corrections/domain/correction_item.dart';
@@ -635,6 +638,7 @@ class _PromptPhase extends StatelessWidget {
   Widget build(BuildContext context) {
     final question = session.currentQuestion;
     final answer = answerController.text.trim();
+    final count = answerController.text.characters.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -650,9 +654,9 @@ class _PromptPhase extends StatelessWidget {
         const SizedBox(height: AppSpacing.xl),
         SizedBox(
           height: 168,
-          child: _AnswerInputPanel(
+          child: TextInputPanel(
             controller: answerController,
-            answerLimit: answerLimit,
+            characterLimit: answerLimit,
             hintText: str(
               'Escribe o graba tu respuesta...',
               'Escreva ou grave sua resposta...',
@@ -660,8 +664,12 @@ class _PromptPhase extends StatelessWidget {
             onChanged: onAnswerChanged,
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        _MicControl(
+        const SizedBox(height: AppSpacing.sm),
+        CharacterCounter(count: count, limit: answerLimit),
+        const SizedBox(height: AppSpacing.xl),
+        DividerLabel(label: str('o', 'ou')),
+        const SizedBox(height: AppSpacing.md),
+        MicControl(
           onTap: onMicTap,
           isRecording: isRecording,
           isTranscribing: isTranscribing,
@@ -1245,8 +1253,9 @@ class _ProgressLabel extends StatelessWidget {
       text,
       style: const TextStyle(
         color: AppColors.textSecondary,
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        height: 1.5,
       ),
     );
   }
@@ -1261,183 +1270,21 @@ class _PromptCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cyan.withValues(alpha: 0.16)),
+        color: AppColors.cyan.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cyan.withValues(alpha: 0.22)),
       ),
       child: Text(
         text,
-        textAlign: TextAlign.center,
         style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontFamily: 'Sora',
-          fontSize: 24,
-          fontWeight: FontWeight.w600,
-          height: 32 / 24,
-        ),
-      ),
-    );
-  }
-}
-
-class _AnswerInputPanel extends StatelessWidget {
-  const _AnswerInputPanel({
-    required this.controller,
-    required this.answerLimit,
-    required this.hintText,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final int answerLimit;
-  final String hintText;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.cyan.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.cyan.withValues(alpha: 0.4),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.cyan.withValues(alpha: 0.08),
-            blurRadius: 20,
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: controller,
-        maxLines: null,
-        expands: true,
-        inputFormatters: [LengthLimitingTextInputFormatter(answerLimit)],
-        onChanged: onChanged,
-        cursorColor: AppColors.cyan,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
+          color: AppColors.textSecondary,
           fontSize: 15,
           height: 24 / 15,
         ),
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          hintText: hintText,
-          hintStyle: const TextStyle(color: AppColors.textSecondary),
-        ),
       ),
     );
-  }
-}
-
-class _MicControl extends StatelessWidget {
-  const _MicControl({
-    required this.onTap,
-    required this.isRecording,
-    required this.isTranscribing,
-    required this.secondsRemaining,
-    required this.idleLabel,
-    required this.activeLabel,
-    required this.transcribingLabel,
-  });
-
-  final VoidCallback? onTap;
-  final bool isRecording;
-  final bool isTranscribing;
-  final int secondsRemaining;
-  final String idleLabel;
-  final String activeLabel;
-  final String transcribingLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isRecording ? AppColors.coral : AppColors.cyan;
-    final label = isTranscribing
-        ? transcribingLabel
-        : isRecording
-        ? activeLabel
-        : idleLabel;
-
-    return Center(
-      child: Column(
-        children: [
-          InkWell(
-            onTap: onTap,
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: 96,
-              height: 96,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withValues(alpha: isRecording ? 0.2 : 0.12),
-                border: Border.all(
-                  color: color.withValues(alpha: isRecording ? 1 : 0.4),
-                  width: 2,
-                ),
-                boxShadow: isRecording
-                    ? [
-                        BoxShadow(
-                          color: AppColors.coral.withValues(alpha: 0.32),
-                          blurRadius: 18,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: isTranscribing
-                  ? const SizedBox.square(
-                      dimension: 28,
-                      child: CircularProgressIndicator(
-                        color: AppColors.cyan,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : Icon(
-                      isRecording ? Icons.stop : Icons.mic_none,
-                      color: color,
-                      size: 34,
-                    ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          if (isRecording) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              _formatTimer(secondsRemaining),
-              style: TextStyle(
-                color: secondsRemaining <= 10
-                    ? AppColors.coral
-                    : AppColors.textPrimary,
-                fontFamily: 'Sora',
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _formatTimer(int value) {
-    final safeValue = value.clamp(0, 60);
-    final minutes = safeValue ~/ 60;
-    final seconds = safeValue % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
 
