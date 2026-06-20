@@ -112,6 +112,10 @@ Rules:
 - Indexes must refer only to the submitted Spanish text, not the instruction text or labels.
 - Indexes are measured in user-perceived characters, not bytes.
 - Accented letters, ñ, inverted punctuation, emoji, and combining-accent sequences each count as one user-perceived character.
+- For each correction also return corrected_start_index and corrected_end_index: the zero-based start (inclusive) and end (exclusive) index of corrected_phrase within the corrected_text you yourself return, measured in user-perceived characters (an accented letter, ñ, or inverted punctuation each count as one).
+- The slice of corrected_text from corrected_start_index to corrected_end_index must equal corrected_phrase exactly, character for character.
+- Before responding, verify that slice by counting characters in the corrected_text you return; if it does not match, fix corrected_start_index and corrected_end_index so it does.
+- For deletions where corrected_phrase is empty, set corrected_start_index equal to corrected_end_index at the deletion point in corrected_text.
 - category must be exactly one of: Grammar, Natural Language, Spelling, Word Choice, Other.
 - short_explanation must be one informal but technically accurate sentence.
 - If there are no corrections, return an empty corrections array and keep corrected_text equal to original_text.
@@ -284,6 +288,10 @@ Rules:
 - Indexes must refer only to the submitted Brazilian Portuguese text, not the instruction text or labels.
 - Indexes are measured in user-perceived characters, not bytes.
 - Accented letters, special characters, emoji, and combining-accent sequences each count as one user-perceived character.
+- For each correction also return corrected_start_index and corrected_end_index: the zero-based start (inclusive) and end (exclusive) index of corrected_phrase within the corrected_text you yourself return, measured in user-perceived characters (an accented letter or special character each count as one).
+- The slice of corrected_text from corrected_start_index to corrected_end_index must equal corrected_phrase exactly, character for character.
+- Before responding, verify that slice by counting characters in the corrected_text you return; if it does not match, fix corrected_start_index and corrected_end_index so it does.
+- For deletions where corrected_phrase is empty, set corrected_start_index equal to corrected_end_index at the deletion point in corrected_text.
 - category must be exactly one of: Grammar, Natural Language, Spelling, Word Choice, Other.
 - short_explanation must be one informal but technically accurate sentence.
 - If there are no corrections, return an empty corrections array and keep corrected_text equal to original_text.

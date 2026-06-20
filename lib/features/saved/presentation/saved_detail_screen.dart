@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
+import '../../../shared/text/correction_highlight_spans.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../corrections/domain/correction_item.dart';
 import '../domain/saved_correction.dart';
 
 class SavedDetailScreen extends StatefulWidget {
@@ -72,6 +74,22 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
   }
 
   List<Widget> _buildSections(SavedCorrection correction) {
+    // Bridge the single saved record to the shared highlight resolver
+    // (buildHighlightedSpans) by rebuilding the CorrectionItem it was saved
+    // from: its phrases, category, and the persisted character ranges. This
+    // anchors each highlight on the stored range — the correct occurrence of a
+    // repeated word — instead of a first-occurrence indexOf (Bug 2).
+    final item = CorrectionItem(
+      originalPhrase: correction.originalPhrase,
+      correctedPhrase: correction.correctedPhrase,
+      category: correction.category,
+      shortExplanation: correction.shortExplanation,
+      startIndex: correction.startIndex,
+      endIndex: correction.endIndex,
+      correctedStartIndex: correction.correctedStartIndex,
+      correctedEndIndex: correction.correctedEndIndex,
+    );
+
     final sections = <(_DetailSection, Widget)>[
       (
         _DetailSection.whyItsWrong,
@@ -97,8 +115,12 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
             ? const _TextBody(text: 'No original text saved for this correction.')
             : _HighlightedSentence(
                 sentence: correction.originalSentence,
-                highlight: correction.originalPhrase,
+                item: item,
                 color: correction.category.color,
+                // Original side: anchor on the persisted original range; for old
+                // records with no saved range, fall back to substring matching.
+                rangeSelector: (item) => (item.startIndex, item.endIndex),
+                phraseSelector: (item) => item.originalPhrase,
               ),
       ),
       (
@@ -109,8 +131,16 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
               )
             : _HighlightedSentence(
                 sentence: correction.correctedSentence,
-                highlight: correction.correctedPhrase,
+                item: item,
                 color: correction.category.color,
+                // Corrected side: the persisted range is the model's own index
+                // into the corrected text; trust only an exact slice match and
+                // drop the highlight on a miss (null/invalid) rather than
+                // mis-placing it.
+                rangeSelector: (item) =>
+                    (item.correctedStartIndex, item.correctedEndIndex),
+                phraseSelector: (item) => item.correctedPhrase,
+                requireExactRange: true,
               ),
       ),
     ];
@@ -300,22 +330,27 @@ class _TextBody extends StatelessWidget {
 class _HighlightedSentence extends StatelessWidget {
   const _HighlightedSentence({
     required this.sentence,
-    required this.highlight,
+    required this.item,
     required this.color,
+    required this.rangeSelector,
+    required this.phraseSelector,
+    this.requireExactRange = false,
   });
 
   final String sentence;
-  final String highlight;
+  final CorrectionItem item;
   final Color color;
+  final (int?, int?) Function(CorrectionItem item) rangeSelector;
+  final String Function(CorrectionItem item) phraseSelector;
+  final bool requireExactRange;
 
   @override
   Widget build(BuildContext context) {
-    final range = _findRange(sentence, highlight);
-
-    if (range == null) {
-      return _TextBody(text: sentence);
-    }
-
+    // Resolution is delegated to the shared helper so the saved/detail screen
+    // anchors on the persisted range exactly as the live corrections screen
+    // does. When nothing resolves, the helper emits the sentence as plain spans
+    // (no highlight) — the original side after a substring miss, or the
+    // corrected side dropping an invalid range.
     return Text.rich(
       TextSpan(
         style: const TextStyle(
@@ -323,34 +358,15 @@ class _HighlightedSentence extends StatelessWidget {
           fontSize: 15,
           height: 24 / 15,
         ),
-        children: [
-          if (range.$1 > 0) TextSpan(text: sentence.substring(0, range.$1)),
-          TextSpan(
-            text: sentence.substring(range.$1, range.$2),
-            style: TextStyle(color: color, fontWeight: FontWeight.w700),
-          ),
-          if (range.$2 < sentence.length)
-            TextSpan(text: sentence.substring(range.$2)),
-        ],
+        children: buildHighlightedSpans(
+          text: sentence,
+          corrections: [item],
+          color: color,
+          rangeSelector: rangeSelector,
+          phraseSelector: phraseSelector,
+          requireExactRange: requireExactRange,
+        ),
       ),
     );
-  }
-
-  static (int, int)? _findRange(String sentence, String highlight) {
-    if (highlight.isEmpty) {
-      return null;
-    }
-
-    final exact = sentence.indexOf(highlight);
-    if (exact != -1) {
-      return (exact, exact + highlight.length);
-    }
-
-    final lower = sentence.toLowerCase().indexOf(highlight.toLowerCase());
-    if (lower != -1) {
-      return (lower, lower + highlight.length);
-    }
-
-    return null;
   }
 }

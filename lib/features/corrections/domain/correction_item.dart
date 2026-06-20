@@ -23,22 +23,6 @@ class CorrectionItem {
   final int? correctedStartIndex;
   final int? correctedEndIndex;
 
-  CorrectionItem withCorrectedRange({
-    required int correctedStartIndex,
-    required int correctedEndIndex,
-  }) {
-    return CorrectionItem(
-      originalPhrase: originalPhrase,
-      correctedPhrase: correctedPhrase,
-      category: category,
-      shortExplanation: shortExplanation,
-      startIndex: startIndex,
-      endIndex: endIndex,
-      correctedStartIndex: correctedStartIndex,
-      correctedEndIndex: correctedEndIndex,
-    );
-  }
-
   factory CorrectionItem.fromJson(
     Map<String, Object?> json, {
     bool allowLegacyCategories = true,
@@ -52,6 +36,8 @@ class CorrectionItem {
       shortExplanation: json['short_explanation'] as String? ?? '',
       startIndex: json['start_index'] as int?,
       endIndex: json['end_index'] as int?,
+      correctedStartIndex: _optionalInt(json['corrected_start_index']),
+      correctedEndIndex: _optionalInt(json['corrected_end_index']),
     );
   }
 
@@ -79,6 +65,8 @@ class CorrectionItem {
       shortExplanation: json['short_explanation'] as String? ?? '',
       startIndex: startIndex,
       endIndex: endIndex,
+      correctedStartIndex: _optionalInt(json['corrected_start_index']),
+      correctedEndIndex: _optionalInt(json['corrected_end_index']),
     );
   }
 
@@ -129,6 +117,8 @@ class CorrectionItem {
       shortExplanation: json['short_explanation'] as String? ?? '',
       startIndex: anchored.start,
       endIndex: anchored.end,
+      correctedStartIndex: _optionalInt(json['corrected_start_index']),
+      correctedEndIndex: _optionalInt(json['corrected_end_index']),
     );
 
     if (!item.isInsertion && item.correctedPhrase == item.originalPhrase) {
@@ -234,6 +224,11 @@ class CorrectionItem {
 
     return characters.skip(startIndex).take(endIndex - startIndex).toString();
   }
+
+  // Defensively reads an integer field from parsed JSON. Returns null when the
+  // field is absent or not an integer (e.g. an older cached response that
+  // predates corrected_start_index/corrected_end_index), rather than throwing.
+  static int? _optionalInt(Object? value) => value is int ? value : null;
 
   static bool _containsSpanishCharacters(String value) {
     return RegExp(r'[áéíóúüñÁÉÍÓÚÜÑ¿¡]').hasMatch(value);

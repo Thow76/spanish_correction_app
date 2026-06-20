@@ -59,50 +59,24 @@ class CorrectionResponse {
     final reconstructedCorrectedText = parsedCorrections.isEmpty
         ? submittedText
         : _reconstructCorrectedText(submittedText, parsedCorrections);
-    final corrections = _withCorrectedRanges(parsedCorrections);
 
+    // Corrected-side highlight ranges come solely from the model's reported
+    // corrected_start_index/corrected_end_index (parsed onto each CorrectionItem
+    // and validated by the slice-check guard in the highlight resolver). The old
+    // arithmetic path computed them against the reconstructed text, which
+    // diverged from the rendered model text — the source of Bug 1.
     return CorrectionResponse(
       originalText: submittedText,
       correctedText:
           _shouldUseModelCorrectedText(
             submittedText: submittedText,
             modelCorrectedText: modelCorrectedText,
-            hasCorrections: corrections.isNotEmpty,
+            hasCorrections: parsedCorrections.isNotEmpty,
           )
           ? modelCorrectedText.trim()
           : reconstructedCorrectedText,
-      corrections: corrections,
+      corrections: parsedCorrections,
     );
-  }
-
-  static List<CorrectionItem> _withCorrectedRanges(
-    List<CorrectionItem> corrections,
-  ) {
-    if (corrections.isEmpty) {
-      return corrections;
-    }
-
-    final sortedByStart = [...corrections]
-      ..sort((left, right) => left.startIndex!.compareTo(right.startIndex!));
-
-    final correctedRanges = <CorrectionItem, (int, int)>{};
-    var delta = 0;
-    for (final correction in sortedByStart) {
-      final correctedStart = correction.startIndex! + delta;
-      final correctedLength = correction.correctedPhrase.characters.length;
-      final correctedEnd = correctedStart + correctedLength;
-      correctedRanges[correction] = (correctedStart, correctedEnd);
-      delta += correctedLength - (correction.endIndex! - correction.startIndex!);
-    }
-
-    return corrections
-        .map(
-          (correction) => correction.withCorrectedRange(
-            correctedStartIndex: correctedRanges[correction]!.$1,
-            correctedEndIndex: correctedRanges[correction]!.$2,
-          ),
-        )
-        .toList();
   }
 
   Map<String, Object?> toJson() {

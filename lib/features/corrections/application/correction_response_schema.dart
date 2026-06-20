@@ -19,6 +19,8 @@ const correctionResponseJsonSchema = <String, Object?>{
         'required': [
           'start_index',
           'end_index',
+          'corrected_start_index',
+          'corrected_end_index',
           'original_phrase',
           'corrected_phrase',
           'category',
@@ -34,6 +36,16 @@ const correctionResponseJsonSchema = <String, Object?>{
             'type': 'integer',
             'description':
                 'Zero-based exclusive end index in user-perceived characters. For insertions, this must equal start_index.',
+          },
+          'corrected_start_index': {
+            'type': 'integer',
+            'description':
+                'Zero-based inclusive index of corrected_phrase in the corrected_text string you return, in user-perceived characters. For deletions, this must equal corrected_end_index.',
+          },
+          'corrected_end_index': {
+            'type': 'integer',
+            'description':
+                'Zero-based exclusive index of corrected_phrase in the corrected_text string you return, in user-perceived characters. The slice of corrected_text between corrected_start_index and corrected_end_index must equal corrected_phrase exactly.',
           },
           'original_phrase': {
             'type': 'string',
@@ -74,6 +86,8 @@ const correctionResponseJsonShape = '''
     {
       "start_index": 0,
       "end_index": 0,
+      "corrected_start_index": 0,
+      "corrected_end_index": 0,
       "original_phrase": "string",
       "corrected_phrase": "string",
       "category": "string",

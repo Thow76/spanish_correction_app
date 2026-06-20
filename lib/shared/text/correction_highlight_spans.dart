@@ -26,6 +26,12 @@ String _originalPhrase(CorrectionItem item) => item.originalPhrase;
 /// span (the corrections screen opens a detail sheet); the game passes none.
 /// [rangeSelector] / [phraseSelector] choose which stored range/phrase to anchor
 /// on (original vs corrected text); they default to the original-text values.
+///
+/// [requireExactRange] trusts only the model-reported range: if the grapheme
+/// slice at that range does not equal the phrase (or the range is null /
+/// out-of-range), the highlight is dropped (rendered as plain text) rather than
+/// falling back to a substring/case-insensitive search. The corrected panel
+/// uses this so a wrong index can never produce a highlight on the wrong span.
 List<InlineSpan> buildHighlightedSpans({
   required String text,
   required List<CorrectionItem> corrections,
@@ -35,6 +41,7 @@ List<InlineSpan> buildHighlightedSpans({
   String Function(CorrectionItem item) phraseSelector = _originalPhrase,
   Color Function(CorrectionItem item)? colorOf,
   GestureRecognizer Function(CorrectionItem item)? recognizerOf,
+  bool requireExactRange = false,
 }) {
   final graphemes = text.characters.toList();
   final highlights = _resolveHighlights(
@@ -42,6 +49,7 @@ List<InlineSpan> buildHighlightedSpans({
     corrections,
     rangeSelector,
     phraseSelector,
+    requireExactRange,
   );
   final spans = <InlineSpan>[];
   var cursor = 0;
@@ -77,12 +85,19 @@ List<_Highlight> _resolveHighlights(
   List<CorrectionItem> corrections,
   (int?, int?) Function(CorrectionItem item) rangeSelector,
   String Function(CorrectionItem item) phraseSelector,
+  bool requireExactRange,
 ) {
   final highlights = <_Highlight>[];
 
   for (final item in corrections) {
     final phrase = phraseSelector(item);
-    final range = _locateRange(item, graphemes, phrase, rangeSelector);
+    final range = _locateRange(
+      item,
+      graphemes,
+      phrase,
+      rangeSelector,
+      requireExactRange,
+    );
     if (range == null) {
       continue;
     }
@@ -108,6 +123,7 @@ List<_Highlight> _resolveHighlights(
   List<String> graphemes,
   String phrase,
   (int?, int?) Function(CorrectionItem item) rangeSelector,
+  bool requireExactRange,
 ) {
   final (modelStart, modelEnd) = rangeSelector(item);
 
@@ -120,6 +136,14 @@ List<_Highlight> _resolveHighlights(
     if (slice == phrase) {
       return (modelStart, modelEnd);
     }
+  }
+
+  // Corrected side: trust only the model's reported range. If the slice did not
+  // match above (wrong, null, or out-of-range indices), drop this highlight
+  // rather than search — a dropped highlight shows plain text, never the wrong
+  // span. No substring or case-insensitive fallback.
+  if (requireExactRange) {
+    return null;
   }
 
   if (phrase.isEmpty) {

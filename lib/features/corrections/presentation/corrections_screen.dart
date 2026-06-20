@@ -57,6 +57,10 @@ class CorrectionsScreen extends StatelessWidget {
                   rangeSelector: (item) =>
                       (item.correctedStartIndex, item.correctedEndIndex),
                   phraseSelector: (item) => item.correctedPhrase,
+                  // The corrected indices are reported by the model against its
+                  // own corrected text; trust only an exact slice match and drop
+                  // any highlight that does not validate (never a wrong span).
+                  requireExactRange: true,
                   onTapCorrection: (item) =>
                       _showCorrectionSheet(context, item),
                 ),
@@ -169,6 +173,7 @@ class _TextPanel extends StatelessWidget {
     required this.rangeSelector,
     required this.phraseSelector,
     required this.onTapCorrection,
+    this.requireExactRange = false,
   });
 
   final String title;
@@ -177,6 +182,7 @@ class _TextPanel extends StatelessWidget {
   final (int?, int?) Function(CorrectionItem item) rangeSelector;
   final String Function(CorrectionItem item) phraseSelector;
   final ValueChanged<CorrectionItem> onTapCorrection;
+  final bool requireExactRange;
 
   @override
   Widget build(BuildContext context) {
@@ -226,6 +232,7 @@ class _TextPanel extends StatelessWidget {
       color: AppColors.textPrimary,
       rangeSelector: rangeSelector,
       phraseSelector: phraseSelector,
+      requireExactRange: requireExactRange,
       colorOf: (item) => item.category.color,
       recognizerOf: (item) =>
           TapGestureRecognizerFactory.build(() => onTapCorrection(item)),
