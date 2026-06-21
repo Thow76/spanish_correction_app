@@ -53,6 +53,26 @@ void main() {
     expect(find.text('on Saturday'), findsNothing);
   });
 
+  testWidgets('renders the progress label for the first question', (
+    tester,
+  ) async {
+    await pump(tester);
+
+    expect(find.text('Paso 1 de 3'), findsOneWidget);
+  });
+
+  testWidgets('the progress label advances with the cursor', (tester) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Paso 2 de 3'), findsOneWidget);
+    expect(find.text('Paso 1 de 3'), findsNothing);
+  });
+
   testWidgets('renders the first question\'s three options (set membership)', (
     tester,
   ) async {

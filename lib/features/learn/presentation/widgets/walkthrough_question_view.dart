@@ -27,6 +27,7 @@ class WalkthroughQuestionView extends StatefulWidget {
   const WalkthroughQuestionView({
     required this.questions,
     required this.onCompleted,
+    this.str = _defaultStr,
     this.random,
     super.key,
   });
@@ -35,11 +36,19 @@ class WalkthroughQuestionView extends StatefulWidget {
   /// tests can flush the timer deterministically via `tester.pump`.
   static const Duration autoAdvanceDelay = Duration(milliseconds: 900);
 
+  /// Default localisation: Spanish. A static tear-off so it can be a const
+  /// constructor default. The game wiring passes the real `_str`.
+  static String _defaultStr(String es, String pt) => es;
+
   final List<WalkthroughQuestion> questions;
 
   /// Output boundary. Defined here as the widget's contract; it is not invoked
   /// until the completion step wires the running tally to it.
   final WalkthroughCompleted onCompleted;
+
+  /// Returns the Spanish or Portuguese string for the active language. Optional
+  /// so existing callers/tests need no change; defaults to Spanish.
+  final String Function(String es, String pt) str;
 
   /// Injectable randomness for the per-question option shuffle, so tests can
   /// seed it. Defaults to a fresh [Random] when null.
@@ -191,6 +200,19 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
+        Text(
+          widget.str(
+            'Paso ${_currentIndex + 1} de ${widget.questions.length}',
+            'Passo ${_currentIndex + 1} de ${widget.questions.length}',
+          ),
+          style: const TextStyle(
+            color: AppColors.textDisabled,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 14),
         Text(
           question.englishStem,
           style: const TextStyle(color: AppColors.textPrimary),
