@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -29,6 +30,10 @@ class WalkthroughQuestionView extends StatefulWidget {
     this.random,
     super.key,
   });
+
+  /// The brief pause shown on a correct answer before auto-advancing. Exposed so
+  /// tests can flush the timer deterministically via `tester.pump`.
+  static const Duration autoAdvanceDelay = Duration(milliseconds: 900);
 
   final List<WalkthroughQuestion> questions;
 
@@ -66,6 +71,10 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   /// Tapping an option commits it; the question then locks (later taps are
   /// ignored). Reset per question by the advance step.
   String? _selectedOption;
+
+  /// Pending auto-advance for a correct answer. Cancelled on dispose. The wrong
+  /// path schedules nothing — it waits for the manual control.
+  Timer? _advanceTimer;
 
   bool get _isLocked => _selectedOption != null;
 
@@ -106,9 +115,23 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
       return;
     }
     setState(() => _selectedOption = option);
+
+    // Correct answers advance themselves after a brief pause; wrong answers wait
+    // for the user to tap the manual control.
+    if (_isCurrentCorrect) {
+      _advanceTimer = Timer(WalkthroughQuestionView.autoAdvanceDelay, _advance);
+    }
   }
 
   void _advance() {
+    // Idempotency guard: cancel any pending auto-advance and refuse to run once
+    // finished, so a stray late timer plus any other trigger cannot double-
+    // advance or fire completion twice.
+    _advanceTimer?.cancel();
+    if (_isFinished) {
+      return;
+    }
+
     // Bank the just-answered question's correctness as it is advanced past.
     if (_isCurrentCorrect) {
       _correctCount++;
@@ -131,6 +154,13 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
       // Fresh per-question state for the next question.
       _selectedOption = null;
     });
+  }
+
+  @override
+  void dispose() {
+    // Never let the auto-advance fire after the widget is gone.
+    _advanceTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -182,8 +212,9 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
                 ? const Key('walkthrough-result-correct')
                 : const Key('walkthrough-result-incorrect'),
           ),
-        // Placeholder advance control, shown once the question is locked.
-        if (_isLocked)
+        // Placeholder advance control, shown only on a WRONG locked answer.
+        // Correct answers auto-advance after a pause, so they show no control.
+        if (_isLocked && !_isCurrentCorrect)
           GestureDetector(
             key: const Key('walkthrough-advance'),
             onTap: _advance,

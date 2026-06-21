@@ -105,6 +105,10 @@ void main() {
     await tester.pump();
 
     expect(committedOption(tester), 'Voy');
+
+    // 'Voy' is correct, which schedules an auto-advance timer; drain it so the
+    // test ends with no pending timer.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
   });
 
   testWidgets('a second tap on a different option is ignored (locked)', (
@@ -112,14 +116,16 @@ void main() {
   ) async {
     await pump(tester, random: Random(1));
 
-    await tester.tap(find.text('Voy'));
-    await tester.pump();
-    expect(committedOption(tester), 'Voy');
-
-    // Lock holds: tapping a different option does not change the committed one.
+    // Commit a distractor (wrong) so the lock is proven without scheduling an
+    // auto-advance timer — correctness is orthogonal to locking.
     await tester.tap(find.text('Va'));
     await tester.pump();
-    expect(committedOption(tester), 'Voy');
+    expect(committedOption(tester), 'Va');
+
+    // Lock holds: tapping a different option does not change the committed one.
+    await tester.tap(find.text('Vamos'));
+    await tester.pump();
+    expect(committedOption(tester), 'Va');
   });
 
   final correctIndicator = find.byKey(const Key('walkthrough-result-correct'));
@@ -144,6 +150,9 @@ void main() {
 
     expect(correctIndicator, findsOneWidget);
     expect(incorrectIndicator, findsNothing);
+
+    // Drain the correct-answer auto-advance timer.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
   });
 
   testWidgets('committing a distractor marks it incorrect', (tester) async {
@@ -179,6 +188,9 @@ void main() {
     await tester.tap(find.text('Voy'));
     await tester.pump();
     expect(correctIndicator, findsOneWidget);
+
+    // Drain the correct-answer auto-advance timer.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
   });
 
   final correctHighlight = find.byKey(
@@ -207,22 +219,25 @@ void main() {
     await tester.pump();
 
     expect(correctHighlight, findsNothing);
+
+    // Drain the correct-answer auto-advance timer.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
   });
 
   final advance = find.byKey(const Key('walkthrough-advance'));
   final finished = find.byKey(const Key('walkthrough-finished'));
 
-  testWidgets('advancing moves to the next question and resets per-question state', (
+  testWidgets('a correct answer auto-advances after the pause and resets per-question state', (
     tester,
   ) async {
     await pump(tester, random: Random(1));
 
-    // Answer Q0, then advance.
+    // Answer Q0 correctly — no manual tap; the pause drives the advance.
     await tester.tap(find.text('Voy'));
     await tester.pump();
     expect(correctIndicator, findsOneWidget);
 
-    await tester.tap(advance);
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
     await tester.pumpAndSettle();
 
     // Q1 is now shown, Q0 gone.
@@ -235,16 +250,69 @@ void main() {
     expect(incorrectIndicator, findsNothing);
   });
 
+  testWidgets('a correct answer does not advance before the pause elapses', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+
+    // Well under the delay: still on Q0, not finished.
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('I am going'), findsOneWidget);
+    expect(find.text('to get my hair cut'), findsNothing);
+    expect(finished, findsNothing);
+
+    // Drain the remaining time so the test ends clean.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+  });
+
+  testWidgets('the correct path shows no manual advance control', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+
+    expect(advance, findsNothing);
+
+    // Drain the auto-advance timer.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+  });
+
+  testWidgets('the wrong path does not auto-advance and waits for the tap', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+
+    // No timer on the wrong path: waiting past the delay stays on Q0.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+    expect(find.text('I am going'), findsOneWidget);
+    expect(find.text('to get my hair cut'), findsNothing);
+
+    // The manual control is present and advances on tap.
+    expect(advance, findsOneWidget);
+    await tester.tap(advance);
+    await tester.pumpAndSettle();
+    expect(find.text('to get my hair cut'), findsOneWidget);
+  });
+
   testWidgets('advancing past the last question shows the finished placeholder', (
     tester,
   ) async {
     await pump(tester, random: Random(1));
 
-    // Walk all three questions: commit any option, then advance.
+    // Walk all three questions: commit the correct option, then let the pause
+    // auto-advance each.
     for (var i = 0; i < questions.length; i++) {
       await tester.tap(find.text(questions[i].correctTranslation));
       await tester.pump();
-      await tester.tap(advance);
+      await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
       await tester.pumpAndSettle();
     }
 
@@ -276,18 +344,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Known mix: Q0 correct, Q1 distractor (wrong), Q2 correct -> 2/3.
-    final answers = [
-      questions[0].correctTranslation,
-      questions[1].distractors.first,
-      questions[2].correctTranslation,
-    ];
-    for (var i = 0; i < questions.length; i++) {
-      await tester.tap(find.text(answers[i]));
-      await tester.pump();
-      await tester.tap(advance);
-      await tester.pumpAndSettle();
-    }
+    // Known mix: Q0 correct (auto), Q1 distractor/wrong (manual tap), Q2 correct
+    // (auto) -> 2/3.
+    // Q0 correct: pause auto-advances.
+    await tester.tap(find.text(questions[0].correctTranslation));
+    await tester.pump();
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+    await tester.pumpAndSettle();
+
+    // Q1 wrong: waits for the manual control.
+    await tester.tap(find.text(questions[1].distractors.first));
+    await tester.pump();
+    await tester.tap(advance);
+    await tester.pumpAndSettle();
+
+    // Q2 correct: pause auto-advances and finishes.
+    await tester.tap(find.text(questions[2].correctTranslation));
+    await tester.pump();
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+    await tester.pumpAndSettle();
 
     expect(calls, 1);
     expect(reportedCorrect, 2);
@@ -314,12 +389,169 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Answer and advance only the first question.
+    // Answer and advance only the first question (correct -> auto-advance).
     await tester.tap(find.text(questions[0].correctTranslation));
     await tester.pump();
-    await tester.tap(advance);
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
     await tester.pumpAndSettle();
 
     expect(calls, 0);
+  });
+
+  testWidgets('disposing during the pause cancels the auto-advance', (
+    tester,
+  ) async {
+    var calls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WalkthroughQuestionView(
+            questions: questions,
+            random: Random(1),
+            onCompleted: ({required correctCount, required totalCount}) {
+              calls++;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Commit a correct answer (schedules the auto-advance), then dispose the
+    // widget mid-pause by pumping a replacement tree.
+    await tester.tap(find.text(questions[0].correctTranslation));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpWidget(const SizedBox());
+
+    // Advance the clock past the delay: the cancelled timer must not fire, so
+    // completion never runs and no pending-timer exception is thrown.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+
+    expect(calls, 0);
+  });
+
+  testWidgets('interacting during the pause does not double-advance', (
+    tester,
+  ) async {
+    var calls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WalkthroughQuestionView(
+            questions: questions,
+            random: Random(1),
+            onCompleted: ({required correctCount, required totalCount}) {
+              calls++;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Commit Q0 correctly, then tap the locked options during the pause.
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+    await tester.tap(find.text('Va'));
+    await tester.tap(find.text('Vamos'));
+    await tester.pump();
+
+    // After the pause, exactly one advance occurred: now on Q1, not Q2.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+    await tester.pumpAndSettle();
+
+    expect(find.text('to get my hair cut'), findsOneWidget);
+    expect(find.text('on Saturday'), findsNothing);
+    expect(calls, 0);
+  });
+
+  testWidgets('a correct final answer auto-advances and fires onCompleted once', (
+    tester,
+  ) async {
+    var calls = 0;
+    int? reportedCorrect;
+    int? reportedTotal;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WalkthroughQuestionView(
+            questions: questions,
+            random: Random(1),
+            onCompleted: ({required correctCount, required totalCount}) {
+              calls++;
+              reportedCorrect = correctCount;
+              reportedTotal = totalCount;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Q0 and Q1 correct (auto-advance), then Q2 correct (auto-advance -> finish).
+    for (var i = 0; i < questions.length; i++) {
+      await tester.tap(find.text(questions[i].correctTranslation));
+      await tester.pump();
+      await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+      await tester.pumpAndSettle();
+    }
+
+    expect(finished, findsOneWidget);
+    expect(calls, 1);
+    expect(reportedCorrect, 3);
+    expect(reportedTotal, 3);
+  });
+
+  testWidgets('a wrong final answer waits for the tap, then fires onCompleted once', (
+    tester,
+  ) async {
+    var calls = 0;
+    int? reportedCorrect;
+    int? reportedTotal;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WalkthroughQuestionView(
+            questions: questions,
+            random: Random(1),
+            onCompleted: ({required correctCount, required totalCount}) {
+              calls++;
+              reportedCorrect = correctCount;
+              reportedTotal = totalCount;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Q0 and Q1 correct (auto-advance) -> 2 banked, now on the final question.
+    for (var i = 0; i < questions.length - 1; i++) {
+      await tester.tap(find.text(questions[i].correctTranslation));
+      await tester.pump();
+      await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+      await tester.pumpAndSettle();
+    }
+
+    // Final question answered wrongly: it must wait for the manual tap.
+    await tester.tap(find.text(questions.last.distractors.first));
+    await tester.pump();
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+    expect(finished, findsNothing);
+    expect(calls, 0);
+
+    // Tapping the manual control finishes and fires completion exactly once.
+    await tester.tap(advance);
+    await tester.pumpAndSettle();
+
+    expect(finished, findsOneWidget);
+    expect(calls, 1);
+    expect(reportedCorrect, 2);
+    expect(reportedTotal, 3);
   });
 }
