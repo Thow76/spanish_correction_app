@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/models/walkthrough_question.dart';
@@ -24,6 +26,7 @@ class WalkthroughQuestionView extends StatefulWidget {
   const WalkthroughQuestionView({
     required this.questions,
     required this.onCompleted,
+    this.random,
     super.key,
   });
 
@@ -33,23 +36,59 @@ class WalkthroughQuestionView extends StatefulWidget {
   /// until the completion step wires the running tally to it.
   final WalkthroughCompleted onCompleted;
 
+  /// Injectable randomness for the per-question option shuffle, so tests can
+  /// seed it. Defaults to a fresh [Random] when null.
+  final Random? random;
+
   @override
   State<WalkthroughQuestionView> createState() =>
       _WalkthroughQuestionViewState();
 }
 
 class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
-  // Reassigned by the advance step; not yet mutated in this (shell-only) step.
+  // Reassigned by the advance step; not yet mutated in this step.
   // ignore: prefer_final_fields
   int _currentIndex = 0;
+
+  /// The three display options per question, indexed in step with
+  /// [widget.questions]. Shuffled once here so a rebuild never reorders them;
+  /// the stored [WalkthroughQuestion.correctTranslation] remains the source of
+  /// truth for judging, so the shuffle carries no "which is correct" signal.
+  late final List<List<String>> _shuffledOptions;
+
+  @override
+  void initState() {
+    super.initState();
+    final random = widget.random ?? Random();
+    _shuffledOptions = [
+      for (final question in widget.questions)
+        [
+          question.correctTranslation,
+          question.distractors.first,
+          question.distractors.second,
+        ]..shuffle(random),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     final question = widget.questions[_currentIndex];
+    final options = _shuffledOptions[_currentIndex];
 
-    return Text(
-      question.englishStem,
-      style: const TextStyle(color: AppColors.textPrimary),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          question.englishStem,
+          style: const TextStyle(color: AppColors.textPrimary),
+        ),
+        for (final option in options)
+          Text(
+            option,
+            style: const TextStyle(color: AppColors.textPrimary),
+          ),
+      ],
     );
   }
 }
