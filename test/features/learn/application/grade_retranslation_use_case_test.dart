@@ -19,7 +19,8 @@ void main() {
 
   group('GradeRetranslationUseCase', () {
     test(
-      'well done when the saved error category is absent from the re-translation',
+      'Bien hecho when the saved category is fixed but other substantive '
+      'errors remain',
       () async {
         final service = _FakeCorrectionService([
           item(ErrorCategory.spelling),
@@ -33,8 +34,13 @@ void main() {
           language: Language.spanish,
         );
 
-        expect(grade.tier, RetranslationTier.excelente);
+        // Target (grammar) is fixed, but spelling + word-choice errors remain,
+        // so the sentence is not clean -> Bien hecho, not Excelente.
+        expect(grade.tier, RetranslationTier.bienHecho);
+        // Still a "fixed target" outcome: isWellDone stays true and the
+        // walkthrough does not trigger.
         expect(grade.isWellDone, isTrue);
+        expect(grade.isKeepPracticing, isFalse);
         expect(grade.categoryErrors, isEmpty);
         // Full list is preserved for the walkthrough service.
         expect(grade.corrections, hasLength(2));
@@ -66,9 +72,12 @@ void main() {
     );
 
     test(
-      'errors in other categories do not count toward the verdict',
+      'errors in other categories never trigger Sigue practicando, but do '
+      'downgrade Excelente to Bien hecho',
       () async {
-        // Several non-grammar errors but no grammar error -> still well done.
+        // Several non-grammar errors but no grammar error: the target is
+        // fixed, so this is never Sigue practicando. The other substantive
+        // errors mean the sentence is not clean -> Bien hecho.
         final service = _FakeCorrectionService([
           item(ErrorCategory.spelling),
           item(ErrorCategory.naturalLanguage),
@@ -83,7 +92,9 @@ void main() {
           language: Language.portuguese,
         );
 
-        expect(grade.tier, RetranslationTier.excelente);
+        expect(grade.tier, RetranslationTier.bienHecho);
+        expect(grade.isWellDone, isTrue);
+        expect(grade.isKeepPracticing, isFalse);
         expect(grade.categoryErrors, isEmpty);
         expect(grade.corrections, hasLength(4));
       },

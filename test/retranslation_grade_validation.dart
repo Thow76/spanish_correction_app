@@ -80,10 +80,12 @@ const List<_Case> _battery = [
     englishSource: 'I want to eat breakfast early tomorrow',
     attempt: 'Quiero desayunar tenprano mañana',
     savedCategory: ErrorCategory.grammar,
-    expectedTier: RetranslationTier.excelente,
+    expectedTier: RetranslationTier.bienHecho,
     note:
-        '"tenprano" is a spelling slip (other category); grammar is clean, so '
-        'expect well done — the spelling noise must NOT flip the verdict.',
+        '"tenprano" is a spelling slip (other category); grammar (the target) '
+        'is clean, so the target is fixed — but the spelling error leaves the '
+        'sentence unclean, so expect Bien hecho (not Excelente; the noise must '
+        'NOT flip it to Sigue practicando).',
   ),
   _Case(
     id: 'es-grammar-fully-clean',
@@ -141,10 +143,11 @@ const List<_Case> _battery = [
     englishSource: 'I bought a new car yesterday',
     attempt: 'Comprei um carro novo ontén',
     savedCategory: ErrorCategory.grammar,
-    expectedTier: RetranslationTier.excelente,
+    expectedTier: RetranslationTier.bienHecho,
     note:
-        '"ontén" is a spelling slip (other category); grammar is clean, so '
-        'expect well done.',
+        '"ontén" is a spelling slip (other category); grammar (the target) is '
+        'clean, so the target is fixed — but the spelling error leaves the '
+        'sentence unclean, so expect Bien hecho.',
   ),
 ];
 

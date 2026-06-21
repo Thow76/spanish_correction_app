@@ -15,11 +15,6 @@ import '../../corrections/domain/error_category.dart';
 /// - [siguePracticando] — the saved error's category is still present (the
 ///   target error was not fixed), regardless of the rest of the sentence.
 ///
-/// NOTE: [bienHecho] is not yet emitted — the "rest of the sentence" check that
-/// distinguishes it from [excelente] is wired in a following step. For now the
-/// grader produces only [excelente] (target fixed) or [siguePracticando]
-/// (target not fixed), preserving the previous two-outcome behaviour.
-///
 /// A saved error is single-category by construction (errors are saved one at a
 /// time by tapping a span), so whether the TARGET error was fixed is judged
 /// only against that one category. Errors the grader finds in other categories
@@ -30,8 +25,6 @@ enum RetranslationTier {
   excelente,
 
   /// Target error fixed BUT other substantive errors exist elsewhere.
-  ///
-  /// Not yet emitted; reserved for the rest-of-sentence check added next.
   bienHecho,
 
   /// The saved error's category is still present in the re-translation.
@@ -61,9 +54,10 @@ class RetranslationGrade {
   /// saved error the user is re-practising.
   final ErrorCategory judgedCategory;
 
-  /// The outcome tier. Currently derived solely from [categoryErrors]; the
-  /// rest-of-sentence check that distinguishes [RetranslationTier.excelente]
-  /// from [RetranslationTier.bienHecho] is added in a following step.
+  /// The outcome tier. Decided from [categoryErrors] (did the target error
+  /// remain?) and, once the target is fixed, whether any other substantive
+  /// error remains in [corrections] (distinguishing [RetranslationTier.excelente]
+  /// from [RetranslationTier.bienHecho]).
   final RetranslationTier tier;
 
   /// Whether the target error was fixed — true for BOTH top tiers
@@ -94,12 +88,16 @@ class GradeRetranslationUseCase {
 
   /// Grades [attempt] in [language] and judges it against [savedErrorCategory].
   ///
-  /// The full grade is preserved on the result. For now only corrections
-  /// matching [savedErrorCategory] decide the tier: if the saved category is
-  /// absent from the re-translation the attempt is [RetranslationTier.excelente];
-  /// if it is still present, [RetranslationTier.siguePracticando].
-  /// ([RetranslationTier.bienHecho] is not yet emitted — the rest-of-sentence
-  /// check is added in a following step.)
+  /// The full grade is preserved on the result. The tier is decided from two
+  /// facts:
+  ///
+  /// - If the saved category is still present (substantive errors in
+  ///   [savedErrorCategory] remain), the target error was not fixed →
+  ///   [RetranslationTier.siguePracticando], regardless of the rest.
+  /// - Otherwise the target error is fixed. If NO other substantive error
+  ///   exists anywhere in the attempt, the whole sentence is clean →
+  ///   [RetranslationTier.excelente]; if some other-category substantive error
+  ///   remains → [RetranslationTier.bienHecho].
   Future<RetranslationGrade> call({
     required String attempt,
     required ErrorCategory savedErrorCategory,
@@ -116,9 +114,15 @@ class GradeRetranslationUseCase {
         .where(_isSubstantive)
         .toList(growable: false);
 
-    final tier = categoryErrors.isEmpty
-        ? RetranslationTier.excelente
-        : RetranslationTier.siguePracticando;
+    final otherSubstantiveErrors = corrections
+        .where((correction) => correction.category != savedErrorCategory)
+        .where(_isSubstantive)
+        .toList(growable: false);
+
+    final tier = _tierFor(
+      categoryErrors: categoryErrors,
+      otherSubstantiveErrors: otherSubstantiveErrors,
+    );
 
     return RetranslationGrade(
       corrections: corrections,
@@ -126,6 +130,23 @@ class GradeRetranslationUseCase {
       judgedCategory: savedErrorCategory,
       tier: tier,
     );
+  }
+
+  /// Pure tier decision. The target error always dominates: if it remains the
+  /// attempt is [RetranslationTier.siguePracticando] no matter how clean the
+  /// rest is. Only once the target is fixed does the rest of the sentence
+  /// distinguish [RetranslationTier.excelente] (nothing else substantive) from
+  /// [RetranslationTier.bienHecho] (other substantive errors remain).
+  static RetranslationTier _tierFor({
+    required List<CorrectionItem> categoryErrors,
+    required List<CorrectionItem> otherSubstantiveErrors,
+  }) {
+    if (categoryErrors.isNotEmpty) {
+      return RetranslationTier.siguePracticando;
+    }
+    return otherSubstantiveErrors.isEmpty
+        ? RetranslationTier.excelente
+        : RetranslationTier.bienHecho;
   }
 
   /// Whether a correction represents a substantive error in its category.
