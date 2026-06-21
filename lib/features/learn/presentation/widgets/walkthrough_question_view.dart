@@ -187,20 +187,31 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   }
 
   /// Builds one styled option button. [index] gives the display badge letter
-  /// (a/b/c). Once locked, the correct option turns green; the wrong-selected
-  /// colouring is layered on in the next step.
+  /// (a/b/c). Once locked: the correct option turns green (both when chosen and
+  /// when highlighted after a wrong answer), and a wrong chosen option turns
+  /// coral. Unanswered/other options keep the neutral default.
   Widget _buildOption(int index, String option) {
     final isCorrectOption =
         option == widget.questions[_currentIndex].correctTranslation;
     final isGreen = _isLocked && isCorrectOption;
+    final isCoral = _isLocked && !isCorrectOption && option == _selectedOption;
 
-    final stateColor = isGreen ? AppColors.success : AppColors.textSecondary;
-    final fillColor = isGreen
-        ? AppColors.success.withValues(alpha: 0.14)
-        : AppColors.textDisabled.withValues(alpha: 0.12);
-    final borderColor = isGreen
-        ? AppColors.success
-        : AppColors.textPrimary.withValues(alpha: 0.12);
+    final Color stateColor;
+    final Color fillColor;
+    final Color borderColor;
+    if (isGreen) {
+      stateColor = AppColors.success;
+      fillColor = AppColors.success.withValues(alpha: 0.14);
+      borderColor = AppColors.success;
+    } else if (isCoral) {
+      stateColor = AppColors.coral;
+      fillColor = AppColors.coral.withValues(alpha: 0.12);
+      borderColor = AppColors.coral;
+    } else {
+      stateColor = AppColors.textSecondary;
+      fillColor = AppColors.textDisabled.withValues(alpha: 0.12);
+      borderColor = AppColors.textPrimary.withValues(alpha: 0.12);
+    }
     final badge = String.fromCharCode('a'.codeUnitAt(0) + index);
 
     return GestureDetector(
@@ -310,19 +321,31 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
             ),
           ),
         ],
-        // Placeholder incorrect indicator, replaced by the real wrong affordance
-        // in the next step.
-        if (_isLocked && !_isCurrentCorrect)
-          const SizedBox(key: Key('walkthrough-result-incorrect')),
-        // Placeholder advance control, shown only on a WRONG locked answer.
-        // Correct answers auto-advance after a pause, so they show no control.
-        if (_isLocked && !_isCurrentCorrect)
+        // Wrong-answer affordance: the correct option is highlighted and this
+        // line is the manual continue control (the correct path auto-advances,
+        // so it has no control). Carries both the result-incorrect marker and
+        // the advance tap target.
+        if (_isLocked && !_isCurrentCorrect) ...[
+          const SizedBox(height: 14),
           GestureDetector(
             key: const Key('walkthrough-advance'),
             onTap: _advance,
             behavior: HitTestBehavior.opaque,
-            child: const SizedBox(height: 44),
+            child: Text(
+              widget.str(
+                'La respuesta correcta está resaltada — siguiente paso…',
+                'A resposta correta está destacada — próximo passo…',
+              ),
+              key: const Key('walkthrough-result-incorrect'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textDisabled,
+                fontSize: 12,
+                height: 18 / 12,
+              ),
+            ),
           ),
+        ],
       ],
     );
   }

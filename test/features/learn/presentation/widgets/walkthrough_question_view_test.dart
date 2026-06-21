@@ -153,6 +153,75 @@ void main() {
     await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
   });
 
+  Color? containerColorFor(WidgetTester tester, Finder text, Color target) {
+    final match = tester
+        .widgetList<Container>(
+          find.ancestor(of: text, matching: find.byType(Container)),
+        )
+        .where((c) => (c.decoration as BoxDecoration?)?.color == target);
+    return match.isEmpty ? null : (match.first.decoration! as BoxDecoration).color;
+  }
+
+  testWidgets('the wrong-selected option is styled coral', (tester) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+
+    expect(
+      containerColorFor(
+        tester,
+        find.text('Va'),
+        AppColors.coral.withValues(alpha: 0.12),
+      ),
+      AppColors.coral.withValues(alpha: 0.12),
+    );
+  });
+
+  testWidgets('the correct option is green-highlighted in the wrong state', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+
+    // The correct option ('Voy') carries the highlight key and the green fill.
+    expect(
+      tester.widget<Text>(
+        find.byKey(const Key('walkthrough-correct-highlight')),
+      ).data,
+      'Voy',
+    );
+    expect(
+      containerColorFor(
+        tester,
+        find.text('Voy'),
+        AppColors.success.withValues(alpha: 0.14),
+      ),
+      AppColors.success.withValues(alpha: 0.14),
+    );
+  });
+
+  testWidgets('the wrong affordance is shown and advances on tap', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+
+    expect(
+      find.text('La respuesta correcta está resaltada — siguiente paso…'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('walkthrough-advance')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('to get my hair cut'), findsOneWidget);
+  });
+
   testWidgets('renders the first question\'s three options (set membership)', (
     tester,
   ) async {
