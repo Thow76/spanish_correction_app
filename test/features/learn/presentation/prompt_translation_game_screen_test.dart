@@ -313,4 +313,23 @@ void main() {
     expect(find.byType(WalkthroughResultView), findsOneWidget);
     expect(find.text('0%'), findsOneWidget);
   });
+
+  testWidgets('Try again returns to the SAME phrase as a fresh prompt', (
+    tester,
+  ) async {
+    await pumpGame(tester);
+    await driveToWalkthroughQuestions(tester);
+    await answerAllWalkthroughWrongly(tester); // 0/3 -> poor tier (Try-again)
+
+    await _tap(tester, find.text('Intentar la traducción completa otra vez'));
+
+    // Back on the prompt for the SAME phrase (same index, same prompt text).
+    expect(find.text('Pregunta 1 de 1'), findsOneWidget);
+    expect(find.text('Yesterday there was a lot of traffic'), findsOneWidget);
+
+    // Fresh attempt: empty input, and no walkthrough/result widgets linger.
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '');
+    expect(find.byType(WalkthroughResultView), findsNothing);
+    expect(find.byType(WalkthroughQuestionView), findsNothing);
+  });
 }

@@ -99,6 +99,12 @@ class _PromptTranslationGameScreenState
   int _walkthroughCorrect = 0;
   int _walkthroughTotal = 0;
 
+  // The session as it stood BEFORE the walkthrough-triggering attempt was
+  // recorded (pointing at that phrase, with its pre-attempt counts). "Try again"
+  // restores this so the same phrase is re-attempted fresh and the discarded
+  // attempt is not double-counted. Null outside the walkthrough flow.
+  GameSession? _sessionBeforeWalkthrough;
+
   String _str(String es, String pt) => switch (widget.language) {
     Language.spanish => es,
     Language.portuguese => pt,
@@ -199,8 +205,7 @@ class _PromptTranslationGameScreenState
                       correctCount: _walkthroughCorrect,
                       totalCount: _walkthroughTotal,
                       onContinue: _advanceToNext,
-                      // TODO(W-iii): wire the real retry path.
-                      onTryAgain: () {},
+                      onTryAgain: _retrySamePhrase,
                       onSeeAnswer: _handleSeeAnswer,
                       str: _str,
                     ),
@@ -379,6 +384,9 @@ class _PromptTranslationGameScreenState
     // Offered purely on the AI tier, independent of how the user self-marked.
     if (grade != null && grade.isKeepPracticing) {
       setState(() {
+        // Snapshot the pre-record session (still pointing at this phrase) so a
+        // later "Try again" can re-attempt it fresh without double-counting.
+        _sessionBeforeWalkthrough = _session;
         _session = nextSession;
         _walkthroughQuestion = question;
         _phase = _GamePhase.walkthrough;
@@ -407,6 +415,7 @@ class _PromptTranslationGameScreenState
     _walkthroughQuestions = null;
     _walkthroughCorrect = 0;
     _walkthroughTotal = 0;
+    _sessionBeforeWalkthrough = null;
   }
 
   /// Advance-only transition: clears the per-attempt state and swaps to the next
@@ -418,6 +427,24 @@ class _PromptTranslationGameScreenState
     setState(() {
       _resetAttemptState();
       _phase = _session!.isComplete ? _GamePhase.summary : _GamePhase.prompt;
+    });
+  }
+
+  /// "Try the full translation again" on the result screen: restores the session
+  /// snapshot (re-pointing at the just-attempted phrase with its pre-attempt
+  /// counts) and returns to a clean prompt. The discarded attempt's score is
+  /// dropped, so the retry is a genuine fresh GRADED attempt — deliberately
+  /// breaking the "walkthrough never re-scores" rule. If the retry also grades
+  /// keep-practicing, the same path offers the walkthrough again.
+  void _retrySamePhrase() {
+    final snapshot = _sessionBeforeWalkthrough;
+    if (snapshot == null) {
+      return;
+    }
+    setState(() {
+      _resetAttemptState();
+      _session = snapshot;
+      _phase = _GamePhase.prompt;
     });
   }
 
