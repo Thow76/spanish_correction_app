@@ -218,12 +218,18 @@ Future<void> pumpGame(
 /// type an answer, reveal (grades KEEP PRACTICING), self-mark "Casi" (matches
 /// the AI verdict, so no override dialog), accept the intro, fetch questions.
 Future<void> driveToWalkthroughQuestions(WidgetTester tester) async {
+  await answerCurrentPhraseToIntro(tester);
+  await _tap(tester, find.text('Sí, vamos'));
+}
+
+/// Types an answer, reveals (grades keep-practicing via the fake), and self-marks
+/// "Casi" — landing on the walkthrough intro ("¿Lo trabajamos paso a paso?").
+Future<void> answerCurrentPhraseToIntro(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField), 'Ayer hubo mucho tráfico');
   await tester.pump();
 
   await _tap(tester, find.text('Ver respuesta'));
   await _tap(tester, find.text('Casi'));
-  await _tap(tester, find.text('Sí, vamos'));
 }
 
 /// Scrolls the target into view (the game screen is a tall ListView, so bottom
@@ -331,5 +337,58 @@ void main() {
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '');
     expect(find.byType(WalkthroughResultView), findsNothing);
     expect(find.byType(WalkthroughQuestionView), findsNothing);
+  });
+
+  testWidgets('retry leaves no stale walkthrough / grade / answer state', (
+    tester,
+  ) async {
+    await pumpGame(tester);
+    await driveToWalkthroughQuestions(tester);
+    await answerAllWalkthroughWrongly(tester); // poor tier -> Try-again visible
+
+    await _tap(tester, find.text('Intentar la traducción completa otra vez'));
+
+    // Clean prompt: empty input, and NONE of the prior-attempt state lingers.
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '');
+    // No reveal/grade ghosts.
+    expect(find.text('Sigue practicando'), findsNothing);
+    expect(find.text('Respuesta esperada'), findsNothing);
+    expect(find.text('Tu respuesta'), findsNothing);
+    // No walkthrough intro / question / result ghosts.
+    expect(find.text('Sí, vamos'), findsNothing);
+    expect(find.byType(WalkthroughQuestionView), findsNothing);
+    expect(find.byType(WalkthroughResultView), findsNothing);
+  });
+
+  testWidgets('retry returns to the SAME phrase index (no skip)', (
+    tester,
+  ) async {
+    await pumpGame(tester);
+    expect(find.text('Pregunta 1 de 1'), findsOneWidget);
+
+    await driveToWalkthroughQuestions(tester);
+    await answerAllWalkthroughWrongly(tester);
+    await _tap(tester, find.text('Intentar la traducción completa otra vez'));
+
+    // Same phrase, not advanced and not the summary.
+    expect(find.text('Pregunta 1 de 1'), findsOneWidget);
+    expect(find.text('Resultado'), findsNothing);
+  });
+
+  testWidgets('a re-failed retry re-offers the walkthrough (loop)', (
+    tester,
+  ) async {
+    await pumpGame(tester);
+    await driveToWalkthroughQuestions(tester);
+    await answerAllWalkthroughWrongly(tester);
+    await _tap(tester, find.text('Intentar la traducción completa otra vez'));
+
+    // Re-attempt the same phrase; the fake grader keeps it keep-practicing, so
+    // the walkthrough intro must be offered again — proving the loop works with
+    // a freshly captured snapshot and no special "second failure" branch.
+    await answerCurrentPhraseToIntro(tester);
+
+    expect(find.text('¿Lo trabajamos paso a paso?'), findsOneWidget);
+    expect(find.text('Sí, vamos'), findsOneWidget);
   });
 }
