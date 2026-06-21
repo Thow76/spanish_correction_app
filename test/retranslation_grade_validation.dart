@@ -71,7 +71,7 @@ const List<_Case> _battery = [
     englishSource: 'I am going to get my hair cut on Saturday',
     attempt: 'Voy a cortar mi pelo en sábado',
     savedCategory: ErrorCategory.grammar,
-    expectedTier: RetranslationTier.keepPracticing,
+    expectedTier: RetranslationTier.siguePracticando,
     note: 'Preposition "en sábado" is a grammar error; expect KEEP PRACTICING.',
   ),
   _Case(
@@ -80,7 +80,7 @@ const List<_Case> _battery = [
     englishSource: 'I want to eat breakfast early tomorrow',
     attempt: 'Quiero desayunar tenprano mañana',
     savedCategory: ErrorCategory.grammar,
-    expectedTier: RetranslationTier.wellDone,
+    expectedTier: RetranslationTier.excelente,
     note:
         '"tenprano" is a spelling slip (other category); grammar is clean, so '
         'expect well done — the spelling noise must NOT flip the verdict.',
@@ -91,7 +91,7 @@ const List<_Case> _battery = [
     englishSource: 'I am going to the cinema with my friends',
     attempt: 'Voy al cine con mis amigos',
     savedCategory: ErrorCategory.grammar,
-    expectedTier: RetranslationTier.wellDone,
+    expectedTier: RetranslationTier.excelente,
     note: 'A clean attempt; expect well done.',
   ),
   _Case(
@@ -100,7 +100,7 @@ const List<_Case> _battery = [
     englishSource: 'I realised I forgot my keys',
     attempt: 'Realicé que olvidé mis llaves',
     savedCategory: ErrorCategory.wordChoice,
-    expectedTier: RetranslationTier.keepPracticing,
+    expectedTier: RetranslationTier.siguePracticando,
     note:
         '"Realicé" as a calque of "realised" is a word-choice error '
         '(should be "Me di cuenta de"); expect KEEP PRACTICING.',
@@ -112,7 +112,7 @@ const List<_Case> _battery = [
     englishSource: 'I am going to take the kids to school',
     attempt: 'Vou levar as crianças em a escola',
     savedCategory: ErrorCategory.grammar,
-    expectedTier: RetranslationTier.keepPracticing,
+    expectedTier: RetranslationTier.siguePracticando,
     note: 'Uncontracted "em a escola" (should be "à escola"); expect KEEP PRACTICING.',
   ),
   _Case(
@@ -121,7 +121,7 @@ const List<_Case> _battery = [
     englishSource: 'I am going home on Saturday',
     attempt: 'Vou para casa no sábado',
     savedCategory: ErrorCategory.grammar,
-    expectedTier: RetranslationTier.wellDone,
+    expectedTier: RetranslationTier.excelente,
     note: 'A clean attempt; expect well done.',
   ),
   _Case(
@@ -130,7 +130,7 @@ const List<_Case> _battery = [
     englishSource: 'It is raining a lot today',
     attempt: 'Está fazendo muita chuva hoje',
     savedCategory: ErrorCategory.naturalLanguage,
-    expectedTier: RetranslationTier.keepPracticing,
+    expectedTier: RetranslationTier.siguePracticando,
     note:
         '"fazendo chuva" is unnatural (native: "chovendo muito"); expect '
         'KEEP PRACTICING if flagged as Natural Language.',
@@ -141,7 +141,7 @@ const List<_Case> _battery = [
     englishSource: 'I bought a new car yesterday',
     attempt: 'Comprei um carro novo ontén',
     savedCategory: ErrorCategory.grammar,
-    expectedTier: RetranslationTier.wellDone,
+    expectedTier: RetranslationTier.excelente,
     note:
         '"ontén" is a spelling slip (other category); grammar is clean, so '
         'expect well done.',

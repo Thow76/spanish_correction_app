@@ -261,6 +261,32 @@ Future<void> answerAllWalkthroughWrongly(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'prompt phase shows the saved error category label and the ORIGINAL wrong '
+    'phrase (not the corrected one)',
+    (tester) async {
+      // wordChoice (not the default grammar) proves the label is dynamic — it
+      // reflects the saved correction's category, not a hardcoded string.
+      await pumpGame(
+        tester,
+        savedCorrections: [
+          buildSavedCorrection(category: ErrorCategory.wordChoice),
+        ],
+      );
+
+      // Dynamic category label.
+      expect(
+        find.textContaining('Word Choice', findRichText: true),
+        findsOneWidget,
+      );
+      // The ORIGINAL (wrong) phrase is shown...
+      expect(find.textContaining('hubo', findRichText: true), findsOneWidget);
+      // ...and the corrected phrase is NOT — showing it would give away the
+      // answer to this recall exercise.
+      expect(find.textContaining('había', findRichText: true), findsNothing);
+    },
+  );
+
   testWidgets('drives the funnel into the real WalkthroughQuestionView', (
     tester,
   ) async {

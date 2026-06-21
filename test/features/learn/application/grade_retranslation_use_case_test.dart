@@ -33,7 +33,7 @@ void main() {
           language: Language.spanish,
         );
 
-        expect(grade.tier, RetranslationTier.wellDone);
+        expect(grade.tier, RetranslationTier.excelente);
         expect(grade.isWellDone, isTrue);
         expect(grade.categoryErrors, isEmpty);
         // Full list is preserved for the walkthrough service.
@@ -57,7 +57,7 @@ void main() {
           language: Language.spanish,
         );
 
-        expect(grade.tier, RetranslationTier.keepPracticing);
+        expect(grade.tier, RetranslationTier.siguePracticando);
         expect(grade.isKeepPracticing, isTrue);
         expect(grade.categoryErrors, hasLength(1));
         expect(grade.categoryErrors.single.category, ErrorCategory.grammar);
@@ -83,7 +83,7 @@ void main() {
           language: Language.portuguese,
         );
 
-        expect(grade.tier, RetranslationTier.wellDone);
+        expect(grade.tier, RetranslationTier.excelente);
         expect(grade.categoryErrors, isEmpty);
         expect(grade.corrections, hasLength(4));
       },
@@ -110,7 +110,7 @@ void main() {
           language: Language.spanish,
         );
 
-        expect(grade.tier, RetranslationTier.wellDone);
+        expect(grade.tier, RetranslationTier.excelente);
         expect(grade.categoryErrors, isEmpty);
         // Still kept in the full list for the walkthrough service.
         expect(grade.corrections, hasLength(1));
@@ -138,7 +138,7 @@ void main() {
           language: Language.spanish,
         );
 
-        expect(grade.tier, RetranslationTier.keepPracticing);
+        expect(grade.tier, RetranslationTier.siguePracticando);
         expect(grade.categoryErrors, hasLength(1));
         expect(grade.categoryErrors.single.originalPhrase, 'en');
       },
@@ -154,7 +154,7 @@ void main() {
         language: Language.spanish,
       );
 
-      expect(grade.tier, RetranslationTier.wellDone);
+      expect(grade.tier, RetranslationTier.excelente);
       expect(grade.corrections, isEmpty);
       expect(grade.categoryErrors, isEmpty);
     });

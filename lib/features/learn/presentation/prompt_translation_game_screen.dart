@@ -22,6 +22,7 @@ import '../../../shared/widgets/text_input_panel.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
 import '../../corrections/domain/correction_item.dart';
+import '../../corrections/domain/error_category.dart';
 import '../../write/application/transcription_service.dart';
 import '../../write/application/transcription_service_exception.dart';
 import '../application/grade_retranslation_use_case.dart';
@@ -720,7 +721,12 @@ class _PromptPhase extends StatelessWidget {
             'Pergunta ${session.currentIndex + 1} de ${session.totalCount}',
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
+        _SavedErrorLabel(
+          category: question.source.category,
+          originalPhrase: question.source.originalPhrase,
+        ),
+        const SizedBox(height: AppSpacing.md),
         _PromptCard(text: question.promptPhrase),
         const SizedBox(height: AppSpacing.xl),
         SizedBox(
@@ -1268,6 +1274,43 @@ class _ProgressLabel extends StatelessWidget {
         fontSize: 13,
         fontWeight: FontWeight.w600,
         height: 1.5,
+      ),
+    );
+  }
+}
+
+/// Frame 584:1111's row above the prompt card: the saved error's category
+/// label followed by the learner's ORIGINAL (wrong) phrase, underlined in the
+/// category's accent colour. Deliberately shows the wrong phrase, never the
+/// correction — revealing the corrected phrase would give away the recall
+/// answer. Both values are sourced from the correction this game question was
+/// built from, so the label is dynamic per phrase.
+class _SavedErrorLabel extends StatelessWidget {
+  const _SavedErrorLabel({required this.category, required this.originalPhrase});
+
+  final ErrorCategory category;
+  final String originalPhrase;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        style: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 15,
+          height: 22.5 / 15,
+        ),
+        children: [
+          TextSpan(text: '${category.label}:  '),
+          TextSpan(
+            text: originalPhrase,
+            style: TextStyle(
+              color: category.color,
+              decoration: TextDecoration.underline,
+              decorationColor: category.color,
+            ),
+          ),
+        ],
       ),
     );
   }
