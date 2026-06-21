@@ -11,6 +11,7 @@ import 'package:spanish_correction_app/features/corrections/domain/error_categor
 import 'package:spanish_correction_app/features/history/domain/correction_submission.dart';
 import 'package:spanish_correction_app/features/learn/presentation/prompt_translation_game_screen.dart';
 import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_question_view.dart';
+import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_result_view.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_correction.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_explanation.dart';
 import 'package:spanish_correction_app/features/write/application/transcription_service.dart';
@@ -244,6 +245,15 @@ Future<void> answerAllWalkthroughCorrectly(WidgetTester tester) async {
   }
 }
 
+/// Answers every walkthrough question with a distractor (wrong), tapping the
+/// manual continue each time (wrong answers do not auto-advance).
+Future<void> answerAllWalkthroughWrongly(WidgetTester tester) async {
+  for (final question in _defaultWalkthroughQuestions) {
+    await _tap(tester, find.text(question.distractors.first));
+    await _tap(tester, find.byKey(const Key('walkthrough-advance')));
+  }
+}
+
 void main() {
   testWidgets('drives the funnel into the real WalkthroughQuestionView', (
     tester,
@@ -263,17 +273,44 @@ void main() {
     expect(find.textContaining('Repaso preparado'), findsNothing);
   });
 
-  testWidgets('completing the walkthrough lands on the result placeholder', (
+  testWidgets('completing the walkthrough shows the result view with the score', (
     tester,
   ) async {
     await pumpGame(tester);
     await driveToWalkthroughQuestions(tester);
     await answerAllWalkthroughCorrectly(tester);
 
-    // onCompleted fired -> the new result phase placeholder shows the score.
-    final placeholder = find.byKey(const Key('walkthrough-result-placeholder'));
-    expect(placeholder, findsOneWidget);
-    expect(tester.widget<Text>(placeholder).data, '3/3');
+    // onCompleted fired -> the real result view renders the 3/3 = 100% score.
+    expect(find.byType(WalkthroughResultView), findsOneWidget);
+    expect(find.text('100%'), findsOneWidget);
     expect(find.byType(WalkthroughQuestionView), findsNothing);
+  });
+
+  testWidgets('Continue from the result advances the game (to summary)', (
+    tester,
+  ) async {
+    await pumpGame(tester);
+    await driveToWalkthroughQuestions(tester);
+    await answerAllWalkthroughCorrectly(tester);
+
+    await _tap(tester, find.text('Continuar'));
+
+    // The single-phrase session is complete -> summary phase.
+    expect(find.byType(WalkthroughResultView), findsNothing);
+    expect(find.text('Resultado'), findsOneWidget);
+  });
+
+  testWidgets('See Answer is a no-op that stays on the result', (tester) async {
+    await pumpGame(tester);
+    await driveToWalkthroughQuestions(tester);
+    await answerAllWalkthroughWrongly(tester);
+
+    // Poor tier (0/3) surfaces "Ver respuesta".
+    expect(find.text('0%'), findsOneWidget);
+    await _tap(tester, find.text('Ver respuesta'));
+
+    // No crash, no navigation: still on the result view.
+    expect(find.byType(WalkthroughResultView), findsOneWidget);
+    expect(find.text('0%'), findsOneWidget);
   });
 }

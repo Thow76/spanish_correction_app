@@ -28,6 +28,7 @@ import '../application/grade_retranslation_use_case.dart';
 import '../domain/game_question.dart';
 import '../domain/game_session.dart';
 import 'widgets/walkthrough_question_view.dart';
+import 'widgets/walkthrough_result_view.dart';
 
 class PromptTranslationGameScreen extends StatefulWidget {
   const PromptTranslationGameScreen({
@@ -194,10 +195,14 @@ class _PromptTranslationGameScreenState
                       onCompleted: _handleWalkthroughCompleted,
                       str: _str,
                     ),
-                    // TEMP placeholder (W-ii replaces with WalkthroughResultView).
-                    _GamePhase.walkthroughResult => Text(
-                      '$_walkthroughCorrect/$_walkthroughTotal',
-                      key: const Key('walkthrough-result-placeholder'),
+                    _GamePhase.walkthroughResult => WalkthroughResultView(
+                      correctCount: _walkthroughCorrect,
+                      totalCount: _walkthroughTotal,
+                      onContinue: _advanceToNext,
+                      // TODO(W-iii): wire the real retry path.
+                      onTryAgain: () {},
+                      onSeeAnswer: _handleSeeAnswer,
+                      str: _str,
                     ),
                     _GamePhase.summary => _SummaryPhase(
                       session: _session!,
@@ -216,17 +221,9 @@ class _PromptTranslationGameScreenState
 
   Future<void> _startSession() async {
     setState(() {
+      _resetAttemptState();
       _isLoading = true;
       _phase = _GamePhase.prompt;
-      _submittedAnswer = '';
-      _answerController.clear();
-      _grade = null;
-      _gradeError = null;
-      _isGrading = false;
-      _walkthroughQuestion = null;
-      _isFetchingWalkthrough = false;
-      _walkthroughError = null;
-      _walkthroughQuestions = null;
     });
 
     await widget.repositoryController.setActiveLanguage(widget.language);
@@ -394,6 +391,24 @@ class _PromptTranslationGameScreenState
     _advanceToNext();
   }
 
+  /// Clears every per-attempt and walkthrough field so the next attempt starts
+  /// completely clean. The single source of truth for "what an attempt owns",
+  /// shared by [_advanceToNext] and the retry path so neither can leak stale
+  /// state. Does NOT touch [_session] or [_phase] — the caller sets those.
+  void _resetAttemptState() {
+    _submittedAnswer = '';
+    _answerController.clear();
+    _grade = null;
+    _gradeError = null;
+    _isGrading = false;
+    _walkthroughQuestion = null;
+    _isFetchingWalkthrough = false;
+    _walkthroughError = null;
+    _walkthroughQuestions = null;
+    _walkthroughCorrect = 0;
+    _walkthroughTotal = 0;
+  }
+
   /// Advance-only transition: clears the per-attempt state and swaps to the next
   /// phrase (or the summary). Does NOT call [GameSession.recordAnswer] — the
   /// score was already recorded by [_recordRating] before any walkthrough intro
@@ -401,15 +416,7 @@ class _PromptTranslationGameScreenState
   /// no Navigator.pop (a pop would exit the whole game).
   void _advanceToNext() {
     setState(() {
-      _submittedAnswer = '';
-      _answerController.clear();
-      _grade = null;
-      _gradeError = null;
-      _isGrading = false;
-      _walkthroughQuestion = null;
-      _isFetchingWalkthrough = false;
-      _walkthroughError = null;
-      _walkthroughQuestions = null;
+      _resetAttemptState();
       _phase = _session!.isComplete ? _GamePhase.summary : _GamePhase.prompt;
     });
   }
@@ -472,6 +479,12 @@ class _PromptTranslationGameScreenState
       _phase = _GamePhase.walkthroughResult;
     });
   }
+
+  /// "See Answer" on the result screen. The answer/explanation destination
+  /// screen does not exist yet (deferred dependency), so this is intentionally a
+  /// no-op for now.
+  // TODO: route to the answer/explanation screen once it exists.
+  void _handleSeeAnswer() {}
 
   void _handleWalkthroughFailure(WalkthroughException error) {
     if (!mounted) {
