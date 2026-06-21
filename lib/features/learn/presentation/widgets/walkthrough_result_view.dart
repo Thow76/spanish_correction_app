@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../shared/design/app_colors.dart';
+import '../../../../shared/design/app_spacing.dart';
+import '../../../../shared/widgets/primary_action_button.dart';
 import '../../domain/walkthrough_result.dart';
 
 /// The walkthrough results screen: a tier-coloured score ring with the rounded
@@ -19,6 +21,7 @@ class WalkthroughResultView extends StatelessWidget {
   const WalkthroughResultView({
     required this.correctCount,
     required this.totalCount,
+    required this.onContinue,
     this.str = _defaultStr,
     super.key,
   });
@@ -29,6 +32,9 @@ class WalkthroughResultView extends StatelessWidget {
 
   final int correctCount;
   final int totalCount;
+
+  /// The primary action, shown on every tier.
+  final VoidCallback onContinue;
 
   /// Returns the Spanish or Portuguese string for the active language. Optional
   /// so callers/tests need no change; defaults to Spanish.
@@ -83,6 +89,11 @@ class WalkthroughResultView extends StatelessWidget {
               ),
             ),
           ),
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        PrimaryActionButton(
+          label: str('Continuar', 'Continuar'),
+          onPressed: onContinue,
         ),
       ],
     );

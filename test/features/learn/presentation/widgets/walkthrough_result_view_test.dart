@@ -8,11 +8,16 @@ void main() {
     WidgetTester tester, {
     required int correct,
     required int total,
+    VoidCallback? onContinue,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: WalkthroughResultView(correctCount: correct, totalCount: total),
+          body: WalkthroughResultView(
+            correctCount: correct,
+            totalCount: total,
+            onContinue: onContinue ?? () {},
+          ),
         ),
       ),
     );
@@ -48,5 +53,18 @@ void main() {
     expect(find.text('33%'), findsOneWidget);
     expect(percentColor(tester, '33%'), AppColors.coral);
     expect(find.text('Difícil — cada repaso lo refuerza.'), findsOneWidget);
+  });
+
+  testWidgets('Continuar is shown and invokes onContinue on tap', (
+    tester,
+  ) async {
+    var calls = 0;
+    await pump(tester, correct: 3, total: 3, onContinue: () => calls++);
+
+    expect(find.text('Continuar'), findsOneWidget);
+
+    await tester.tap(find.text('Continuar'));
+    await tester.pump();
+    expect(calls, 1);
   });
 }
