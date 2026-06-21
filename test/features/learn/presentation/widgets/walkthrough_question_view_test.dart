@@ -225,4 +225,73 @@ void main() {
     // No question body remains.
     expect(find.text('on Saturday'), findsNothing);
   });
+
+  testWidgets('onCompleted fires once with the running tally', (tester) async {
+    var calls = 0;
+    int? reportedCorrect;
+    int? reportedTotal;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WalkthroughQuestionView(
+            questions: questions,
+            random: Random(1),
+            onCompleted: ({required correctCount, required totalCount}) {
+              calls++;
+              reportedCorrect = correctCount;
+              reportedTotal = totalCount;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Known mix: Q0 correct, Q1 distractor (wrong), Q2 correct -> 2/3.
+    final answers = [
+      questions[0].correctTranslation,
+      questions[1].distractors.first,
+      questions[2].correctTranslation,
+    ];
+    for (var i = 0; i < questions.length; i++) {
+      await tester.tap(find.text(answers[i]));
+      await tester.pump();
+      await tester.tap(advance);
+      await tester.pumpAndSettle();
+    }
+
+    expect(calls, 1);
+    expect(reportedCorrect, 2);
+    expect(reportedTotal, 3);
+  });
+
+  testWidgets('onCompleted does not fire before the last question', (
+    tester,
+  ) async {
+    var calls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WalkthroughQuestionView(
+            questions: questions,
+            random: Random(1),
+            onCompleted: ({required correctCount, required totalCount}) {
+              calls++;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Answer and advance only the first question.
+    await tester.tap(find.text(questions[0].correctTranslation));
+    await tester.pump();
+    await tester.tap(advance);
+    await tester.pumpAndSettle();
+
+    expect(calls, 0);
+  });
 }

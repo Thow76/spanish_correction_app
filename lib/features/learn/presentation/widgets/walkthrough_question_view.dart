@@ -48,10 +48,13 @@ class WalkthroughQuestionView extends StatefulWidget {
 class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   int _currentIndex = 0;
 
-  /// Set once the last question is advanced past. The completion callback is
-  /// wired to this transition in the next step; for now it only swaps the
-  /// placeholder body to a finished marker.
+  /// Set once the last question is advanced past, at which point [onCompleted]
+  /// has already fired. Also swaps the placeholder body to a finished marker.
   bool _isFinished = false;
+
+  /// Correct answers banked so far. A question's correctness is banked when it
+  /// is advanced past, so this only counts answered questions.
+  int _correctCount = 0;
 
   /// The three display options per question, indexed in step with
   /// [widget.questions]. Shuffled once here so a rebuild never reorders them;
@@ -85,15 +88,24 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   }
 
   void _advance() {
+    // Bank the just-answered question's correctness as it is advanced past.
+    if (_isCurrentCorrect) {
+      _correctCount++;
+    }
+
     final isLastQuestion = _currentIndex == widget.questions.length - 1;
+    if (isLastQuestion) {
+      setState(() => _isFinished = true);
+      // Fire the single completion boundary exactly once, from the event
+      // handler (never from build), now that every question is banked.
+      widget.onCompleted(
+        correctCount: _correctCount,
+        totalCount: widget.questions.length,
+      );
+      return;
+    }
+
     setState(() {
-      if (isLastQuestion) {
-        // Boundary: the completion callback + running tally are wired here in
-        // the next step. For now this only flips to the finished placeholder
-        // and never lets the cursor run past the last question.
-        _isFinished = true;
-        return;
-      }
       _currentIndex++;
       // Fresh per-question state for the next question.
       _selectedOption = null;
