@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../shared/design/app_colors.dart';
 import '../../../../shared/design/app_spacing.dart';
 import '../../../../shared/widgets/primary_action_button.dart';
+import '../../../../shared/widgets/secondary_action_button.dart';
 import '../../domain/walkthrough_result.dart';
 
 /// The walkthrough results screen: a tier-coloured score ring with the rounded
@@ -22,6 +23,8 @@ class WalkthroughResultView extends StatelessWidget {
     required this.correctCount,
     required this.totalCount,
     required this.onContinue,
+    required this.onTryAgain,
+    required this.onSeeAnswer,
     this.str = _defaultStr,
     super.key,
   });
@@ -35,6 +38,15 @@ class WalkthroughResultView extends StatelessWidget {
 
   /// The primary action, shown on every tier.
   final VoidCallback onContinue;
+
+  /// Secondary action shown on the satisfactory and poor tiers: retry the full
+  /// free-translation attempt.
+  final VoidCallback onTryAgain;
+
+  /// Secondary action shown on the poor tier only. The answer/explanation
+  /// destination screen does not exist yet, so the host leaves this unwired for
+  /// now (deferred dependency) — the button still surfaces the callback.
+  final VoidCallback onSeeAnswer;
 
   /// Returns the Spanish or Portuguese string for the active language. Optional
   /// so callers/tests need no change; defaults to Spanish.
@@ -95,6 +107,26 @@ class WalkthroughResultView extends StatelessWidget {
           label: str('Continuar', 'Continuar'),
           onPressed: onContinue,
         ),
+        // Poor tier also offers a route to the answer (destination screen is a
+        // later phase, so onSeeAnswer is wired up by the host then).
+        if (result.tier == WalkthroughTier.poor) ...[
+          const SizedBox(height: AppSpacing.md),
+          SecondaryActionButton(
+            label: str('Ver respuesta', 'Ver resposta'),
+            onPressed: onSeeAnswer,
+          ),
+        ],
+        // Satisfactory and poor tiers offer retrying the full translation.
+        if (result.tier != WalkthroughTier.success) ...[
+          const SizedBox(height: AppSpacing.md),
+          SecondaryActionButton(
+            label: str(
+              'Intentar la traducción completa otra vez',
+              'Tentar a tradução completa de novo',
+            ),
+            onPressed: onTryAgain,
+          ),
+        ],
       ],
     );
   }

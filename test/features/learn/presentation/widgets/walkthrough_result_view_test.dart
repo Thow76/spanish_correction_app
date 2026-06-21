@@ -9,6 +9,8 @@ void main() {
     required int correct,
     required int total,
     VoidCallback? onContinue,
+    VoidCallback? onTryAgain,
+    VoidCallback? onSeeAnswer,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -17,12 +19,17 @@ void main() {
             correctCount: correct,
             totalCount: total,
             onContinue: onContinue ?? () {},
+            onTryAgain: onTryAgain ?? () {},
+            onSeeAnswer: onSeeAnswer ?? () {},
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
   }
+
+  final tryAgain = find.text('Intentar la traducción completa otra vez');
+  final seeAnswer = find.text('Ver respuesta');
 
   Color percentColor(WidgetTester tester, String label) =>
       tester.widget<Text>(find.text(label)).style!.color!;
@@ -66,5 +73,52 @@ void main() {
     await tester.tap(find.text('Continuar'));
     await tester.pump();
     expect(calls, 1);
+  });
+
+  testWidgets('success tier shows only Continuar', (tester) async {
+    await pump(tester, correct: 3, total: 3);
+
+    expect(find.text('Continuar'), findsOneWidget);
+    expect(tryAgain, findsNothing);
+    expect(seeAnswer, findsNothing);
+  });
+
+  testWidgets('satisfactory tier shows Continuar + Try-again', (tester) async {
+    var tryAgainCalls = 0;
+    await pump(tester, correct: 2, total: 3, onTryAgain: () => tryAgainCalls++);
+
+    expect(find.text('Continuar'), findsOneWidget);
+    expect(tryAgain, findsOneWidget);
+    expect(seeAnswer, findsNothing);
+
+    await tester.tap(tryAgain);
+    await tester.pump();
+    expect(tryAgainCalls, 1);
+  });
+
+  testWidgets('poor tier shows Continuar + See-Answer + Try-again', (
+    tester,
+  ) async {
+    var tryAgainCalls = 0;
+    var seeAnswerCalls = 0;
+    await pump(
+      tester,
+      correct: 1,
+      total: 3,
+      onTryAgain: () => tryAgainCalls++,
+      onSeeAnswer: () => seeAnswerCalls++,
+    );
+
+    expect(find.text('Continuar'), findsOneWidget);
+    expect(seeAnswer, findsOneWidget);
+    expect(tryAgain, findsOneWidget);
+
+    await tester.tap(seeAnswer);
+    await tester.pump();
+    expect(seeAnswerCalls, 1);
+
+    await tester.tap(tryAgain);
+    await tester.pump();
+    expect(tryAgainCalls, 1);
   });
 }
