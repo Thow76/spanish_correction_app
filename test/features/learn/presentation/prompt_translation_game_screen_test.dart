@@ -10,6 +10,7 @@ import 'package:spanish_correction_app/features/corrections/domain/correction_re
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 import 'package:spanish_correction_app/features/history/domain/correction_submission.dart';
 import 'package:spanish_correction_app/features/learn/presentation/prompt_translation_game_screen.dart';
+import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_question_view.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_correction.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_explanation.dart';
 import 'package:spanish_correction_app/features/write/application/transcription_service.dart';
@@ -233,8 +234,18 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+/// Answers every walkthrough question with its correct option, letting the
+/// auto-advance pause carry each step forward.
+Future<void> answerAllWalkthroughCorrectly(WidgetTester tester) async {
+  for (final question in _defaultWalkthroughQuestions) {
+    await _tap(tester, find.text(question.correctTranslation));
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+    await tester.pumpAndSettle();
+  }
+}
+
 void main() {
-  testWidgets('drives the funnel end-to-end to the walkthrough question phase', (
+  testWidgets('drives the funnel into the real WalkthroughQuestionView', (
     tester,
   ) async {
     await pumpGame(tester);
@@ -245,8 +256,24 @@ void main() {
 
     await driveToWalkthroughQuestions(tester);
 
-    // The fetched questions land on the current stub placeholder.
-    expect(find.textContaining('Repaso preparado'), findsOneWidget);
-    expect(find.textContaining('3 preguntas'), findsOneWidget);
+    // The fetched questions render in the real question view (first stem shown),
+    // not the old stub.
+    expect(find.byType(WalkthroughQuestionView), findsOneWidget);
+    expect(find.text('Yesterday'), findsOneWidget);
+    expect(find.textContaining('Repaso preparado'), findsNothing);
+  });
+
+  testWidgets('completing the walkthrough lands on the result placeholder', (
+    tester,
+  ) async {
+    await pumpGame(tester);
+    await driveToWalkthroughQuestions(tester);
+    await answerAllWalkthroughCorrectly(tester);
+
+    // onCompleted fired -> the new result phase placeholder shows the score.
+    final placeholder = find.byKey(const Key('walkthrough-result-placeholder'));
+    expect(placeholder, findsOneWidget);
+    expect(tester.widget<Text>(placeholder).data, '3/3');
+    expect(find.byType(WalkthroughQuestionView), findsNothing);
   });
 }

@@ -27,6 +27,7 @@ import '../../write/application/transcription_service_exception.dart';
 import '../application/grade_retranslation_use_case.dart';
 import '../domain/game_question.dart';
 import '../domain/game_session.dart';
+import 'widgets/walkthrough_question_view.dart';
 
 class PromptTranslationGameScreen extends StatefulWidget {
   const PromptTranslationGameScreen({
@@ -49,7 +50,14 @@ class PromptTranslationGameScreen extends StatefulWidget {
       _PromptTranslationGameScreenState();
 }
 
-enum _GamePhase { prompt, reveal, walkthrough, walkthroughQuestion, summary }
+enum _GamePhase {
+  prompt,
+  reveal,
+  walkthrough,
+  walkthroughQuestion,
+  walkthroughResult,
+  summary,
+}
 
 class _PromptTranslationGameScreenState
     extends State<PromptTranslationGameScreen> {
@@ -84,6 +92,11 @@ class _PromptTranslationGameScreenState
   bool _isFetchingWalkthrough = false;
   WalkthroughException? _walkthroughError;
   List<WalkthroughQuestion>? _walkthroughQuestions;
+
+  // Walkthrough score, captured once [WalkthroughQuestionView] completes and read
+  // by the result phase.
+  int _walkthroughCorrect = 0;
+  int _walkthroughTotal = 0;
 
   String _str(String es, String pt) => switch (widget.language) {
     Language.spanish => es,
@@ -176,10 +189,15 @@ class _PromptTranslationGameScreenState
                       onNo: _advanceToNext,
                       str: _str,
                     ),
-                    _GamePhase.walkthroughQuestion => _WalkthroughQuestionStub(
-                      questionCount: _walkthroughQuestions?.length ?? 0,
-                      onContinue: _advanceToNext,
+                    _GamePhase.walkthroughQuestion => WalkthroughQuestionView(
+                      questions: _walkthroughQuestions!,
+                      onCompleted: _handleWalkthroughCompleted,
                       str: _str,
+                    ),
+                    // TEMP placeholder (W-ii replaces with WalkthroughResultView).
+                    _GamePhase.walkthroughResult => Text(
+                      '$_walkthroughCorrect/$_walkthroughTotal',
+                      key: const Key('walkthrough-result-placeholder'),
                     ),
                     _GamePhase.summary => _SummaryPhase(
                       session: _session!,
@@ -440,6 +458,19 @@ class _PromptTranslationGameScreenState
     } on WalkthroughValidationException catch (error) {
       _handleWalkthroughFailure(error);
     }
+  }
+
+  /// Stores the walkthrough score and shows the result phase. Fired exactly once
+  /// by [WalkthroughQuestionView] when every question has been answered.
+  void _handleWalkthroughCompleted({
+    required int correctCount,
+    required int totalCount,
+  }) {
+    setState(() {
+      _walkthroughCorrect = correctCount;
+      _walkthroughTotal = totalCount;
+      _phase = _GamePhase.walkthroughResult;
+    });
   }
 
   void _handleWalkthroughFailure(WalkthroughException error) {
@@ -1112,65 +1143,6 @@ class _WalkthroughIntroCta extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-/// STUB (Section 6a): placeholder for the walkthrough question screen, which is
-/// a later section. It only confirms the fetch succeeded (and how many questions
-/// came back) and offers a way back into the game flow so the user is not
-/// trapped. The real multiple-choice screen, answer collection, per-chunk
-/// judging, and any GOOD-tier offer are intentionally NOT built here.
-class _WalkthroughQuestionStub extends StatelessWidget {
-  const _WalkthroughQuestionStub({
-    required this.questionCount,
-    required this.onContinue,
-    required this.str,
-  });
-
-  final int questionCount;
-  final VoidCallback onContinue;
-  final String Function(String es, String pt) str;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.cyan.withValues(alpha: 0.16)),
-          ),
-          child: Column(
-            children: [
-              const Icon(Icons.construction, color: AppColors.cyan, size: 32),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                str(
-                  'Repaso preparado: $questionCount preguntas.\n'
-                  'La pantalla de preguntas llega en una próxima sección.',
-                  'Revisão preparada: $questionCount perguntas.\n'
-                  'A tela de perguntas chega em uma próxima seção.',
-                ),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                  height: 20 / 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xxl),
-        PrimaryActionButton(
-          label: str('Continuar', 'Continuar'),
-          onPressed: onContinue,
         ),
       ],
     );
