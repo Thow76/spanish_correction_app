@@ -180,4 +180,49 @@ void main() {
     await tester.pump();
     expect(correctIndicator, findsOneWidget);
   });
+
+  final advance = find.byKey(const Key('walkthrough-advance'));
+  final finished = find.byKey(const Key('walkthrough-finished'));
+
+  testWidgets('advancing moves to the next question and resets per-question state', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    // Answer Q0, then advance.
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+    expect(correctIndicator, findsOneWidget);
+
+    await tester.tap(advance);
+    await tester.pumpAndSettle();
+
+    // Q1 is now shown, Q0 gone.
+    expect(find.text('to get my hair cut'), findsOneWidget);
+    expect(find.text('I am going'), findsNothing);
+
+    // Per-question state is fresh: nothing committed, no correctness indicator.
+    expect(committedOption(tester), isNull);
+    expect(correctIndicator, findsNothing);
+    expect(incorrectIndicator, findsNothing);
+  });
+
+  testWidgets('advancing past the last question shows the finished placeholder', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    // Walk all three questions: commit any option, then advance.
+    for (var i = 0; i < questions.length; i++) {
+      await tester.tap(find.text(questions[i].correctTranslation));
+      await tester.pump();
+      await tester.tap(advance);
+      await tester.pumpAndSettle();
+    }
+
+    // The finished marker is shown; no out-of-range crash occurred.
+    expect(finished, findsOneWidget);
+    // No question body remains.
+    expect(find.text('on Saturday'), findsNothing);
+  });
 }

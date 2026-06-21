@@ -46,9 +46,12 @@ class WalkthroughQuestionView extends StatefulWidget {
 }
 
 class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
-  // Reassigned by the advance step; not yet mutated in this step.
-  // ignore: prefer_final_fields
   int _currentIndex = 0;
+
+  /// Set once the last question is advanced past. The completion callback is
+  /// wired to this transition in the next step; for now it only swaps the
+  /// placeholder body to a finished marker.
+  bool _isFinished = false;
 
   /// The three display options per question, indexed in step with
   /// [widget.questions]. Shuffled once here so a rebuild never reorders them;
@@ -81,6 +84,22 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
     setState(() => _selectedOption = option);
   }
 
+  void _advance() {
+    final isLastQuestion = _currentIndex == widget.questions.length - 1;
+    setState(() {
+      if (isLastQuestion) {
+        // Boundary: the completion callback + running tally are wired here in
+        // the next step. For now this only flips to the finished placeholder
+        // and never lets the cursor run past the last question.
+        _isFinished = true;
+        return;
+      }
+      _currentIndex++;
+      // Fresh per-question state for the next question.
+      _selectedOption = null;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +116,11 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
 
   @override
   Widget build(BuildContext context) {
+    // Finished placeholder: the results/score screen is a later phase.
+    if (_isFinished) {
+      return const SizedBox(key: Key('walkthrough-finished'));
+    }
+
     final question = widget.questions[_currentIndex];
     final options = _shuffledOptions[_currentIndex];
 
@@ -126,6 +150,14 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
             key: _isCurrentCorrect
                 ? const Key('walkthrough-result-correct')
                 : const Key('walkthrough-result-incorrect'),
+          ),
+        // Placeholder advance control, shown once the question is locked.
+        if (_isLocked)
+          GestureDetector(
+            key: const Key('walkthrough-advance'),
+            onTap: _advance,
+            behavior: HitTestBehavior.opaque,
+            child: const SizedBox(height: 44),
           ),
       ],
     );
