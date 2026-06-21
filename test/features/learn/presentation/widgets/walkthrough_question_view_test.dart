@@ -87,4 +87,97 @@ void main() {
     await pump(tester, random: Random(1));
     expect(renderedOptionOrder(), firstOrder);
   });
+
+  // The data of the currently committed option, or null while unanswered.
+  String? committedOption(WidgetTester tester) {
+    final finder = find.byKey(const Key('walkthrough-selected-option'));
+    if (finder.evaluate().isEmpty) {
+      return null;
+    }
+    return tester.widget<Text>(finder).data;
+  }
+
+  testWidgets('tapping an option commits it', (tester) async {
+    await pump(tester, random: Random(1));
+    expect(committedOption(tester), isNull);
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+
+    expect(committedOption(tester), 'Voy');
+  });
+
+  testWidgets('a second tap on a different option is ignored (locked)', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+    expect(committedOption(tester), 'Voy');
+
+    // Lock holds: tapping a different option does not change the committed one.
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+    expect(committedOption(tester), 'Voy');
+  });
+
+  final correctIndicator = find.byKey(const Key('walkthrough-result-correct'));
+  final incorrectIndicator = find.byKey(
+    const Key('walkthrough-result-incorrect'),
+  );
+
+  testWidgets('no correctness indicator before an answer is committed', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    expect(correctIndicator, findsNothing);
+    expect(incorrectIndicator, findsNothing);
+  });
+
+  testWidgets('committing the correct option marks it correct', (tester) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+
+    expect(correctIndicator, findsOneWidget);
+    expect(incorrectIndicator, findsNothing);
+  });
+
+  testWidgets('committing a distractor marks it incorrect', (tester) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+
+    expect(incorrectIndicator, findsOneWidget);
+    expect(correctIndicator, findsNothing);
+  });
+
+  testWidgets('judging follows the stored value, not display position', (
+    tester,
+  ) async {
+    // Random(1) renders the first question as [Vamos, Va, Voy]: the correct
+    // answer ('Voy') is LAST, not first. Tapping it by its stored text must
+    // still judge correct — proving the == follows the stored value, not the
+    // shuffled display order.
+    await pump(tester, random: Random(1));
+
+    final firstRendered = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((text) => text.data)
+        .whereType<String>()
+        .firstWhere((data) => {'Voy', 'Va', 'Vamos'}.contains(data));
+    expect(
+      firstRendered,
+      isNot('Voy'),
+      reason: 'guard: the correct answer must not be first under this seed',
+    );
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+    expect(correctIndicator, findsOneWidget);
+  });
 }

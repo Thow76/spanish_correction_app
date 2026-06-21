@@ -56,6 +56,31 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   /// truth for judging, so the shuffle carries no "which is correct" signal.
   late final List<List<String>> _shuffledOptions;
 
+  /// The committed option for the current question, or null while unanswered.
+  /// Tapping an option commits it; the question then locks (later taps are
+  /// ignored). Reset per question by the advance step.
+  String? _selectedOption;
+
+  bool get _isLocked => _selectedOption != null;
+
+  /// Whether the committed answer is correct. Compares the STORED option string
+  /// against the STORED [WalkthroughQuestion.correctTranslation] — never a
+  /// re-rendered/transformed display label — so judging follows the stored
+  /// value regardless of shuffled display order. No normalisation is needed:
+  /// the service guarantees the three options are mutually distinct even under
+  /// whitespace-normalisation.
+  bool get _isCurrentCorrect =>
+      _selectedOption == widget.questions[_currentIndex].correctTranslation;
+
+  void _commit(String option) {
+    // Tap == commit + lock: once an option is chosen the question is answered
+    // and further taps are no-ops. Selection and lock are one action.
+    if (_isLocked) {
+      return;
+    }
+    setState(() => _selectedOption = option);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -84,9 +109,23 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
           style: const TextStyle(color: AppColors.textPrimary),
         ),
         for (final option in options)
-          Text(
-            option,
-            style: const TextStyle(color: AppColors.textPrimary),
+          GestureDetector(
+            onTap: () => _commit(option),
+            child: Text(
+              option,
+              key: _selectedOption == option
+                  ? const Key('walkthrough-selected-option')
+                  : null,
+              style: const TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+        // Placeholder correctness indicator, shown once the question is locked.
+        // Real correct/incorrect visuals are the Figma phase.
+        if (_isLocked)
+          SizedBox(
+            key: _isCurrentCorrect
+                ? const Key('walkthrough-result-correct')
+                : const Key('walkthrough-result-incorrect'),
           ),
       ],
     );
