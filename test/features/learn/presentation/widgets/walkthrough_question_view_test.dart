@@ -118,6 +118,41 @@ void main() {
     expect(decoration.color, AppColors.textDisabled.withValues(alpha: 0.12));
   });
 
+  testWidgets('the correct option is styled green when locked', (tester) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+
+    final button = tester
+        .widgetList<Container>(
+          find.ancestor(of: find.text('Voy'), matching: find.byType(Container)),
+        )
+        .firstWhere(
+          (container) => (container.decoration as BoxDecoration?)?.color ==
+              AppColors.success.withValues(alpha: 0.14),
+        );
+    final decoration = button.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.success.withValues(alpha: 0.14));
+
+    // Drain the auto-advance timer.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+  });
+
+  testWidgets('the correct affordance text is shown after a correct answer', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+
+    expect(find.text('✓ Correcto — siguiente paso…'), findsOneWidget);
+
+    // Drain the auto-advance timer.
+    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+  });
+
   testWidgets('renders the first question\'s three options (set membership)', (
     tester,
   ) async {

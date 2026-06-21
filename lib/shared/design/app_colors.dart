@@ -12,6 +12,9 @@ class AppColors {
   static const textSecondary = Color(0xFFE8E8E8);
   static const textDisabled = Color(0xFF4A5568);
 
+  /// Correct-answer green used by the walkthrough question states.
+  static const success = Color(0xFF5DE4A0);
+
   static const grammar = Color(0xFF5B8DEF);
   static const spelling = Color(0xFFEF5B5B);
   static const wordChoice = Color(0xFF5BEF8D);

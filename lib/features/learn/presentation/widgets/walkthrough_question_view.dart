@@ -187,10 +187,20 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   }
 
   /// Builds one styled option button. [index] gives the display badge letter
-  /// (a/b/c). Colours are the neutral default in this step; the correct/wrong
-  /// per-state colours are layered on in later steps.
+  /// (a/b/c). Once locked, the correct option turns green; the wrong-selected
+  /// colouring is layered on in the next step.
   Widget _buildOption(int index, String option) {
-    const stateColor = AppColors.textSecondary;
+    final isCorrectOption =
+        option == widget.questions[_currentIndex].correctTranslation;
+    final isGreen = _isLocked && isCorrectOption;
+
+    final stateColor = isGreen ? AppColors.success : AppColors.textSecondary;
+    final fillColor = isGreen
+        ? AppColors.success.withValues(alpha: 0.14)
+        : AppColors.textDisabled.withValues(alpha: 0.12);
+    final borderColor = isGreen
+        ? AppColors.success
+        : AppColors.textPrimary.withValues(alpha: 0.12);
     final badge = String.fromCharCode('a'.codeUnitAt(0) + index);
 
     return GestureDetector(
@@ -199,11 +209,9 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         decoration: BoxDecoration(
-          color: AppColors.textDisabled.withValues(alpha: 0.12),
+          color: fillColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.textPrimary.withValues(alpha: 0.12),
-          ),
+          border: Border.all(color: borderColor),
         ),
         child: Row(
           children: [
@@ -221,7 +229,7 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
               child: Text(
                 option,
                 key: _keyForOption(option),
-                style: const TextStyle(
+                style: TextStyle(
                   color: stateColor,
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -284,14 +292,28 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
           if (i > 0) const SizedBox(height: 10),
           _buildOption(i, options[i]),
         ],
-        // Placeholder correctness indicator, shown once the question is locked.
-        // Real correct/incorrect visuals are the Figma phase.
-        if (_isLocked)
-          SizedBox(
-            key: _isCurrentCorrect
-                ? const Key('walkthrough-result-correct')
-                : const Key('walkthrough-result-incorrect'),
+        // Correct-answer affordance: shown on a correct locked answer while it
+        // auto-advances. Carries the result-correct marker.
+        if (_isLocked && _isCurrentCorrect) ...[
+          const SizedBox(height: 14),
+          Text(
+            widget.str(
+              '✓ Correcto — siguiente paso…',
+              '✓ Correto — próximo passo…',
+            ),
+            key: const Key('walkthrough-result-correct'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.textDisabled,
+              fontSize: 12,
+              height: 18 / 12,
+            ),
           ),
+        ],
+        // Placeholder incorrect indicator, replaced by the real wrong affordance
+        // in the next step.
+        if (_isLocked && !_isCurrentCorrect)
+          const SizedBox(key: Key('walkthrough-result-incorrect')),
         // Placeholder advance control, shown only on a WRONG locked answer.
         // Correct answers auto-advance after a pause, so they show no control.
         if (_isLocked && !_isCurrentCorrect)
