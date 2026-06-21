@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/models/walkthrough_question.dart';
 import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_question_view.dart';
+import 'package:spanish_correction_app/shared/design/app_colors.dart';
 
 void main() {
   WalkthroughQuestion question(
@@ -71,6 +72,50 @@ void main() {
 
     expect(find.text('Paso 2 de 3'), findsOneWidget);
     expect(find.text('Paso 1 de 3'), findsNothing);
+  });
+
+  testWidgets('the stem is rendered inside the cyan card', (tester) async {
+    await pump(tester);
+
+    final stem = find.text('I am going');
+    expect(stem, findsOneWidget);
+
+    // The stem sits inside a Container decorated with the cyan-tinted fill.
+    final card = tester
+        .widgetList<Container>(
+          find.ancestor(of: stem, matching: find.byType(Container)),
+        )
+        .firstWhere(
+          (container) =>
+              (container.decoration as BoxDecoration?)?.color ==
+              AppColors.cyan.withValues(alpha: 0.06),
+        );
+    final decoration = card.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.cyan.withValues(alpha: 0.06));
+  });
+
+  testWidgets('option buttons render badge letters a, b, c', (tester) async {
+    await pump(tester, random: Random(1));
+
+    expect(find.text('a'), findsOneWidget);
+    expect(find.text('b'), findsOneWidget);
+    expect(find.text('c'), findsOneWidget);
+  });
+
+  testWidgets('a default option has the neutral decoration', (tester) async {
+    await pump(tester, random: Random(1));
+
+    final optionText = find.text('Voy');
+    final button = tester
+        .widgetList<Container>(
+          find.ancestor(of: optionText, matching: find.byType(Container)),
+        )
+        .firstWhere(
+          (container) => (container.decoration as BoxDecoration?)?.color ==
+              AppColors.textDisabled.withValues(alpha: 0.12),
+        );
+    final decoration = button.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.textDisabled.withValues(alpha: 0.12));
   });
 
   testWidgets('renders the first question\'s three options (set membership)', (

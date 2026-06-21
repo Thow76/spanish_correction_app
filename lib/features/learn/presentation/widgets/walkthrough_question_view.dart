@@ -186,6 +186,55 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
     ];
   }
 
+  /// Builds one styled option button. [index] gives the display badge letter
+  /// (a/b/c). Colours are the neutral default in this step; the correct/wrong
+  /// per-state colours are layered on in later steps.
+  Widget _buildOption(int index, String option) {
+    const stateColor = AppColors.textSecondary;
+    final badge = String.fromCharCode('a'.codeUnitAt(0) + index);
+
+    return GestureDetector(
+      onTap: () => _commit(option),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        decoration: BoxDecoration(
+          color: AppColors.textDisabled.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.textPrimary.withValues(alpha: 0.12),
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(
+              badge,
+              style: TextStyle(
+                color: stateColor.withValues(alpha: 0.55),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                height: 18 / 12,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                option,
+                key: _keyForOption(option),
+                style: const TextStyle(
+                  color: stateColor,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  height: 21 / 15,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Finished placeholder: the results/score screen is a later phase.
@@ -213,19 +262,28 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
           ),
         ),
         const SizedBox(height: 14),
-        Text(
-          question.englishStem,
-          style: const TextStyle(color: AppColors.textPrimary),
-        ),
-        for (final option in options)
-          GestureDetector(
-            onTap: () => _commit(option),
-            child: Text(
-              option,
-              key: _keyForOption(option),
-              style: const TextStyle(color: AppColors.textPrimary),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.cyan.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.cyan.withValues(alpha: 0.22)),
+          ),
+          child: Text(
+            question.englishStem,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 15,
+              height: 24 / 15,
             ),
           ),
+        ),
+        const SizedBox(height: 14),
+        for (var i = 0; i < options.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _buildOption(i, options[i]),
+        ],
         // Placeholder correctness indicator, shown once the question is locked.
         // Real correct/incorrect visuals are the Figma phase.
         if (_isLocked)
