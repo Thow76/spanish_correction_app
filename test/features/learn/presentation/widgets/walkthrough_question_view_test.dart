@@ -181,6 +181,34 @@ void main() {
     expect(correctIndicator, findsOneWidget);
   });
 
+  final correctHighlight = find.byKey(
+    const Key('walkthrough-correct-highlight'),
+  );
+
+  testWidgets('a wrong answer highlights the correct option', (tester) async {
+    await pump(tester, random: Random(1));
+
+    // 'Va' is a distractor; 'Voy' is the stored correct answer.
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+
+    expect(correctHighlight, findsOneWidget);
+    // The highlighted option is the stored correct translation, not the tapped
+    // distractor.
+    expect(tester.widget<Text>(correctHighlight).data, 'Voy');
+  });
+
+  testWidgets('a correct answer shows no correct-option highlight', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+
+    expect(correctHighlight, findsNothing);
+  });
+
   final advance = find.byKey(const Key('walkthrough-advance'));
   final finished = find.byKey(const Key('walkthrough-finished'));
 

@@ -78,6 +78,27 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   bool get _isCurrentCorrect =>
       _selectedOption == widget.questions[_currentIndex].correctTranslation;
 
+  /// The key (if any) an option's placeholder should carry.
+  ///
+  /// On a WRONG locked answer, the option matching the stored
+  /// [WalkthroughQuestion.correctTranslation] is marked with
+  /// `walkthrough-correct-highlight` — a placeholder for the real
+  /// "here's the right answer" highlight (the visual is the Figma phase). The
+  /// committed option always carries `walkthrough-selected-option`. These never
+  /// collide: on a wrong answer the selected option is a distractor, distinct
+  /// from the correct one.
+  Key? _keyForOption(String option) {
+    if (_selectedOption == option) {
+      return const Key('walkthrough-selected-option');
+    }
+    final isCorrectOption =
+        option == widget.questions[_currentIndex].correctTranslation;
+    if (_isLocked && !_isCurrentCorrect && isCorrectOption) {
+      return const Key('walkthrough-correct-highlight');
+    }
+    return null;
+  }
+
   void _commit(String option) {
     // Tap == commit + lock: once an option is chosen the question is answered
     // and further taps are no-ops. Selection and lock are one action.
@@ -149,9 +170,7 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
             onTap: () => _commit(option),
             child: Text(
               option,
-              key: _selectedOption == option
-                  ? const Key('walkthrough-selected-option')
-                  : null,
+              key: _keyForOption(option),
               style: const TextStyle(color: AppColors.textPrimary),
             ),
           ),
