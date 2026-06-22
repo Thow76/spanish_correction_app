@@ -49,7 +49,7 @@ void main() {
     );
 
     test(
-      'KEEP PRACTICING when the saved error category is still present',
+      'Sigue practicando when the saved error category is still present',
       () async {
         final service = _FakeCorrectionService([
           item(ErrorCategory.grammar),
@@ -130,7 +130,7 @@ void main() {
 
     test(
       'a substantive grammar error alongside a punctuation insertion still '
-      'KEEP PRACTICING',
+      'Sigue practicando',
       () async {
         final service = _FakeCorrectionService([
           item(ErrorCategory.grammar, phrase: 'en'),
@@ -155,7 +155,7 @@ void main() {
       },
     );
 
-    test('a clean re-translation (no corrections) is well done', () async {
+    test('a clean re-translation (no corrections) is Excelente', () async {
       final service = _FakeCorrectionService(const []);
       final useCase = GradeRetranslationUseCase(correctionService: service);
 
@@ -168,6 +168,105 @@ void main() {
       expect(grade.tier, RetranslationTier.excelente);
       expect(grade.corrections, isEmpty);
       expect(grade.categoryErrors, isEmpty);
+    });
+
+    group('three-tier edge cases', () {
+      test(
+        'a non-substantive error in another category stays Excelente',
+        () async {
+          // Target (grammar) is fixed. The only other-category correction is a
+          // pure punctuation insertion (empty original -> "."), which is not
+          // substantive, so the sentence still counts as clean -> Excelente.
+          final service = _FakeCorrectionService([
+            const CorrectionItem(
+              originalPhrase: '',
+              correctedPhrase: '.',
+              category: ErrorCategory.spelling,
+              shortExplanation: 'Add a full stop.',
+            ),
+          ]);
+          final useCase = GradeRetranslationUseCase(correctionService: service);
+
+          final grade = await useCase.call(
+            attempt: 'Voy al cine con mis amigos',
+            savedErrorCategory: ErrorCategory.grammar,
+            language: Language.spanish,
+          );
+
+          expect(grade.tier, RetranslationTier.excelente);
+          expect(grade.categoryErrors, isEmpty);
+          // The non-substantive item is still kept for the walkthrough.
+          expect(grade.corrections, hasLength(1));
+        },
+      );
+
+      test(
+        'target fixed with exactly one other substantive error is Bien hecho',
+        () async {
+          final service = _FakeCorrectionService([
+            item(ErrorCategory.spelling),
+          ]);
+          final useCase = GradeRetranslationUseCase(correctionService: service);
+
+          final grade = await useCase.call(
+            attempt: 'mi intento',
+            savedErrorCategory: ErrorCategory.grammar,
+            language: Language.spanish,
+          );
+
+          expect(grade.tier, RetranslationTier.bienHecho);
+          expect(grade.isWellDone, isTrue);
+          expect(grade.isKeepPracticing, isFalse);
+          expect(grade.categoryErrors, isEmpty);
+        },
+      );
+
+      test(
+        'target not fixed dominates even when the rest is clean',
+        () async {
+          // The only correction is a substantive error in the target category
+          // and nothing else: the target failure dominates -> Sigue practicando.
+          final service = _FakeCorrectionService([
+            item(ErrorCategory.grammar, phrase: 'en'),
+          ]);
+          final useCase = GradeRetranslationUseCase(correctionService: service);
+
+          final grade = await useCase.call(
+            attempt: 'Voy a cortar mi pelo en sábado',
+            savedErrorCategory: ErrorCategory.grammar,
+            language: Language.spanish,
+          );
+
+          expect(grade.tier, RetranslationTier.siguePracticando);
+          expect(grade.isKeepPracticing, isTrue);
+          expect(grade.isWellDone, isFalse);
+          expect(grade.categoryErrors, hasLength(1));
+        },
+      );
+
+      test(
+        'target not fixed with other substantive errors is still Sigue '
+        'practicando',
+        () async {
+          // Other-category errors never upgrade a failed target.
+          final service = _FakeCorrectionService([
+            item(ErrorCategory.grammar),
+            item(ErrorCategory.spelling),
+            item(ErrorCategory.wordChoice),
+          ]);
+          final useCase = GradeRetranslationUseCase(correctionService: service);
+
+          final grade = await useCase.call(
+            attempt: 'mi intento',
+            savedErrorCategory: ErrorCategory.grammar,
+            language: Language.spanish,
+          );
+
+          expect(grade.tier, RetranslationTier.siguePracticando);
+          expect(grade.isKeepPracticing, isTrue);
+          expect(grade.categoryErrors, hasLength(1));
+        },
+      );
     });
 
     test('trims the attempt before grading', () async {
