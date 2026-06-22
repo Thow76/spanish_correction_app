@@ -821,21 +821,48 @@ class _VerdictPanel extends StatelessWidget {
     } else {
       final resolved = grade!;
       final category = resolved.judgedCategory.label;
-      accent = resolved.isWellDone ? AppColors.mint : AppColors.coral;
-      final verdictLabel = resolved.isWellDone
-          ? str('Bien hecho', 'Muito bem')
-          : str('Sigue practicando', 'Continue praticando');
-      final reasoning = resolved.isWellDone
-          ? str(
-              'La categoría de enfoque ($category) está correcta en tu traducción.',
-              'A categoria em foco ($category) está correta na sua tradução.',
-            )
-          : str(
-              'La IA marcó en tu categoría de enfoque ($category): '
-              '${_describeErrors(resolved)}.',
-              'A IA apontou na sua categoria em foco ($category): '
-              '${_describeErrors(resolved)}.',
-            );
+      // Step 1 (Phase 4): select off the real tier instead of the two-bucket
+      // isWellDone. excelente intentionally renders identically to bienHecho for
+      // now — its distinct Excelente visuals land in the next step. bienHecho and
+      // siguePracticando keep their exact current appearance.
+      final IconData verdictIcon;
+      final String verdictLabel;
+      final String reasoning;
+      switch (resolved.tier) {
+        case RetranslationTier.excelente:
+          // Figma 596:1160: the Excelente heading colour is #5de4a0
+          // (AppColors.success) and the label is "¡Excelente!". The frame is a
+          // fuller Phase 5 result screen with no verdict icon or reasoning
+          // subtext, so within the interim card the icon and reasoning below are
+          // documented in-house defaults (not from Figma) kept for parity with
+          // the other two states — adjust freely. The reasoning is whole-sentence
+          // (no category) because excelente means the entire sentence is clean.
+          accent = AppColors.success;
+          verdictIcon = Icons.verified_outlined;
+          verdictLabel = str('¡Excelente!', 'Excelente!');
+          reasoning = str(
+            'Toda la frase está correcta de principio a fin.',
+            'A frase inteira está correta do início ao fim.',
+          );
+        case RetranslationTier.bienHecho:
+          accent = AppColors.mint;
+          verdictIcon = Icons.check_circle_outline;
+          verdictLabel = str('Bien hecho', 'Muito bem');
+          reasoning = str(
+            'La categoría de enfoque ($category) está correcta en tu traducción.',
+            'A categoria em foco ($category) está correta na sua tradução.',
+          );
+        case RetranslationTier.siguePracticando:
+          accent = AppColors.coral;
+          verdictIcon = Icons.error_outline;
+          verdictLabel = str('Sigue practicando', 'Continue praticando');
+          reasoning = str(
+            'La IA marcó en tu categoría de enfoque ($category): '
+            '${_describeErrors(resolved)}.',
+            'A IA apontou na sua categoria em foco ($category): '
+            '${_describeErrors(resolved)}.',
+          );
+      }
 
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -843,9 +870,7 @@ class _VerdictPanel extends StatelessWidget {
           Row(
             children: [
               Icon(
-                resolved.isWellDone
-                    ? Icons.check_circle_outline
-                    : Icons.error_outline,
+                verdictIcon,
                 color: accent,
                 size: 18,
               ),

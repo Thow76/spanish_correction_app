@@ -274,6 +274,15 @@ Future<void> _answerAndAdvance(WidgetTester tester) async {
   await _tap(tester, find.byKey(const Key('reveal-advance')));
 }
 
+/// Types an answer and reveals, stopping on the reveal screen (the AI verdict
+/// has resolved) WITHOUT advancing — so the verdict panel can be inspected.
+Future<void> _answerToReveal(WidgetTester tester) async {
+  await tester.enterText(find.byType(TextField), 'Ayer había mucho tráfico');
+  await tester.pump();
+
+  await _tap(tester, find.text('Ver respuesta'));
+}
+
 /// Scrolls the target into view (the game screen is a tall ListView, so bottom
 /// controls sit below the fold) and taps it.
 Future<void> _tap(WidgetTester tester, Finder finder) async {
@@ -535,6 +544,66 @@ void main() {
         expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
         expect(find.text('Resultado'), findsOneWidget);
         expect(find.text('0 / 1'), findsOneWidget);
+      },
+    );
+  });
+
+  group('Verdict panel renders all three tiers', () {
+    testWidgets(
+      'excelente -> "¡Excelente!" verdict (success state) on the reveal screen',
+      (tester) async {
+        // No corrections -> target fixed AND sentence clean -> excelente.
+        await pumpGame(tester, corrections: const []);
+
+        await _answerToReveal(tester);
+
+        expect(find.text('¡Excelente!'), findsOneWidget);
+        expect(find.byIcon(Icons.verified_outlined), findsOneWidget);
+        // Distinct from the bienHecho state.
+        expect(find.text('Bien hecho'), findsNothing);
+        expect(find.byIcon(Icons.check_circle_outline), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'bienHecho -> "Bien hecho" verdict, NOT Excelente (non-regression)',
+      (tester) async {
+        // Only a spelling error (the saved category is grammar): target fixed
+        // but the sentence is not clean -> bienHecho.
+        await pumpGame(
+          tester,
+          corrections: const [
+            CorrectionItem(
+              originalPhrase: 'traffico',
+              correctedPhrase: 'tráfico',
+              category: ErrorCategory.spelling,
+              shortExplanation: 'Spelling.',
+            ),
+          ],
+        );
+
+        await _answerToReveal(tester);
+
+        expect(find.text('Bien hecho'), findsOneWidget);
+        expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+        // The Excelente state must NOT leak into bienHecho.
+        expect(find.text('¡Excelente!'), findsNothing);
+        expect(find.byIcon(Icons.verified_outlined), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'siguePracticando -> "Sigue practicando" verdict (practice state)',
+      (tester) async {
+        // The default fake keeps a grammar error -> siguePracticando.
+        await pumpGame(tester);
+
+        await _answerToReveal(tester);
+
+        expect(find.text('Sigue practicando'), findsOneWidget);
+        expect(find.byIcon(Icons.error_outline), findsOneWidget);
+        expect(find.text('¡Excelente!'), findsNothing);
+        expect(find.text('Bien hecho'), findsNothing);
       },
     );
   });
