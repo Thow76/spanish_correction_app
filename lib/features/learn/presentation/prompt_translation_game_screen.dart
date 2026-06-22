@@ -184,8 +184,7 @@ class _PromptTranslationGameScreenState
                       isGrading: _isGrading,
                       grade: _grade,
                       gradeFailed: _gradeError != null,
-                      onCorrect: () => _handleSelfMark(isCorrect: true),
-                      onIncorrect: () => _handleSelfMark(isCorrect: false),
+                      onAdvance: _recordRating,
                       str: _str,
                     ),
                     _GamePhase.walkthrough => _WalkthroughIntroPhase(
@@ -298,76 +297,6 @@ class _PromptTranslationGameScreenState
     }
   }
 
-  /// Routes a self-mark through the AI verdict. When the user agrees with the
-  /// AI (or there is no verdict to disagree with), it records directly. When
-  /// the user contradicts the AI verdict, the override is gated behind a dialog
-  /// that surfaces what the AI objected to.
-  Future<void> _handleSelfMark({required bool isCorrect}) async {
-    final grade = _grade;
-    if (grade != null && isCorrect != grade.isWellDone) {
-      final confirmed = await _confirmOverride(
-        grade: grade,
-        userClaimsCorrect: isCorrect,
-      );
-      if (confirmed != true) {
-        return;
-      }
-    }
-    _recordRating(isCorrect: isCorrect);
-  }
-
-  Future<bool?> _confirmOverride({
-    required RetranslationGrade grade,
-    required bool userClaimsCorrect,
-  }) {
-    final category = grade.judgedCategory.label;
-    final reasoning = userClaimsCorrect
-        ? _str(
-            'La IA marcó en tu categoría de enfoque ($category): '
-            '${_describeErrors(grade)}.',
-            'A IA apontou na sua categoria em foco ($category): '
-            '${_describeErrors(grade)}.',
-          )
-        : _str(
-            'La IA no encontró errores en tu categoría de enfoque ($category).',
-            'A IA não encontrou erros na sua categoria em foco ($category).',
-          );
-    final confirmLabel = userClaimsCorrect
-        ? _str('Marcar como correcto', 'Marcar como correto')
-        : _str('Marcar para practicar', 'Marcar para praticar');
-
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text(
-          _str('Anular a la IA', 'Substituir a IA'),
-          style: const TextStyle(color: AppColors.textPrimary),
-        ),
-        content: Text(
-          reasoning,
-          style: const TextStyle(color: AppColors.textSecondary, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(_str('Cancelar', 'Cancelar')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(confirmLabel),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _describeErrors(RetranslationGrade grade) {
-    return grade.categoryErrors
-        .map((error) => '"${error.originalPhrase}" → "${error.correctedPhrase}"')
-        .join(', ');
-  }
-
   /// Records the score for the current attempt, then either offers the
   /// walkthrough intro (KEEP PRACTICING) or advances to the next phrase.
   ///
@@ -377,9 +306,15 @@ class _PromptTranslationGameScreenState
   /// into [_walkthroughQuestion] and keeps [_submittedAnswer]/[_grade] (rather
   /// than reading the now-advanced `_session.currentQuestion`). The advance-only
   /// reset is deferred to [_advanceToNext] so the No path never re-scores.
-  void _recordRating({required bool isCorrect}) {
+  void _recordRating() {
     final question = _session!.currentQuestion;
     final grade = _grade;
+    // Phase 2: the X/Y score is re-sourced from the AI tier, not a user
+    // self-mark. excelente + bienHecho (isWellDone) count as a hit;
+    // siguePracticando is a miss. An unavailable grade (offline/failed) counts
+    // as a miss, and the walkthrough trigger below stays gated on `grade != null`
+    // so a missing grade is a silent miss + advance.
+    final isCorrect = grade?.isWellDone ?? false;
     final nextSession = _session!.recordAnswer(isCorrect: isCorrect);
 
     // Offered purely on the AI tier, independent of how the user self-marked.
@@ -774,8 +709,7 @@ class _RevealPhase extends StatelessWidget {
     required this.isGrading,
     required this.grade,
     required this.gradeFailed,
-    required this.onCorrect,
-    required this.onIncorrect,
+    required this.onAdvance,
     required this.str,
   });
 
@@ -784,17 +718,17 @@ class _RevealPhase extends StatelessWidget {
   final bool isGrading;
   final RetranslationGrade? grade;
   final bool gradeFailed;
-  final VoidCallback onCorrect;
-  final VoidCallback onIncorrect;
+
+  /// PLACEHOLDER advance action (Phase 3b). Records the score off the AI tier
+  /// and either offers the walkthrough or moves on — the sole forward path now
+  /// that the self-rating buttons are gone. Phase 5 replaces this with per-tier
+  /// routing (Continue / Try again / See answer / Walkthrough), so the label and
+  /// key here are transitional.
+  final VoidCallback onAdvance;
   final String Function(String es, String pt) str;
 
   @override
   Widget build(BuildContext context) {
-    // Self-mark stays disabled until the AI verdict resolves, so the user
-    // always sees the AI's proposal (and its reasoning) before disposing. If
-    // grading failed there is no verdict to wait on, so marking is enabled.
-    final canSelfMark = !isGrading;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -819,31 +753,15 @@ class _RevealPhase extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         _ContextPanel(text: question.source.shortExplanation),
         const SizedBox(height: AppSpacing.xxl),
-        Text(
-          str('Tu valoración', 'Sua avaliação'),
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            Expanded(
-              child: PrimaryActionButton(
-                label: str('Casi', 'Quase'),
-                onPressed: canSelfMark ? onIncorrect : null,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: PrimaryActionButton(
-                label: str('Lo logré', 'Acertei'),
-                onPressed: canSelfMark ? onCorrect : null,
-              ),
-            ),
-          ],
+        // PLACEHOLDER advance (Phase 3b): the sole forward action now that the
+        // self-rating row is gone. Disabled while grading so the AI verdict
+        // resolves first; enabled on grade failure so an unavailable grade can
+        // still advance. Phase 5 replaces this single button with per-tier
+        // routing.
+        PrimaryActionButton(
+          key: const Key('reveal-advance'),
+          label: str('Continuar', 'Continuar'),
+          onPressed: isGrading ? null : onAdvance,
         ),
       ],
     );

@@ -131,6 +131,33 @@ class _FakeWalkthroughService extends WalkthroughService {
   }
 }
 
+/// A CorrectionService whose grade always throws, so the re-translation grade is
+/// unavailable (the screen's `_grade` stays null) — exercising the agreed
+/// null-grade scoring fallback (counts as a miss, no walkthrough).
+class _ThrowingCorrectionService implements CorrectionService {
+  @override
+  Future<CorrectionResponse> correctText(String text, Language language) async =>
+      throw Exception('grade unavailable');
+
+  @override
+  Future<String> generateLongExplanation(
+    CorrectionItem correction,
+    Language language,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<SavedExplanation> generateStructuredExplanation(
+    CorrectionItem correction,
+    Language language,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<String> generatePromptPhrase({
+    required String correctedSentence,
+    required Language language,
+  }) async => throw UnimplementedError();
+}
+
 class _FakeTranscriptionService implements TranscriptionService {
   @override
   Future<String> transcribeAudio(String audioPath, Language language) async =>
@@ -194,6 +221,7 @@ Future<void> pumpGame(
   List<SavedCorrection>? savedCorrections,
   List<CorrectionItem>? corrections,
   List<WalkthroughQuestion>? walkthroughQuestions,
+  CorrectionService? correctionService,
 }) async {
   final controller = CorrectionRepositoryController(
     _FakeCorrectionRepository(savedCorrections ?? [buildSavedCorrection()]),
@@ -203,7 +231,8 @@ Future<void> pumpGame(
       home: PromptTranslationGameScreen(
         repositoryController: controller,
         transcriptionService: _FakeTranscriptionService(),
-        correctionService: _FakeCorrectionService(corrections: corrections),
+        correctionService:
+            correctionService ?? _FakeCorrectionService(corrections: corrections),
         walkthroughService: _FakeWalkthroughService(
           questions: walkthroughQuestions,
         ),
@@ -215,21 +244,34 @@ Future<void> pumpGame(
 }
 
 /// Drives a fresh prompt phase through to the walkthrough question phase:
-/// type an answer, reveal (grades KEEP PRACTICING), self-mark "Casi" (matches
-/// the AI verdict, so no override dialog), accept the intro, fetch questions.
+/// type an answer, reveal (grades KEEP PRACTICING), advance off the AI tier,
+/// accept the intro, fetch questions.
 Future<void> driveToWalkthroughQuestions(WidgetTester tester) async {
   await answerCurrentPhraseToIntro(tester);
   await _tap(tester, find.text('Sí, vamos'));
 }
 
-/// Types an answer, reveals (grades keep-practicing via the fake), and self-marks
-/// "Casi" — landing on the walkthrough intro ("¿Lo trabajamos paso a paso?").
+/// Types an answer, reveals (grades keep-practicing via the fake), and taps the
+/// reveal advance control — landing on the walkthrough intro, which the AI tier
+/// (siguePracticando) triggers regardless of any self-mark.
 Future<void> answerCurrentPhraseToIntro(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField), 'Ayer hubo mucho tráfico');
   await tester.pump();
 
   await _tap(tester, find.text('Ver respuesta'));
-  await _tap(tester, find.text('Casi'));
+  await _tap(tester, find.byKey(const Key('reveal-advance')));
+}
+
+/// Types an answer, reveals (awaiting the AI verdict), and taps the reveal
+/// advance control. Unlike [answerCurrentPhraseToIntro] this makes no claim
+/// about where it lands — the tier decides (summary for a hit, walkthrough
+/// intro for a miss).
+Future<void> _answerAndAdvance(WidgetTester tester) async {
+  await tester.enterText(find.byType(TextField), 'Ayer había mucho tráfico');
+  await tester.pump();
+
+  await _tap(tester, find.text('Ver respuesta'));
+  await _tap(tester, find.byKey(const Key('reveal-advance')));
 }
 
 /// Scrolls the target into view (the game screen is a tall ListView, so bottom
@@ -416,5 +458,84 @@ void main() {
 
     expect(find.text('¿Lo trabajamos paso a paso?'), findsOneWidget);
     expect(find.text('Sí, vamos'), findsOneWidget);
+  });
+
+  group('AI-tier scoring (X/Y sourced from grade.isWellDone)', () {
+    testWidgets(
+      'excelente counts as a hit: a clean attempt advances straight to a 1/1 '
+      'summary with no walkthrough',
+      (tester) async {
+        // No corrections at all -> target fixed AND sentence clean -> excelente.
+        await pumpGame(tester, corrections: const []);
+
+        await _answerAndAdvance(tester);
+
+        // A well-done tier never offers the walkthrough; the single-phrase
+        // session is complete -> summary, scored as a hit.
+        expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
+        expect(find.text('Resultado'), findsOneWidget);
+        expect(find.text('1 / 1'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'bienHecho counts as a hit: target fixed but an other-category error '
+      'remains -> 1/1 summary, still no walkthrough',
+      (tester) async {
+        // Only a spelling error (the saved category is grammar): the target is
+        // fixed but the sentence is not clean -> bienHecho (isWellDone == true).
+        await pumpGame(
+          tester,
+          corrections: const [
+            CorrectionItem(
+              originalPhrase: 'traffico',
+              correctedPhrase: 'tráfico',
+              category: ErrorCategory.spelling,
+              shortExplanation: 'Spelling.',
+            ),
+          ],
+        );
+
+        await _answerAndAdvance(tester);
+
+        expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
+        expect(find.text('Resultado'), findsOneWidget);
+        expect(find.text('1 / 1'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'siguePracticando counts as a miss: 0/1 summary after declining the '
+      'walkthrough',
+      (tester) async {
+        // The default fake keeps a grammar error -> siguePracticando (miss).
+        await pumpGame(tester);
+
+        await _answerAndAdvance(tester);
+
+        // The miss tier offers the walkthrough; decline it to reach the summary.
+        expect(find.text('¿Lo trabajamos paso a paso?'), findsOneWidget);
+        await _tap(tester, find.text('Ahora no'));
+
+        expect(find.text('Resultado'), findsOneWidget);
+        expect(find.text('0 / 1'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'an unavailable grade counts as a miss: 0/1 summary and no walkthrough',
+      (tester) async {
+        // Grading throws -> _grade stays null. Per the agreed fallback a null
+        // grade scores as a miss, and the walkthrough guard (grade != null)
+        // keeps the intro from showing.
+        await pumpGame(tester, correctionService: _ThrowingCorrectionService());
+
+        await _answerAndAdvance(tester);
+
+        expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
+        expect(find.text('Resultado'), findsOneWidget);
+        expect(find.text('0 / 1'), findsOneWidget);
+      },
+    );
   });
 }
