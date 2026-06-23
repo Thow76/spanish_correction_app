@@ -18,6 +18,7 @@ import '../../../shared/widgets/empty_state_panel.dart';
 import '../../../shared/widgets/divider_label.dart';
 import '../../../shared/widgets/mic_control.dart';
 import '../../../shared/widgets/primary_action_button.dart';
+import '../../../shared/widgets/secondary_action_button.dart';
 import '../../../shared/widgets/text_input_panel.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
@@ -184,7 +185,10 @@ class _PromptTranslationGameScreenState
                       isGrading: _isGrading,
                       grade: _grade,
                       gradeFailed: _gradeError != null,
-                      onAdvance: _recordRating,
+                      onContinue: _continueAfterReveal,
+                      onTryAgain: _tryAgainAfterReveal,
+                      onWalkthrough: _walkthroughAfterReveal,
+                      onSeeAnswer: _handleSeeAnswer,
                       str: _str,
                     ),
                     _GamePhase.walkthrough => _WalkthroughIntroPhase(
@@ -297,42 +301,62 @@ class _PromptTranslationGameScreenState
     }
   }
 
-  /// Records the score for the current attempt, then either offers the
-  /// walkthrough intro (KEEP PRACTICING) or advances to the next phrase.
+  /// Records the score for the current attempt and advances the session
+  /// pointer, snapshotting the pre-record session and the just-answered question
+  /// first. Pure field mutation — callers wrap it in [setState] and then pick a
+  /// destination ([_continueAfterReveal] / [_walkthroughAfterReveal], and in
+  /// Phase 5 the per-tier "Try again" path).
   ///
   /// Scoring is bundled into [GameSession.recordAnswer], which ALSO advances
-  /// `currentIndex`. So once this runs the session points at the *next*
-  /// question — the walkthrough therefore captures the just-answered question
-  /// into [_walkthroughQuestion] and keeps [_submittedAnswer]/[_grade] (rather
-  /// than reading the now-advanced `_session.currentQuestion`). The advance-only
-  /// reset is deferred to [_advanceToNext] so the No path never re-scores.
-  void _recordRating() {
-    final question = _session!.currentQuestion;
-    final grade = _grade;
+  /// `currentIndex`, so once this runs the session points at the *next*
+  /// question. The just-answered question is captured into [_walkthroughQuestion]
+  /// BEFORE recording (the walkthrough and any retry read this capture, not the
+  /// now-advanced `_session.currentQuestion`); [_submittedAnswer]/[_grade] are
+  /// left untouched for the intro.
+  ///
+  /// The pre-record snapshot ([_sessionBeforeWalkthrough]) is taken for EVERY
+  /// tier, not just KEEP PRACTICING. Today only the walkthrough path reads it,
+  /// but Phase 5 offers "Try again" on Bien hecho too, and that retry restores
+  /// this snapshot to drop the discarded attempt's score — exactly as the
+  /// keep-practicing retry has always done. Capturing it unconditionally is
+  /// harmless on the advance path because [_advanceToNext] clears it.
+  void _recordScore() {
     // Phase 2: the X/Y score is re-sourced from the AI tier, not a user
     // self-mark. excelente + bienHecho (isWellDone) count as a hit;
     // siguePracticando is a miss. An unavailable grade (offline/failed) counts
-    // as a miss, and the walkthrough trigger below stays gated on `grade != null`
-    // so a missing grade is a silent miss + advance.
-    final isCorrect = grade?.isWellDone ?? false;
-    final nextSession = _session!.recordAnswer(isCorrect: isCorrect);
+    // as a miss.
+    final isCorrect = _grade?.isWellDone ?? false;
+    _sessionBeforeWalkthrough = _session;
+    _walkthroughQuestion = _session!.currentQuestion;
+    _session = _session!.recordAnswer(isCorrect: isCorrect);
+  }
 
-    // Offered purely on the AI tier, independent of how the user self-marked.
-    if (grade != null && grade.isKeepPracticing) {
-      setState(() {
-        // Snapshot the pre-record session (still pointing at this phrase) so a
-        // later "Try again" can re-attempt it fresh without double-counting.
-        _sessionBeforeWalkthrough = _session;
-        _session = nextSession;
-        _walkthroughQuestion = question;
-        _phase = _GamePhase.walkthrough;
-        // _submittedAnswer and _grade are intentionally retained for the intro.
-      });
-      return;
-    }
-
-    setState(() => _session = nextSession);
+  /// Continue past the reveal screen: record the score and move on to the next
+  /// phrase (or the summary). The forward path for the satisfied tiers
+  /// (Excelente / Bien hecho) and the unavailable-grade fallback.
+  void _continueAfterReveal() {
+    setState(_recordScore);
     _advanceToNext();
+  }
+
+  /// Record the score and open the walkthrough intro for the just-answered
+  /// phrase. Routes into the existing [_GamePhase.walkthrough]; [_recordScore]
+  /// has already captured the phrase and the retry snapshot.
+  void _walkthroughAfterReveal() {
+    setState(() {
+      _recordScore();
+      _phase = _GamePhase.walkthrough;
+    });
+  }
+
+  /// "Intentar de nuevo" on the Bien hecho reveal screen: record the score (to
+  /// take the pre-record snapshot) then immediately restore it via
+  /// [_retrySamePhrase], dropping this attempt's score and re-attempting the
+  /// same phrase fresh. Mirrors the walkthrough-result retry; relies on the
+  /// all-tier snapshot [_recordScore] now takes.
+  void _tryAgainAfterReveal() {
+    setState(_recordScore);
+    _retrySamePhrase();
   }
 
   /// Clears every per-attempt and walkthrough field so the next attempt starts
@@ -709,7 +733,10 @@ class _RevealPhase extends StatelessWidget {
     required this.isGrading,
     required this.grade,
     required this.gradeFailed,
-    required this.onAdvance,
+    required this.onContinue,
+    required this.onTryAgain,
+    required this.onWalkthrough,
+    required this.onSeeAnswer,
     required this.str,
   });
 
@@ -719,12 +746,14 @@ class _RevealPhase extends StatelessWidget {
   final RetranslationGrade? grade;
   final bool gradeFailed;
 
-  /// PLACEHOLDER advance action (Phase 3b). Records the score off the AI tier
-  /// and either offers the walkthrough or moves on — the sole forward path now
-  /// that the self-rating buttons are gone. Phase 5 replaces this with per-tier
-  /// routing (Continue / Try again / See answer / Walkthrough), so the label and
-  /// key here are transitional.
-  final VoidCallback onAdvance;
+  /// Per-tier reveal routes (Phase 5), selected by [_RevealActionBar] off
+  /// `grade.tier`: [onContinue] for the satisfied tiers, [onTryAgain] for Bien
+  /// hecho's retry, [onWalkthrough] for Sigue practicando, and [onSeeAnswer] for
+  /// the (still-stubbed) answer screen.
+  final VoidCallback onContinue;
+  final VoidCallback onTryAgain;
+  final VoidCallback onWalkthrough;
+  final VoidCallback onSeeAnswer;
   final String Function(String es, String pt) str;
 
   @override
@@ -753,18 +782,113 @@ class _RevealPhase extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         _ContextPanel(text: question.source.shortExplanation),
         const SizedBox(height: AppSpacing.xxl),
-        // PLACEHOLDER advance (Phase 3b): the sole forward action now that the
-        // self-rating row is gone. Disabled while grading so the AI verdict
-        // resolves first; enabled on grade failure so an unavailable grade can
-        // still advance. Phase 5 replaces this single button with per-tier
-        // routing.
-        PrimaryActionButton(
-          key: const Key('reveal-advance'),
-          label: str('Continuar', 'Continuar'),
-          onPressed: isGrading ? null : onAdvance,
+        _RevealActionBar(
+          tier: grade?.tier,
+          isGrading: isGrading,
+          onContinue: onContinue,
+          onTryAgain: onTryAgain,
+          onWalkthrough: onWalkthrough,
+          onSeeAnswer: onSeeAnswer,
+          str: str,
         ),
       ],
     );
+  }
+}
+
+/// The bottom action bar on the reveal screen, routing per [RetranslationTier]
+/// (Figma 596:1160 / 596:1241 / 596:1358):
+///
+/// - Excelente: a single "Siguiente pregunta" continue.
+/// - Bien hecho: "Siguiente pregunta" + an "Intentar de nuevo" retry.
+/// - Sigue practicando: "Practicar paso a paso" (walkthrough) + "Ver respuesta"
+///   (see answer). No standalone continue — the walkthrough IS the forward path.
+///
+/// While grading, a disabled continue holds the slot until the AI verdict
+/// resolves. If the grade is unavailable (offline/failed: [tier] is null and not
+/// grading) a single enabled continue is the only safe forward action, matching
+/// the historical fallback where a missing grade scores as a miss and advances.
+///
+/// Each button carries a stable per-tier key (reveal-continue / reveal-try-again
+/// / reveal-walkthrough / reveal-see-answer) so the funnel tests tap by tier,
+/// not by (localised) label.
+class _RevealActionBar extends StatelessWidget {
+  const _RevealActionBar({
+    required this.tier,
+    required this.isGrading,
+    required this.onContinue,
+    required this.onTryAgain,
+    required this.onWalkthrough,
+    required this.onSeeAnswer,
+    required this.str,
+  });
+
+  /// The resolved outcome tier, or null while grading or when the grade is
+  /// unavailable.
+  final RetranslationTier? tier;
+  final bool isGrading;
+  final VoidCallback onContinue;
+  final VoidCallback onTryAgain;
+  final VoidCallback onWalkthrough;
+  final VoidCallback onSeeAnswer;
+  final String Function(String es, String pt) str;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isGrading) {
+      // Hold the continue slot disabled until the AI verdict resolves.
+      return PrimaryActionButton(
+        key: const Key('reveal-continue'),
+        label: str('Siguiente pregunta', 'Próxima pergunta'),
+        onPressed: null,
+      );
+    }
+
+    switch (tier) {
+      case RetranslationTier.bienHecho:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PrimaryActionButton(
+              key: const Key('reveal-continue'),
+              label: str('Siguiente pregunta', 'Próxima pergunta'),
+              onPressed: onContinue,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SecondaryActionButton(
+              key: const Key('reveal-try-again'),
+              label: str('Intentar de nuevo', 'Tentar de novo'),
+              onPressed: onTryAgain,
+            ),
+          ],
+        );
+      case RetranslationTier.siguePracticando:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PrimaryActionButton(
+              key: const Key('reveal-walkthrough'),
+              label: str('Practicar paso a paso', 'Praticar passo a passo'),
+              onPressed: onWalkthrough,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SecondaryActionButton(
+              key: const Key('reveal-see-answer'),
+              label: str('Ver respuesta', 'Ver resposta'),
+              onPressed: onSeeAnswer,
+            ),
+          ],
+        );
+      case RetranslationTier.excelente:
+      case null:
+        // Excelente shows a single continue; a null (unavailable) grade falls
+        // back to the same single continue as the only safe forward action.
+        return PrimaryActionButton(
+          key: const Key('reveal-continue'),
+          label: str('Siguiente pregunta', 'Próxima pergunta'),
+          onPressed: onContinue,
+        );
+    }
   }
 }
 

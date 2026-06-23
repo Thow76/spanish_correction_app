@@ -15,6 +15,11 @@ class AppColors {
   /// Correct-answer green used by the walkthrough question states.
   static const success = Color(0xFF5DE4A0);
 
+  /// Amber heading accent for the "Sigue practicando" result tier
+  /// (Figma 596:1358, heading fill #F59E0B). A distinct semantic token rather
+  /// than reusing the [naturalLanguage] error-category colour.
+  static const amber = Color(0xFFF59E0B);
+
   static const grammar = Color(0xFF5B8DEF);
   static const spelling = Color(0xFFEF5B5B);
   static const wordChoice = Color(0xFF5BEF8D);

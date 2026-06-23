@@ -252,18 +252,18 @@ Future<void> driveToWalkthroughQuestions(WidgetTester tester) async {
 }
 
 /// Types an answer, reveals (grades keep-practicing via the fake), and taps the
-/// reveal advance control — landing on the walkthrough intro, which the AI tier
+/// reveal primary advance — landing on the walkthrough intro, which the AI tier
 /// (siguePracticando) triggers regardless of any self-mark.
 Future<void> answerCurrentPhraseToIntro(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField), 'Ayer hubo mucho tráfico');
   await tester.pump();
 
   await _tap(tester, find.text('Ver respuesta'));
-  await _tap(tester, find.byKey(const Key('reveal-advance')));
+  await _advanceFromReveal(tester);
 }
 
 /// Types an answer, reveals (awaiting the AI verdict), and taps the reveal
-/// advance control. Unlike [answerCurrentPhraseToIntro] this makes no claim
+/// primary advance. Unlike [answerCurrentPhraseToIntro] this makes no claim
 /// about where it lands — the tier decides (summary for a hit, walkthrough
 /// intro for a miss).
 Future<void> _answerAndAdvance(WidgetTester tester) async {
@@ -271,7 +271,21 @@ Future<void> _answerAndAdvance(WidgetTester tester) async {
   await tester.pump();
 
   await _tap(tester, find.text('Ver respuesta'));
-  await _tap(tester, find.byKey(const Key('reveal-advance')));
+  await _advanceFromReveal(tester);
+}
+
+/// Taps the reveal screen's primary forward button, whichever tier is shown:
+/// `reveal-continue` for the satisfied tiers (and the unavailable-grade
+/// fallback), `reveal-walkthrough` for Sigue practicando.
+Future<void> _advanceFromReveal(WidgetTester tester) async {
+  final hasContinue = find
+      .byKey(const Key('reveal-continue'))
+      .evaluate()
+      .isNotEmpty;
+  final key = hasContinue
+      ? const Key('reveal-continue')
+      : const Key('reveal-walkthrough');
+  await _tap(tester, find.byKey(key));
 }
 
 /// Types an answer and reveals, stopping on the reveal screen (the AI verdict
@@ -604,6 +618,73 @@ void main() {
         expect(find.byIcon(Icons.error_outline), findsOneWidget);
         expect(find.text('¡Excelente!'), findsNothing);
         expect(find.text('Bien hecho'), findsNothing);
+      },
+    );
+  });
+
+  group('reveal action bar surfaces the per-tier buttons', () {
+    final spellingOnly = [
+      const CorrectionItem(
+        originalPhrase: 'traffico',
+        correctedPhrase: 'tráfico',
+        category: ErrorCategory.spelling,
+        shortExplanation: 'Spelling.',
+      ),
+    ];
+
+    testWidgets('excelente -> continue only', (tester) async {
+      // No corrections -> target fixed AND sentence clean -> excelente.
+      await pumpGame(tester, corrections: const []);
+      await _answerToReveal(tester);
+
+      expect(find.byKey(const Key('reveal-continue')), findsOneWidget);
+      expect(find.byKey(const Key('reveal-try-again')), findsNothing);
+      expect(find.byKey(const Key('reveal-walkthrough')), findsNothing);
+      expect(find.byKey(const Key('reveal-see-answer')), findsNothing);
+    });
+
+    testWidgets('bienHecho -> continue + try again', (tester) async {
+      // Saved category is grammar; only a spelling error remains -> bienHecho.
+      await pumpGame(tester, corrections: spellingOnly);
+      await _answerToReveal(tester);
+
+      expect(find.byKey(const Key('reveal-continue')), findsOneWidget);
+      expect(find.byKey(const Key('reveal-try-again')), findsOneWidget);
+      expect(find.byKey(const Key('reveal-walkthrough')), findsNothing);
+      expect(find.byKey(const Key('reveal-see-answer')), findsNothing);
+    });
+
+    testWidgets(
+      'siguePracticando -> walkthrough + see answer, no continue',
+      (tester) async {
+        // The default fake keeps a grammar error -> siguePracticando.
+        await pumpGame(tester);
+        await _answerToReveal(tester);
+
+        expect(find.byKey(const Key('reveal-walkthrough')), findsOneWidget);
+        expect(find.byKey(const Key('reveal-see-answer')), findsOneWidget);
+        expect(find.byKey(const Key('reveal-continue')), findsNothing);
+        expect(find.byKey(const Key('reveal-try-again')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'Bien hecho "Intentar de nuevo" returns to the same phrase fresh',
+      (tester) async {
+        await pumpGame(tester, corrections: spellingOnly);
+        await _answerToReveal(tester);
+
+        await _tap(tester, find.byKey(const Key('reveal-try-again')));
+
+        // Back on the SAME phrase as a clean prompt, score dropped (not a skip
+        // to the summary), exercising the all-tier snapshot.
+        expect(find.text('Pregunta 1 de 1'), findsOneWidget);
+        expect(find.text('Yesterday there was a lot of traffic'), findsOneWidget);
+        expect(find.text('Resultado'), findsNothing);
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          '',
+        );
       },
     );
   });
