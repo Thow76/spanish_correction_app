@@ -80,8 +80,8 @@ class _PromptTranslationGameScreenState
   bool _isTranscribing = false;
   int _recordingSecondsRemaining = _recordingLimitSeconds;
 
-  // AI grade of the current re-translation (Chunk 2 use case). The AI proposes
-  // a verdict; the user disposes via the retained self-mark. Reset per attempt.
+  // AI grade of the current re-translation (Chunk 2 use case). The AI verdict is
+  // the sole measure of success. Reset per attempt.
   bool _isGrading = false;
   RetranslationGrade? _grade;
   Object? _gradeError;
@@ -289,8 +289,8 @@ class _PromptTranslationGameScreenState
         _isGrading = false;
       });
     } catch (error) {
-      // No retry-in-place here (that is Section 6a): degrade gracefully to the
-      // plain self-mark when the grade is unavailable.
+      // No retry-in-place here (that is Section 6a): degrade gracefully when the
+      // AI grade is unavailable, surfacing the unavailable-grade message.
       if (!mounted) {
         return;
       }
@@ -321,8 +321,8 @@ class _PromptTranslationGameScreenState
   /// keep-practicing retry has always done. Capturing it unconditionally is
   /// harmless on the advance path because [_advanceToNext] clears it.
   void _recordScore() {
-    // Phase 2: the X/Y score is re-sourced from the AI tier, not a user
-    // self-mark. Each tier carries a weight via [_pointsFor].
+    // Phase 2: the X/Y score is sourced from the AI tier. Each tier carries a
+    // weight via [_pointsFor].
     final points = _pointsFor(_grade?.tier);
     _sessionBeforeWalkthrough = _session;
     _walkthroughQuestion = _session!.currentQuestion;
@@ -1025,8 +1025,8 @@ class _CurrentAnswerBlock extends StatelessWidget {
   }
 }
 
-/// Shows the AI's verdict and its reasoning on the reveal phase, alongside the
-/// retained self-mark below it. The AI proposes; the user disposes.
+/// Shows the AI's verdict and its reasoning on the reveal phase. The AI verdict
+/// is the sole measure of success; nothing renders below it.
 class _VerdictPanel extends StatelessWidget {
   const _VerdictPanel({
     required this.isGrading,
@@ -1064,13 +1064,13 @@ class _VerdictPanel extends StatelessWidget {
         ],
       );
     } else if (grade == null) {
-      // Grade unavailable (e.g. offline). Degrade to plain self-mark.
+      // The AI grade is unavailable (e.g. offline or the grader errored).
       accent = AppColors.textSecondary;
       body = Text(
         gradeFailed
             ? str(
-                'Valoración de la IA no disponible. Usa tu propia valoración.',
-                'Avaliação da IA indisponível. Use sua própria avaliação.',
+                'No se pudo completar la valoración de la IA. Inténtalo de nuevo.',
+                'Não foi possível concluir a avaliação da IA. Tente novamente.',
               )
             : '',
         style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),

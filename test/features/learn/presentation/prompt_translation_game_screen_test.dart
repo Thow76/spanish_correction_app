@@ -254,7 +254,7 @@ Future<void> driveToWalkthroughQuestions(WidgetTester tester) async {
 
 /// Types an answer, reveals (grades keep-practicing via the fake), and taps the
 /// reveal primary advance — landing on the walkthrough intro, which the AI tier
-/// (siguePracticando) triggers regardless of any self-mark.
+/// (siguePracticando) triggers on its own.
 Future<void> answerCurrentPhraseToIntro(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField), 'Ayer hubo mucho tráfico');
   await tester.pump();
