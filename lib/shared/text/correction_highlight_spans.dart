@@ -22,6 +22,8 @@ String _originalPhrase(CorrectionItem item) => item.originalPhrase;
 /// [color] is the highlight colour for every span unless [colorOf] is provided,
 /// in which case it overrides per item (the corrections screen colours by error
 /// category; the game passes a single accent colour and no [colorOf]).
+/// [decoration] is applied to every highlighted span (e.g. the reveal screen's
+/// underlined diff); it defaults to none so existing call sites are unchanged.
 /// [recognizerOf], when provided, attaches a tap recognizer to each highlighted
 /// span (the corrections screen opens a detail sheet); the game passes none.
 /// [rangeSelector] / [phraseSelector] choose which stored range/phrase to anchor
@@ -37,6 +39,7 @@ List<InlineSpan> buildHighlightedSpans({
   required List<CorrectionItem> corrections,
   required Color color,
   FontWeight fontWeight = FontWeight.w700,
+  TextDecoration? decoration,
   (int?, int?) Function(CorrectionItem item) rangeSelector = _originalRange,
   String Function(CorrectionItem item) phraseSelector = _originalPhrase,
   Color Function(CorrectionItem item)? colorOf,
@@ -66,6 +69,7 @@ List<InlineSpan> buildHighlightedSpans({
         style: TextStyle(
           color: colorOf?.call(highlight.item) ?? color,
           fontWeight: fontWeight,
+          decoration: decoration,
         ),
         recognizer: recognizerOf?.call(highlight.item),
       ),

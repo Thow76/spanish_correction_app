@@ -758,9 +758,25 @@ class _RevealPhase extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final grade = this.grade;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Phase 5 (Figma 596:1160 / :1241 / :1358): the tier heading and the
+        // diff-underlined answer block. Rendered only once the grade resolves;
+        // while grading / on grade failure the interim panels below stand in.
+        // The old comparison/verdict/context panels are still present here and
+        // are removed at the Step 7 cutover.
+        if (grade != null) ...[
+          _RevealHeading(tier: grade.tier, str: str),
+          const SizedBox(height: AppSpacing.md),
+          _CurrentAnswerBlock(
+            answer: submittedAnswer,
+            corrections: grade.corrections,
+            str: str,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
         _AnswerComparisonPanel(
           title: str('Tu respuesta', 'Sua resposta'),
           text: submittedAnswer.isEmpty ? '...' : submittedAnswer,
@@ -889,6 +905,109 @@ class _RevealActionBar extends StatelessWidget {
           onPressed: onContinue,
         );
     }
+  }
+}
+
+/// The colour-coded tier heading at the top of the reveal screen (Figma
+/// 596:1315 et al): Sora Bold 18/27. Excelente is green, Bien hecho cyan, Sigue
+/// practicando amber — the sole tier signal now that the verdict card is gone.
+class _RevealHeading extends StatelessWidget {
+  const _RevealHeading({required this.tier, required this.str});
+
+  final RetranslationTier tier;
+  final String Function(String es, String pt) str;
+
+  @override
+  Widget build(BuildContext context) {
+    final (String label, Color color) = switch (tier) {
+      RetranslationTier.excelente => (
+        str('¡Excelente!', 'Excelente!'),
+        AppColors.success,
+      ),
+      RetranslationTier.bienHecho => (
+        str('¡Bien hecho!', 'Muito bem!'),
+        AppColors.cyan,
+      ),
+      RetranslationTier.siguePracticando => (
+        str('Sigue practicando', 'Continue praticando'),
+        AppColors.amber,
+      ),
+    };
+
+    return Text(
+      label,
+      key: const Key('reveal-heading'),
+      style: TextStyle(
+        color: color,
+        fontFamily: 'Sora',
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        height: 27 / 18,
+      ),
+    );
+  }
+}
+
+/// The "Tu respuesta" block on the reveal screen (Figma 596:1316 et al): the
+/// learner's submitted attempt on a surface card, with any substantive errors
+/// the grader found diff-underlined in the highlight yellow (#EFDC5B). The diff
+/// set is the FULL [corrections] list, not just the saved category — so Bien
+/// hecho still underlines the other-category error it left behind, and a clean
+/// Excelente attempt renders with no underline at all.
+class _CurrentAnswerBlock extends StatelessWidget {
+  const _CurrentAnswerBlock({
+    required this.answer,
+    required this.corrections,
+    required this.str,
+  });
+
+  final String answer;
+  final List<CorrectionItem> corrections;
+  final String Function(String es, String pt) str;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          str('Tu respuesta', 'Sua resposta'),
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text.rich(
+            TextSpan(
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 15,
+                height: 24 / 15,
+              ),
+              children: buildHighlightedSpans(
+                text: answer.isEmpty ? '...' : answer,
+                corrections: corrections,
+                color: AppColors.naturalLanguage,
+                fontWeight: FontWeight.w400,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

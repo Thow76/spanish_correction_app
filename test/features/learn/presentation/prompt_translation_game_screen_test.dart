@@ -13,6 +13,7 @@ import 'package:spanish_correction_app/features/learn/presentation/prompt_transl
 import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_question_view.dart';
 import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_result_view.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_correction.dart';
+import 'package:spanish_correction_app/shared/design/app_colors.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_explanation.dart';
 import 'package:spanish_correction_app/features/write/application/transcription_service.dart';
 import 'package:spanish_correction_app/core/models/walkthrough_activity.dart';
@@ -571,7 +572,9 @@ void main() {
 
         await _answerToReveal(tester);
 
-        expect(find.text('¡Excelente!'), findsOneWidget);
+        // The reveal heading now also shows "¡Excelente!", so the text appears
+        // twice (heading + interim verdict card) until Step 7 removes the card.
+        expect(find.text('¡Excelente!'), findsWidgets);
         expect(find.byIcon(Icons.verified_outlined), findsOneWidget);
         // Distinct from the bienHecho state.
         expect(find.text('Bien hecho'), findsNothing);
@@ -614,7 +617,9 @@ void main() {
 
         await _answerToReveal(tester);
 
-        expect(find.text('Sigue practicando'), findsOneWidget);
+        // Heading + interim verdict card both render "Sigue practicando" until
+        // Step 7 removes the card.
+        expect(find.text('Sigue practicando'), findsWidgets);
         expect(find.byIcon(Icons.error_outline), findsOneWidget);
         expect(find.text('¡Excelente!'), findsNothing);
         expect(find.text('Bien hecho'), findsNothing);
@@ -688,4 +693,94 @@ void main() {
       },
     );
   });
+
+  group('reveal heading and answer block (Phase 5 redesign)', () {
+    final spellingOnly = [
+      const CorrectionItem(
+        originalPhrase: 'traffico',
+        correctedPhrase: 'tráfico',
+        category: ErrorCategory.spelling,
+        shortExplanation: 'Spelling.',
+      ),
+    ];
+
+    Text headingOf(WidgetTester tester) =>
+        tester.widget<Text>(find.byKey(const Key('reveal-heading')));
+
+    testWidgets('excelente -> green "¡Excelente!" heading', (tester) async {
+      await pumpGame(tester, corrections: const []);
+      await _answerToReveal(tester);
+
+      final heading = headingOf(tester);
+      expect(heading.data, '¡Excelente!');
+      expect(heading.style?.color, AppColors.success);
+    });
+
+    testWidgets('bienHecho -> cyan "¡Bien hecho!" heading', (tester) async {
+      await pumpGame(tester, corrections: spellingOnly);
+      await _answerToReveal(tester);
+
+      final heading = headingOf(tester);
+      expect(heading.data, '¡Bien hecho!');
+      expect(heading.style?.color, AppColors.cyan);
+    });
+
+    testWidgets('siguePracticando -> amber "Sigue practicando" heading', (
+      tester,
+    ) async {
+      await pumpGame(tester);
+      await _answerToReveal(tester);
+
+      final heading = headingOf(tester);
+      expect(heading.data, 'Sigue practicando');
+      expect(heading.style?.color, AppColors.amber);
+    });
+
+    testWidgets(
+      'siguePracticando underlines the still-present phrase in Tu respuesta',
+      (tester) async {
+        // The default fake keeps the grammar error 'hubo'; type an attempt that
+        // contains it so the diff can locate and underline it.
+        await pumpGame(tester);
+        await tester.enterText(
+          find.byType(TextField),
+          'Ayer hubo mucho tráfico',
+        );
+        await tester.pump();
+        await _tap(tester, find.text('Ver respuesta'));
+
+        expect(_underlinedDiffPhrases(tester), contains('hubo'));
+      },
+    );
+
+    testWidgets('excelente renders no diff underline (clean attempt)', (
+      tester,
+    ) async {
+      await pumpGame(tester, corrections: const []);
+      await _answerToReveal(tester);
+
+      expect(_underlinedDiffPhrases(tester), isEmpty);
+    });
+  });
+}
+
+/// The text of every span rendered with the reveal diff treatment — an
+/// underline in the highlight yellow ([AppColors.naturalLanguage]).
+List<String> _underlinedDiffPhrases(WidgetTester tester) {
+  final phrases = <String>[];
+  for (final rich in tester.widgetList<RichText>(find.byType(RichText))) {
+    void visit(InlineSpan span) {
+      if (span is TextSpan) {
+        if (span.text != null &&
+            span.style?.decoration == TextDecoration.underline &&
+            span.style?.color == AppColors.naturalLanguage) {
+          phrases.add(span.text!);
+        }
+        span.children?.forEach(visit);
+      }
+    }
+
+    visit(rich.text);
+  }
+  return phrases;
 }
