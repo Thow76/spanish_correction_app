@@ -730,6 +730,45 @@ void main() {
         expect(find.text('0 / 2'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'See answer on every question: non-last -> "Siguiente pregunta" -> next '
+      'prompt, last -> "Terminar" -> summary, each miss recorded',
+      (tester) async {
+        await pumpGame(
+          tester,
+          savedCorrections: [
+            buildSavedCorrection(id: 'sc-1', promptPhrase: 'Prompt one'),
+            buildSavedCorrection(id: 'sc-2', promptPhrase: 'Prompt two'),
+          ],
+        );
+
+        expect(find.text('Pregunta 1 de 2'), findsOneWidget);
+
+        // Q1 via See answer: NOT the last question -> "Siguiente pregunta".
+        await _answerToReveal(tester);
+        await _tap(tester, find.byKey(const Key('reveal-see-answer')));
+        expect(find.byType(AnswerView), findsOneWidget);
+        expect(find.text('Siguiente pregunta'), findsOneWidget);
+        expect(find.text('Terminar'), findsNothing);
+
+        // Forward advances to the NEXT prompt, not the summary.
+        await _tap(tester, find.byKey(const Key('answer-forward')));
+        expect(find.text('Pregunta 2 de 2'), findsOneWidget);
+        expect(find.text('Resultado'), findsNothing);
+
+        // Q2 via See answer: the last question -> "Terminar" -> summary.
+        await _answerToReveal(tester);
+        await _tap(tester, find.byKey(const Key('reveal-see-answer')));
+        expect(find.text('Terminar'), findsOneWidget);
+        await _tap(tester, find.byKey(const Key('answer-forward')));
+
+        // Both answered via See answer and scored as a miss (0 each); the
+        // denominator is 2 per answered question -> 0 / 4.
+        expect(find.text('Resultado'), findsOneWidget);
+        expect(find.text('0 / 4'), findsOneWidget);
+      },
+    );
   });
 
   group('reveal heading and answer block (Phase 5 redesign)', () {
