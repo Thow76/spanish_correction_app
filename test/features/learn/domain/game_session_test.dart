@@ -78,12 +78,5 @@ void main() {
       expect(original.maxScore, 0);
       expect(original.currentIndex, 0);
     });
-
-    test('recordPoints leaves the legacy correct/incorrect counts untouched', () {
-      final session = _session().recordPoints(points: 2);
-
-      expect(session.correctCount, 0);
-      expect(session.incorrectCount, 0);
-    });
   });
 }

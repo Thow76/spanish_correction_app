@@ -393,8 +393,8 @@ class _PromptTranslationGameScreenState
   }
 
   /// Advance-only transition: clears the per-attempt state and swaps to the next
-  /// phrase (or the summary). Does NOT call [GameSession.recordAnswer] — the
-  /// score was already recorded by [_recordRating] before any walkthrough intro
+  /// phrase (or the summary). Does NOT call [GameSession.recordPoints] — the
+  /// score was already recorded by [_recordScore] before any walkthrough intro
   /// was shown, so the No path reusing this cannot double-count. Pure setState,
   /// no Navigator.pop (a pop would exit the whole game).
   void _advanceToNext() {
