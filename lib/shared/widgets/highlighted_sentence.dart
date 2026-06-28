@@ -19,6 +19,7 @@ class HighlightedSentence extends StatelessWidget {
     required this.rangeSelector,
     required this.phraseSelector,
     this.requireExactRange = false,
+    this.decoration,
     super.key,
   });
 
@@ -28,6 +29,11 @@ class HighlightedSentence extends StatelessWidget {
   final (int?, int?) Function(CorrectionItem item) rangeSelector;
   final String Function(CorrectionItem item) phraseSelector;
   final bool requireExactRange;
+
+  /// Optional decoration applied to the highlighted phrase (e.g. an underline on
+  /// the answer screen). Defaults to none, so existing call sites (the
+  /// saved-detail screen) keep their colour-and-weight-only highlight.
+  final TextDecoration? decoration;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +48,7 @@ class HighlightedSentence extends StatelessWidget {
           text: sentence,
           corrections: [item],
           color: color,
+          decoration: decoration,
           rangeSelector: rangeSelector,
           phraseSelector: phraseSelector,
           requireExactRange: requireExactRange,
