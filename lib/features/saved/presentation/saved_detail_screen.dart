@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
-import '../../../shared/text/correction_highlight_spans.dart';
 import '../../../shared/widgets/app_header.dart';
-import '../../corrections/domain/correction_item.dart';
+import '../../../shared/widgets/category_pill.dart';
+import '../../../shared/widgets/collapsible_section.dart';
+import '../../../shared/widgets/highlighted_sentence.dart';
+import '../../../shared/widgets/text_body.dart';
 import '../domain/saved_correction.dart';
 
 class SavedDetailScreen extends StatefulWidget {
@@ -62,7 +64,10 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _CategoryPill(correction: correction),
+                CategoryPill(
+                  label: correction.category.label,
+                  color: correction.category.color,
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 ..._buildSections(correction),
               ],
@@ -76,34 +81,24 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
   List<Widget> _buildSections(SavedCorrection correction) {
     // Bridge the single saved record to the shared highlight resolver
     // (buildHighlightedSpans) by rebuilding the CorrectionItem it was saved
-    // from: its phrases, category, and the persisted character ranges. This
-    // anchors each highlight on the stored range — the correct occurrence of a
-    // repeated word — instead of a first-occurrence indexOf (Bug 2).
-    final item = CorrectionItem(
-      originalPhrase: correction.originalPhrase,
-      correctedPhrase: correction.correctedPhrase,
-      category: correction.category,
-      shortExplanation: correction.shortExplanation,
-      startIndex: correction.startIndex,
-      endIndex: correction.endIndex,
-      correctedStartIndex: correction.correctedStartIndex,
-      correctedEndIndex: correction.correctedEndIndex,
-    );
+    // from, so each highlight anchors on the stored range — the correct
+    // occurrence of a repeated word — instead of a first-occurrence indexOf.
+    final item = correction.toCorrectionItem();
 
     final sections = <(_DetailSection, Widget)>[
       (
         _DetailSection.whyItsWrong,
-        _TextBody(
+        TextBody(
           text: _fallbackText(correction.explanation.whyItsWrong),
         ),
       ),
       (
         _DetailSection.inContext,
-        _TextBody(text: _fallbackText(correction.explanation.inContext)),
+        TextBody(text: _fallbackText(correction.explanation.inContext)),
       ),
       (
         _DetailSection.alternatives,
-        _TextBody(
+        TextBody(
           text: correction.explanation.alternatives.isEmpty
               ? 'No alternatives saved for this correction.'
               : correction.explanation.alternatives.join('\n'),
@@ -112,8 +107,8 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
       (
         _DetailSection.originalText,
         correction.originalSentence.isEmpty
-            ? const _TextBody(text: 'No original text saved for this correction.')
-            : _HighlightedSentence(
+            ? const TextBody(text: 'No original text saved for this correction.')
+            : HighlightedSentence(
                 sentence: correction.originalSentence,
                 item: item,
                 color: correction.category.color,
@@ -126,10 +121,10 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
       (
         _DetailSection.correctedText,
         correction.correctedSentence.isEmpty
-            ? const _TextBody(
+            ? const TextBody(
                 text: 'No corrected text saved for this correction.',
               )
-            : _HighlightedSentence(
+            : HighlightedSentence(
                 sentence: correction.correctedSentence,
                 item: item,
                 color: correction.category.color,
@@ -149,7 +144,7 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
     for (var index = 0; index < sections.length; index++) {
       final (section, body) = sections[index];
       widgets.add(
-        _CollapsibleSection(
+        CollapsibleSection(
           title: section.title,
           isCollapsed: _collapsedSections.contains(section),
           onToggle: () => _toggleSection(section),
@@ -195,178 +190,4 @@ enum _DetailSection {
   const _DetailSection(this.title);
 
   final String title;
-}
-
-class _CategoryPill extends StatelessWidget {
-  const _CategoryPill({required this.correction});
-
-  final SavedCorrection correction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: correction.category.color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: correction.category.color.withValues(alpha: 0.7),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          child: Text(
-            correction.category.label,
-            style: TextStyle(
-              color: correction.category.color,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CollapsibleSection extends StatelessWidget {
-  const _CollapsibleSection({
-    required this.title,
-    required this.isCollapsed,
-    required this.onToggle,
-    required this.child,
-  });
-
-  final String title;
-  final bool isCollapsed;
-  final VoidCallback onToggle;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cyan.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.md,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  AnimatedRotation(
-                    turns: isCollapsed ? 0 : 0.5,
-                    duration: const Duration(milliseconds: 160),
-                    child: const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                0,
-                AppSpacing.lg,
-                AppSpacing.lg,
-              ),
-              child: child,
-            ),
-            crossFadeState: isCollapsed
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            duration: const Duration(milliseconds: 160),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TextBody extends StatelessWidget {
-  const _TextBody({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: AppColors.textPrimary,
-        fontSize: 15,
-        height: 24 / 15,
-      ),
-    );
-  }
-}
-
-class _HighlightedSentence extends StatelessWidget {
-  const _HighlightedSentence({
-    required this.sentence,
-    required this.item,
-    required this.color,
-    required this.rangeSelector,
-    required this.phraseSelector,
-    this.requireExactRange = false,
-  });
-
-  final String sentence;
-  final CorrectionItem item;
-  final Color color;
-  final (int?, int?) Function(CorrectionItem item) rangeSelector;
-  final String Function(CorrectionItem item) phraseSelector;
-  final bool requireExactRange;
-
-  @override
-  Widget build(BuildContext context) {
-    // Resolution is delegated to the shared helper so the saved/detail screen
-    // anchors on the persisted range exactly as the live corrections screen
-    // does. When nothing resolves, the helper emits the sentence as plain spans
-    // (no highlight) — the original side after a substring miss, or the
-    // corrected side dropping an invalid range.
-    return Text.rich(
-      TextSpan(
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 15,
-          height: 24 / 15,
-        ),
-        children: buildHighlightedSpans(
-          text: sentence,
-          corrections: [item],
-          color: color,
-          rangeSelector: rangeSelector,
-          phraseSelector: phraseSelector,
-          requireExactRange: requireExactRange,
-        ),
-      ),
-    );
-  }
 }

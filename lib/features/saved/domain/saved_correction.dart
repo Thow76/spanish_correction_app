@@ -1,4 +1,5 @@
 import '../../../core/enums/language.dart';
+import '../../corrections/domain/correction_item.dart';
 import '../../corrections/domain/error_category.dart';
 import 'saved_explanation.dart';
 
@@ -76,6 +77,23 @@ class SavedCorrection {
       endIndex: endIndex ?? this.endIndex,
       correctedStartIndex: correctedStartIndex ?? this.correctedStartIndex,
       correctedEndIndex: correctedEndIndex ?? this.correctedEndIndex,
+    );
+  }
+
+  /// Rebuilds the `CorrectionItem` this record was saved from — its phrases,
+  /// category, and persisted character ranges — so the shared highlight resolver
+  /// ([buildHighlightedSpans]) can anchor on the stored range (the correct
+  /// occurrence of a repeated word) instead of a first-occurrence search.
+  CorrectionItem toCorrectionItem() {
+    return CorrectionItem(
+      originalPhrase: originalPhrase,
+      correctedPhrase: correctedPhrase,
+      category: category,
+      shortExplanation: shortExplanation,
+      startIndex: startIndex,
+      endIndex: endIndex,
+      correctedStartIndex: correctedStartIndex,
+      correctedEndIndex: correctedEndIndex,
     );
   }
 
