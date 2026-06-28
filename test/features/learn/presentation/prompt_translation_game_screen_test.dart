@@ -484,9 +484,9 @@ void main() {
     expect(find.text('Sí, vamos'), findsOneWidget);
   });
 
-  group('AI-tier scoring (X/Y sourced from grade.isWellDone)', () {
+  group('AI-tier scoring (X/Y sourced from grade.tier)', () {
     testWidgets(
-      'excelente counts as a hit: a clean attempt advances straight to a 1/1 '
+      'excelente scores 2: a clean attempt advances straight to a 2/2 '
       'summary with no walkthrough',
       (tester) async {
         // No corrections at all -> target fixed AND sentence clean -> excelente.
@@ -495,19 +495,19 @@ void main() {
         await _answerAndAdvance(tester);
 
         // A well-done tier never offers the walkthrough; the single-phrase
-        // session is complete -> summary, scored as a hit.
+        // session is complete -> summary, scored at the top weight (2 of 2).
         expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
         expect(find.text('Resultado'), findsOneWidget);
-        expect(find.text('1 / 1'), findsOneWidget);
+        expect(find.text('2 / 2'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'bienHecho counts as a hit: target fixed but an other-category error '
-      'remains -> 1/1 summary, still no walkthrough',
+      'bienHecho scores 1 (distinct from excelente): target fixed but an '
+      'other-category error remains -> 1/2 summary, still no walkthrough',
       (tester) async {
         // Only a spelling error (the saved category is grammar): the target is
-        // fixed but the sentence is not clean -> bienHecho (isWellDone == true).
+        // fixed but the sentence is not clean -> bienHecho (weight 1, not 2).
         await pumpGame(
           tester,
           corrections: const [
@@ -524,12 +524,12 @@ void main() {
 
         expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
         expect(find.text('Resultado'), findsOneWidget);
-        expect(find.text('1 / 1'), findsOneWidget);
+        expect(find.text('1 / 2'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'siguePracticando counts as a miss: 0/1 summary after declining the '
+      'siguePracticando scores 0: 0/2 summary after declining the '
       'walkthrough',
       (tester) async {
         // The default fake keeps a grammar error -> siguePracticando (miss).
@@ -542,12 +542,12 @@ void main() {
         await _tap(tester, find.text('Ahora no'));
 
         expect(find.text('Resultado'), findsOneWidget);
-        expect(find.text('0 / 1'), findsOneWidget);
+        expect(find.text('0 / 2'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'an unavailable grade counts as a miss: 0/1 summary and no walkthrough',
+      'an unavailable grade scores 0: 0/2 summary and no walkthrough',
       (tester) async {
         // Grading throws -> _grade stays null. Per the agreed fallback a null
         // grade scores as a miss, and the walkthrough guard (grade != null)
@@ -558,7 +558,7 @@ void main() {
 
         expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
         expect(find.text('Resultado'), findsOneWidget);
-        expect(find.text('0 / 1'), findsOneWidget);
+        expect(find.text('0 / 2'), findsOneWidget);
       },
     );
   });

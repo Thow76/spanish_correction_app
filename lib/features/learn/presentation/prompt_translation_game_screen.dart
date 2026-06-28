@@ -307,7 +307,7 @@ class _PromptTranslationGameScreenState
   /// destination ([_continueAfterReveal] / [_walkthroughAfterReveal], and in
   /// Phase 5 the per-tier "Try again" path).
   ///
-  /// Scoring is bundled into [GameSession.recordAnswer], which ALSO advances
+  /// Scoring is bundled into [GameSession.recordPoints], which ALSO advances
   /// `currentIndex`, so once this runs the session points at the *next*
   /// question. The just-answered question is captured into [_walkthroughQuestion]
   /// BEFORE recording (the walkthrough and any retry read this capture, not the
@@ -322,13 +322,27 @@ class _PromptTranslationGameScreenState
   /// harmless on the advance path because [_advanceToNext] clears it.
   void _recordScore() {
     // Phase 2: the X/Y score is re-sourced from the AI tier, not a user
-    // self-mark. excelente + bienHecho (isWellDone) count as a hit;
-    // siguePracticando is a miss. An unavailable grade (offline/failed) counts
-    // as a miss.
-    final isCorrect = _grade?.isWellDone ?? false;
+    // self-mark. Each tier carries a weight via [_pointsFor].
+    final points = _pointsFor(_grade?.tier);
     _sessionBeforeWalkthrough = _session;
     _walkthroughQuestion = _session!.currentQuestion;
-    _session = _session!.recordAnswer(isCorrect: isCorrect);
+    _session = _session!.recordPoints(points: points);
+  }
+
+  /// Maps the AI re-translation [tier] to its session-score weight (Excelente =
+  /// 2, Bien hecho = 1, Sigue practicando = 0). A null tier — an unavailable
+  /// grade (offline/failed) — scores 0, matching the agreed miss fallback. The
+  /// denominator is fixed at 2 per answered question by [GameSession.maxScore].
+  int _pointsFor(RetranslationTier? tier) {
+    switch (tier) {
+      case RetranslationTier.excelente:
+        return 2;
+      case RetranslationTier.bienHecho:
+        return 1;
+      case RetranslationTier.siguePracticando:
+      case null:
+        return 0;
+    }
   }
 
   /// Continue past the reveal screen: record the score and move on to the next
@@ -1409,7 +1423,7 @@ class _SummaryPhase extends StatelessWidget {
           child: Column(
             children: [
               Text(
-                '${session.correctCount} / ${session.totalCount}',
+                '${session.score} / ${session.maxScore}',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: AppColors.cyan,
