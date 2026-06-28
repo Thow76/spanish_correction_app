@@ -29,6 +29,7 @@ import '../../write/application/transcription_service_exception.dart';
 import '../application/grade_retranslation_use_case.dart';
 import '../domain/game_question.dart';
 import '../domain/game_session.dart';
+import 'widgets/answer_view.dart';
 import 'widgets/walkthrough_question_view.dart';
 import 'widgets/walkthrough_result_view.dart';
 
@@ -56,6 +57,7 @@ class PromptTranslationGameScreen extends StatefulWidget {
 enum _GamePhase {
   prompt,
   reveal,
+  answer,
   walkthrough,
   walkthroughQuestion,
   walkthroughResult,
@@ -106,6 +108,13 @@ class _PromptTranslationGameScreenState
   // restores this so the same phrase is re-attempted fresh and the discarded
   // attempt is not double-counted. Null outside the walkthrough flow.
   GameSession? _sessionBeforeWalkthrough;
+
+  // Which entry point opened the answer screen ([_GamePhase.answer]). The two
+  // entries differ in session state: from the reveal screen the score is NOT yet
+  // recorded (read the un-advanced [_session]); from the walkthrough result it
+  // IS recorded (read the captured [_walkthroughQuestion]). This flag selects
+  // the right source, last-question test, and forward action in the build.
+  bool _answerFromWalkthrough = false;
 
   String _str(String es, String pt) => switch (widget.language) {
     Language.spanish => es,
@@ -188,7 +197,19 @@ class _PromptTranslationGameScreenState
                       onContinue: _continueAfterReveal,
                       onTryAgain: _tryAgainAfterReveal,
                       onWalkthrough: _walkthroughAfterReveal,
-                      onSeeAnswer: _handleSeeAnswer,
+                      onSeeAnswer: _seeAnswerFromReveal,
+                      str: _str,
+                    ),
+                    _GamePhase.answer => AnswerView(
+                      correction: _answerFromWalkthrough
+                          ? _walkthroughQuestion!.source
+                          : _session!.currentQuestion.source,
+                      isLastQuestion: _answerFromWalkthrough
+                          ? _session!.isComplete
+                          : _session!.currentIndex == _session!.totalCount - 1,
+                      onForward: _answerFromWalkthrough
+                          ? _advanceToNext
+                          : _continueAfterReveal,
                       str: _str,
                     ),
                     _GamePhase.walkthrough => _WalkthroughIntroPhase(
@@ -210,7 +231,7 @@ class _PromptTranslationGameScreenState
                       totalCount: _walkthroughTotal,
                       onContinue: _advanceToNext,
                       onTryAgain: _retrySamePhrase,
-                      onSeeAnswer: _handleSeeAnswer,
+                      onSeeAnswer: _seeAnswerFromWalkthrough,
                       str: _str,
                     ),
                     _GamePhase.summary => _SummaryPhase(
@@ -390,6 +411,7 @@ class _PromptTranslationGameScreenState
     _walkthroughCorrect = 0;
     _walkthroughTotal = 0;
     _sessionBeforeWalkthrough = null;
+    _answerFromWalkthrough = false;
   }
 
   /// Advance-only transition: clears the per-attempt state and swaps to the next
@@ -481,11 +503,27 @@ class _PromptTranslationGameScreenState
     });
   }
 
-  /// "See Answer" on the result screen. The answer/explanation destination
-  /// screen does not exist yet (deferred dependency), so this is intentionally a
-  /// no-op for now.
-  // TODO: route to the answer/explanation screen once it exists.
-  void _handleSeeAnswer() {}
+  /// "Ver respuesta" on the reveal screen: open the answer screen for the
+  /// just-answered phrase. The score is NOT recorded here — the answer screen's
+  /// forward button wires [_continueAfterReveal], which records then advances, so
+  /// reading the un-advanced [_session] still points at the practised question.
+  void _seeAnswerFromReveal() {
+    setState(() {
+      _answerFromWalkthrough = false;
+      _phase = _GamePhase.answer;
+    });
+  }
+
+  /// "Ver respuesta" on the walkthrough result screen: open the answer screen for
+  /// the practised phrase. The score was already recorded when the walkthrough
+  /// was entered, so the answer screen reads the captured [_walkthroughQuestion]
+  /// and its forward button is advance-only ([_advanceToNext]) — no re-record.
+  void _seeAnswerFromWalkthrough() {
+    setState(() {
+      _answerFromWalkthrough = true;
+      _phase = _GamePhase.answer;
+    });
+  }
 
   void _handleWalkthroughFailure(WalkthroughException error) {
     if (!mounted) {

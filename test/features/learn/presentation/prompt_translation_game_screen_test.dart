@@ -10,6 +10,7 @@ import 'package:spanish_correction_app/features/corrections/domain/correction_re
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 import 'package:spanish_correction_app/features/history/domain/correction_submission.dart';
 import 'package:spanish_correction_app/features/learn/presentation/prompt_translation_game_screen.dart';
+import 'package:spanish_correction_app/features/learn/presentation/widgets/answer_view.dart';
 import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_question_view.dart';
 import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_result_view.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_correction.dart';
@@ -398,7 +399,9 @@ void main() {
     expect(find.text('Resultado'), findsOneWidget);
   });
 
-  testWidgets('See Answer is a no-op that stays on the result', (tester) async {
+  testWidgets('See Answer opens the answer screen from the walkthrough result', (
+    tester,
+  ) async {
     await pumpGame(tester);
     await driveToWalkthroughQuestions(tester);
     await answerAllWalkthroughWrongly(tester);
@@ -407,9 +410,17 @@ void main() {
     expect(find.text('0%'), findsOneWidget);
     await _tap(tester, find.text('Ver respuesta'));
 
-    // No crash, no navigation: still on the result view.
-    expect(find.byType(WalkthroughResultView), findsOneWidget);
-    expect(find.text('0%'), findsOneWidget);
+    // Navigates to the answer screen; the result view is gone. The score was
+    // already recorded at walkthrough entry, so this is the last (single)
+    // question -> "Terminar" forward.
+    expect(find.byType(AnswerView), findsOneWidget);
+    expect(find.byType(WalkthroughResultView), findsNothing);
+    expect(find.text('Terminar'), findsOneWidget);
+
+    // Forward advances to the summary WITHOUT re-recording (still 0 / 2).
+    await _tap(tester, find.byKey(const Key('answer-forward')));
+    expect(find.text('Resultado'), findsOneWidget);
+    expect(find.text('0 / 2'), findsOneWidget);
   });
 
   testWidgets('Try again returns to the SAME phrase as a fresh prompt', (
@@ -690,6 +701,33 @@ void main() {
           tester.widget<TextField>(find.byType(TextField)).controller!.text,
           '',
         );
+      },
+    );
+  });
+
+  group('answer screen routing (Ver respuesta)', () {
+    testWidgets(
+      'reveal See answer opens the answer screen; forward records once and '
+      'advances',
+      (tester) async {
+        // Default fake keeps a grammar error -> siguePracticando (the only tier
+        // with a See answer button).
+        await pumpGame(tester);
+        await _answerToReveal(tester);
+
+        await _tap(tester, find.byKey(const Key('reveal-see-answer')));
+
+        // The answer screen is shown; the reveal action bar is gone.
+        expect(find.byType(AnswerView), findsOneWidget);
+        // Single-question session, not yet recorded -> last question -> Terminar.
+        expect(find.text('Terminar'), findsOneWidget);
+
+        await _tap(tester, find.byKey(const Key('answer-forward')));
+
+        // Scored exactly once as a miss (siguePracticando = 0 of 2) and advanced
+        // to the summary — no double/missed record.
+        expect(find.text('Resultado'), findsOneWidget);
+        expect(find.text('0 / 2'), findsOneWidget);
       },
     );
   });
