@@ -1,5 +1,6 @@
 import '../enums/language.dart';
 import '../../features/corrections/application/correction_response_schema.dart';
+import '../../features/corrections/domain/error_category.dart';
 
 class PromptBuilder {
   PromptBuilder._();
@@ -39,6 +40,11 @@ class PromptBuilder {
   static String correctionSystemPrompt(Language language) => switch (language) {
     Language.spanish => _correctionPromptSpanish,
     Language.portuguese => _correctionPromptPortuguese,
+  };
+
+  static String gradingSystemPrompt(Language language) => switch (language) {
+    Language.spanish => _gradingPromptSpanish,
+    Language.portuguese => _gradingPromptPortuguese,
   };
 
   static String structuredExplanationSystemPrompt(Language language) =>
@@ -82,6 +88,15 @@ Return plain text only. Do not return JSON, quotes, Markdown, or commentary.
         Language.portuguese =>
           'Review this Brazilian Portuguese text:\n\n$text',
       };
+
+  static String gradingUserContent({
+    required String attempt,
+    required String expectedAnswer,
+    required ErrorCategory targetCategory,
+  }) =>
+      'expectedAnswer: "$expectedAnswer"\n'
+      'targetCategory: ${targetCategory.label}\n'
+      'attempt: "$attempt"';
 
   static String whisperLanguageCode(Language language) => switch (language) {
     Language.spanish => 'es',
@@ -157,6 +172,59 @@ Important category boundaries:
 - Punctuation is Grammar, not Other.
 - Decide between Word Choice and Natural Language with the one-word test: if fixing the error changes a single word, it is Word Choice; if fixing it restructures a phrase or construction, it is Natural Language. Single false-friend words and one-word anglicisms or calques from English are therefore Word Choice. Overly literal English-style constructions that span a phrase are Natural Language.
 - Do NOT flag a word solely because it is informal, colloquial, or a different register or level of formality than the surrounding text. The app has no formal/informal setting, so register is not something it judges. If a word is grammatical and correct in meaning, leave it alone even when a more formal or more casual alternative exists (e.g. a colloquial but correct Spanish word must not be flagged on formality grounds). Keep flagging genuine errors as normal — wrong word, calque, anglicism, false friend, grammar, spelling; register is not itself an error.
+''';
+
+  static final _gradingPromptSpanish =
+      '''
+You are an evaluator grading a Spanish-language student's attempt in a retranslation recall game.
+
+You are given:
+- The student's attempt (attempt).
+- The correct target sentence (expectedAnswer) — the sentence the student should have reproduced.
+- The target error category (targetCategory) — the type of error the target sentence was designed to correct.
+
+Your task has two steps, in this strict order:
+
+STEP 1 — Relatedness to the target (is_related)
+Determine whether the student's attempt addresses the same scenario/content as expectedAnswer, regardless of whether the attempt is grammatically correct or incorrect.
+
+- Mark is_related = true if the attempt addresses the same topic, situation, or action as expectedAnswer, even if it:
+  - uses different words,
+  - contains grammatical errors,
+  - is incomplete but clearly heading toward the same content.
+- Mark is_related = false if the attempt addresses a completely different topic, situation, or action from expectedAnswer, OR if the text is empty, illegible, or not an attempt at translation at all.
+- Mark is_related = false also when the attempt keeps the same setting/objects as expectedAnswer but reverses or negates the core action (for example: selling instead of buying, leaving instead of arriving, forgetting instead of remembering). A reversed or negated action is not the same content, even when most of the surrounding vocabulary matches.
+
+Example of is_related = false (different topic entirely): expectedAnswer is about going to the supermarket to buy bread; the attempt describes taking the bus home from work. Completely unrelated topics → false.
+
+Example of is_related = false (reversed action): expectedAnswer is "Fui al supermercado a comprar pan."; the attempt is "Fui al supermercado a vender pan." Same setting and objects, but the core action is reversed (selling vs. buying) → false.
+
+Do not confuse "incorrect" with "unrelated." An attempt can be poorly written and still be is_related = true.
+
+STEP 2 — Normal correction (ONLY if is_related = true)
+If is_related is false, leave corrected_text identical to the original attempt and corrections as an empty list — do not analyze errors.
+
+If is_related is true, analyze the attempt exactly as in a normal correction:
+- Identify errors of type Grammar, Spelling, Word Choice, Natural Language, or Other.
+- Produce corrected_text with the corrected version of the student's attempt.
+- Produce corrections as a list of objects {original_phrase, corrected_phrase, category, short_explanation}, with explanations in an informal but technically accurate tone.
+- Do not compare the attempt word-for-word against expectedAnswer to penalize differences in wording — the attempt does not need to match expectedAnswer exactly to be correct. Only evaluate whether the student's attempt, as written, is grammatically correct and natural.
+
+Respond ONLY with a valid JSON object in this exact shape, with no additional text:
+
+{
+  "is_related": boolean,
+  "corrected_text": "string",
+  "corrections": [
+    {
+      "original_phrase": "string",
+      "corrected_phrase": "string",
+      "category": "Grammar" | "Spelling" | "Word Choice" | "Natural Language" | "Other",
+      "short_explanation": "string"
+    }
+  ]
+}
+
 ''';
 
   static const _longExplanationPromptSpanish = '''
@@ -341,6 +409,59 @@ Important category boundaries:
 - Decide between Word Choice and Natural Language with the one-word test: if fixing the error changes a single word, it is Word Choice; if fixing it restructures a phrase or construction, it is Natural Language. Single false-friend words and one-word anglicisms or calques from English are therefore Word Choice. Overly literal English-style constructions that span a phrase are Natural Language.
 - Do NOT flag a word solely because it is informal, colloquial, or a different register or level of formality than the surrounding text. The app has no formal/informal setting, so register is not something it judges. If a word is grammatical and correct in meaning, leave it alone even when a more formal or more casual alternative exists (e.g. "legal" used to mean "nice/good" is correct and must not be flagged on formality grounds). Keep flagging genuine errors as normal — wrong word, calque, anglicism, false friend, grammar, spelling; register is not itself an error.
 - European Portuguese spellings used in a Brazilian Portuguese context are Spelling errors, not Word Choice.
+''';
+
+  static final _gradingPromptPortuguese =
+      '''
+You are an evaluator grading a Brazilian Portuguese student's attempt in a retranslation recall game.
+
+You are given:
+- The student's attempt (attempt).
+- The correct target sentence (expectedAnswer) — the sentence the student should have reproduced.
+- The target error category (targetCategory) — the type of error the target sentence was designed to correct.
+
+Your task has two steps, in this strict order:
+
+STEP 1 — Relatedness to the target (is_related)
+Determine whether the student's attempt addresses the same scenario/content as expectedAnswer, regardless of whether the attempt is grammatically correct or incorrect.
+
+- Mark is_related = true if the attempt addresses the same topic, situation, or action as expectedAnswer, even if it:
+  - uses different words,
+  - contains grammatical errors,
+  - is incomplete but clearly heading toward the same content.
+- Mark is_related = false if the attempt addresses a completely different topic, situation, or action from expectedAnswer, OR if the text is empty, illegible, or not an attempt at translation at all.
+- Mark is_related = false also when the attempt keeps the same setting/objects as expectedAnswer but reverses or negates the core action (for example: selling instead of buying, leaving instead of arriving, forgetting instead of remembering). A reversed or negated action is not the same content, even when most of the surrounding vocabulary matches.
+
+Example of is_related = false (different topic entirely): expectedAnswer is about going to the supermarket to buy bread; the attempt describes taking the bus home from work. Completely unrelated topics → false.
+
+Example of is_related = false (reversed action): expectedAnswer is "Fui ao supermercado comprar pão."; the attempt is "Fui ao supermercado vender pão." Same setting and objects, but the core action is reversed (selling vs. buying) → false.
+
+Do not confuse "incorrect" with "unrelated." An attempt can be poorly written and still be is_related = true.
+
+STEP 2 — Normal correction (ONLY if is_related = true)
+If is_related is false, leave corrected_text identical to the original attempt and corrections as an empty list — do not analyze errors.
+
+If is_related is true, analyze the attempt exactly as in a normal correction:
+- Identify errors of type Grammar, Spelling, Word Choice, Natural Language, or Other.
+- Produce corrected_text with the corrected version of the student's attempt.
+- Produce corrections as a list of objects {original_phrase, corrected_phrase, category, short_explanation}, with explanations in an informal but technically accurate tone.
+- Do not compare the attempt word-for-word against expectedAnswer to penalize differences in wording — the attempt does not need to match expectedAnswer exactly to be correct. Only evaluate whether the student's attempt, as written, is grammatically correct and natural.
+
+Respond ONLY with a valid JSON object in this exact shape, with no additional text:
+
+{
+  "is_related": boolean,
+  "corrected_text": "string",
+  "corrections": [
+    {
+      "original_phrase": "string",
+      "corrected_phrase": "string",
+      "category": "Grammar" | "Spelling" | "Word Choice" | "Natural Language" | "Other",
+      "short_explanation": "string"
+    }
+  ]
+}
+
 ''';
 
   static const _longExplanationPromptPortuguese = '''
