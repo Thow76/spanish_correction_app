@@ -6,8 +6,10 @@ import '../../../core/enums/language.dart';
 import '../../../core/services/prompt_builder.dart';
 import '../application/correction_service.dart';
 import '../application/correction_service_exception.dart';
+import '../application/retranslation_grade_response.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
+import '../domain/error_category.dart';
 import '../../saved/domain/saved_explanation.dart';
 
 class GeminiCorrectionService implements CorrectionService {
@@ -121,6 +123,22 @@ Short explanation: ${correction.shortExplanation}
       responseMimeType: 'text/plain',
     );
     return responseText.trim();
+  }
+
+  // TODO: Not implemented. Gemini is not currently a selectable correction
+  // provider. If Gemini becomes selectable again, this MUST be implemented
+  // before the retranslation game is usable on that provider — it currently
+  // throws UnimplementedError and will crash on use.
+  @override
+  Future<RetranslationGradeResponse> gradeRetranslation({
+    required String attempt,
+    required String expectedAnswer,
+    required ErrorCategory targetCategory,
+    required Language language,
+  }) {
+    throw UnimplementedError(
+      'GeminiCorrectionService.gradeRetranslation is not implemented.',
+    );
   }
 
   Future<String> _generateContent({

@@ -7,8 +7,10 @@ import '../../../core/services/prompt_builder.dart';
 import '../application/correction_response_schema.dart';
 import '../application/correction_service.dart';
 import '../application/correction_service_exception.dart';
+import '../application/retranslation_grade_response.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
+import '../domain/error_category.dart';
 import '../../saved/domain/saved_explanation.dart';
 
 class OpenAiCorrectionService implements CorrectionService {
@@ -122,6 +124,40 @@ Short explanation: ${correction.shortExplanation}
       userText: correctedSentence,
     );
     return responseText.trim();
+  }
+
+  @override
+  Future<RetranslationGradeResponse> gradeRetranslation({
+    required String attempt,
+    required String expectedAnswer,
+    required ErrorCategory targetCategory,
+    required Language language,
+  }) async {
+    _ensureConfigured();
+
+    final responseText = await _createResponse(
+      systemInstruction: PromptBuilder.gradingSystemPrompt(language),
+      userText: PromptBuilder.gradingUserContent(
+        attempt: attempt,
+        expectedAnswer: expectedAnswer,
+        targetCategory: targetCategory,
+      ),
+      textFormat: _gradingResponseFormat,
+    );
+
+    try {
+      final jsonObject = jsonDecode(_extractJsonObject(responseText));
+      if (jsonObject is! Map<String, Object?>) {
+        throw const FormatException('Root value is not an object.');
+      }
+
+      return RetranslationGradeResponse.fromJson(jsonObject);
+    } on FormatException catch (error) {
+      throw CorrectionServiceException(
+        CorrectionFailureReason.invalidResponse,
+        'OpenAI returned an invalid grading response: $error',
+      );
+    }
   }
 
   Future<String> _createResponse({
@@ -276,6 +312,60 @@ const _structuredExplanationResponseFormat = {
   'name': 'saved_correction_explanation',
   'strict': true,
   'schema': _structuredExplanationJsonSchema,
+};
+
+const _gradingResponseFormat = {
+  'type': 'json_schema',
+  'name': 'retranslation_grade_response',
+  'strict': true,
+  'schema': _gradingResponseJsonSchema,
+};
+
+const _gradingResponseJsonSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': ['is_related', 'corrected_text', 'corrections'],
+  'properties': {
+    'is_related': {
+      'type': 'boolean',
+      'description':
+          'Whether the attempt addresses the same content as expectedAnswer.',
+    },
+    'corrected_text': {
+      'type': 'string',
+      'description': 'Corrected version of the attempt.',
+    },
+    'corrections': {
+      'type': 'array',
+      'description':
+          'Corrections found in the attempt, empty when is_related is false.',
+      'items': {
+        'type': 'object',
+        'additionalProperties': false,
+        'required': [
+          'original_phrase',
+          'corrected_phrase',
+          'category',
+          'short_explanation',
+        ],
+        'properties': {
+          'original_phrase': {'type': 'string'},
+          'corrected_phrase': {'type': 'string'},
+          'category': {
+            'type': 'string',
+            'enum': [
+              'Grammar',
+              'Natural Language',
+              'Spelling',
+              'Word Choice',
+              'Other',
+            ],
+          },
+          'short_explanation': {'type': 'string'},
+        },
+      },
+    },
+  },
 };
 
 const _structuredExplanationJsonSchema = <String, Object?>{
