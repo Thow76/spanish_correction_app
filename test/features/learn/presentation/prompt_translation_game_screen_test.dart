@@ -5,6 +5,7 @@ import 'package:spanish_correction_app/core/models/walkthrough_question.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository_controller.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
+import 'package:spanish_correction_app/features/corrections/application/retranslation_grade_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
@@ -80,19 +81,15 @@ CorrectionItem _grammarError() => const CorrectionItem(
 /// Returns a CorrectionService whose grade keeps a grammar error present, so a
 /// grammar-category saved correction grades KEEP PRACTICING.
 class _FakeCorrectionService implements CorrectionService {
-  _FakeCorrectionService({List<CorrectionItem>? corrections})
+  _FakeCorrectionService({List<CorrectionItem>? corrections, this.isRelated = true})
     : _corrections = corrections ?? [_grammarError()];
 
   final List<CorrectionItem> _corrections;
+  final bool isRelated;
 
   @override
-  Future<CorrectionResponse> correctText(String text, Language language) async {
-    return CorrectionResponse(
-      originalText: text,
-      correctedText: text,
-      corrections: _corrections,
-    );
-  }
+  Future<CorrectionResponse> correctText(String text, Language language) async =>
+      throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(
@@ -111,6 +108,20 @@ class _FakeCorrectionService implements CorrectionService {
     required String correctedSentence,
     required Language language,
   }) async => throw UnimplementedError();
+
+  @override
+  Future<RetranslationGradeResponse> gradeRetranslation({
+    required String attempt,
+    required String expectedAnswer,
+    required ErrorCategory targetCategory,
+    required Language language,
+  }) async {
+    return RetranslationGradeResponse(
+      isRelated: isRelated,
+      correctedText: attempt,
+      corrections: _corrections,
+    );
+  }
 }
 
 /// A WalkthroughService that returns canned questions without any network call.
@@ -139,7 +150,7 @@ class _FakeWalkthroughService extends WalkthroughService {
 class _ThrowingCorrectionService implements CorrectionService {
   @override
   Future<CorrectionResponse> correctText(String text, Language language) async =>
-      throw Exception('grade unavailable');
+      throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(
@@ -158,6 +169,14 @@ class _ThrowingCorrectionService implements CorrectionService {
     required String correctedSentence,
     required Language language,
   }) async => throw UnimplementedError();
+
+  @override
+  Future<RetranslationGradeResponse> gradeRetranslation({
+    required String attempt,
+    required String expectedAnswer,
+    required ErrorCategory targetCategory,
+    required Language language,
+  }) async => throw Exception('grade unavailable');
 }
 
 class _FakeTranscriptionService implements TranscriptionService {
@@ -634,6 +653,27 @@ void main() {
         expect(find.byIcon(Icons.error_outline), findsOneWidget);
         expect(find.text('¡Excelente!'), findsNothing);
         expect(find.text('Bien hecho'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'off-topic (isRelated: false) -> "Sigue practicando" verdict with the '
+      'distinct off-topic explanation, not the "category not fixed" message',
+      (tester) async {
+        await pumpGame(
+          tester,
+          correctionService: _FakeCorrectionService(isRelated: false),
+        );
+
+        await _answerToReveal(tester);
+
+        expect(find.text('Sigue practicando'), findsWidgets);
+        expect(
+          find.text('Esto no aborda la frase objetivo — inténtalo de nuevo.'),
+          findsOneWidget,
+        );
+        // The normal "target category not fixed" reasoning must not appear.
+        expect(find.textContaining('La IA marcó en tu categoría'), findsNothing);
       },
     );
   });

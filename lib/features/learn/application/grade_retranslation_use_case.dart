@@ -39,6 +39,7 @@ class RetranslationGrade {
     required this.categoryErrors,
     required this.judgedCategory,
     required this.tier,
+    required this.isRelated,
   });
 
   /// Every correction the grader returned for the attempt, across all
@@ -47,7 +48,8 @@ class RetranslationGrade {
   final List<CorrectionItem> corrections;
 
   /// The subset of [corrections] whose category equals [judgedCategory]. These
-  /// are the only errors that count toward the [tier].
+  /// are the only errors that count toward the [tier]. Empty when [isRelated]
+  /// is false, since the attempt was never judged against the category.
   final List<CorrectionItem> categoryErrors;
 
   /// The single category the attempt was judged against — the category of the
@@ -58,7 +60,20 @@ class RetranslationGrade {
   /// remain?) and, once the target is fixed, whether any other substantive
   /// error remains in [corrections] (distinguishing [RetranslationTier.excelente]
   /// from [RetranslationTier.bienHecho]).
+  ///
+  /// When [isRelated] is false this is [RetranslationTier.siguePracticando]
+  /// without having run the category/tier logic at all — the attempt never
+  /// reached the target sentence's scenario, so there is nothing to judge.
   final RetranslationTier tier;
+
+  /// Whether the attempt addresses the same scenario/content as the target
+  /// sentence. False means the grader judged the attempt off-topic (or a
+  /// reversed/negated action) rather than grading it for errors — [tier] is
+  /// forced to [RetranslationTier.siguePracticando] in that case, but callers
+  /// that want to distinguish "off-topic" from "on-topic but not fixed" (e.g.
+  /// to show a different explanation) should check this flag rather than
+  /// inferring it from [tier] alone.
+  final bool isRelated;
 
   /// Whether the target error was fixed — true for BOTH top tiers
   /// ([RetranslationTier.excelente] and [RetranslationTier.bienHecho]). This
@@ -86,10 +101,12 @@ class GradeRetranslationUseCase {
 
   final CorrectionService _correctionService;
 
-  /// Grades [attempt] in [language] and judges it against [savedErrorCategory].
+  /// Grades [attempt] in [language] against [expectedAnswer] and judges it
+  /// against [savedErrorCategory].
   ///
-  /// The full grade is preserved on the result. The tier is decided from two
-  /// facts:
+  /// The grader first decides whether [attempt] is even related to
+  /// [expectedAnswer] (see [RetranslationGrade.isRelated]). Only when it is
+  /// does the tier get decided from the usual two facts:
   ///
   /// - If the saved category is still present (substantive errors in
   ///   [savedErrorCategory] remain), the target error was not fixed →
@@ -100,14 +117,31 @@ class GradeRetranslationUseCase {
   ///   remains → [RetranslationTier.bienHecho].
   Future<RetranslationGrade> call({
     required String attempt,
+    required String expectedAnswer,
     required ErrorCategory savedErrorCategory,
     required Language language,
   }) async {
-    final response = await _correctionService.correctText(
-      attempt.trim(),
-      language,
+    final response = await _correctionService.gradeRetranslation(
+      attempt: attempt.trim(),
+      expectedAnswer: expectedAnswer,
+      targetCategory: savedErrorCategory,
+      language: language,
     );
     final corrections = response.corrections;
+
+    if (!response.isRelated) {
+      // The attempt is off-topic (or reverses/negates the target scenario) —
+      // there is nothing to judge, so _tierFor/_isSubstantive never run. The
+      // tier still reads as siguePracticando (no walkthrough/scoring path
+      // changes), but isRelated lets callers show a distinct explanation.
+      return RetranslationGrade(
+        corrections: corrections,
+        categoryErrors: const [],
+        judgedCategory: savedErrorCategory,
+        tier: RetranslationTier.siguePracticando,
+        isRelated: false,
+      );
+    }
 
     final categoryErrors = corrections
         .where((correction) => correction.category == savedErrorCategory)
@@ -129,6 +163,7 @@ class GradeRetranslationUseCase {
       categoryErrors: categoryErrors,
       judgedCategory: savedErrorCategory,
       tier: tier,
+      isRelated: true,
     );
   }
 

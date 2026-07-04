@@ -299,6 +299,7 @@ class _PromptTranslationGameScreenState
     try {
       final grade = await _grader.call(
         attempt: answer,
+        expectedAnswer: question.expectedAnswer,
         savedErrorCategory: question.source.category,
         language: widget.language,
       );
@@ -1097,7 +1098,10 @@ class _VerdictPanel extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Text(
             str('Evaluando con la IA...', 'Avaliando com a IA...'),
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+            ),
           ),
         ],
       );
@@ -1123,40 +1127,54 @@ class _VerdictPanel extends StatelessWidget {
       final IconData verdictIcon;
       final String verdictLabel;
       final String reasoning;
-      switch (resolved.tier) {
-        case RetranslationTier.excelente:
-          // Figma 596:1160: the Excelente heading colour is #5de4a0
-          // (AppColors.success) and the label is "¡Excelente!". The frame is a
-          // fuller Phase 5 result screen with no verdict icon or reasoning
-          // subtext, so within the interim card the icon and reasoning below are
-          // documented in-house defaults (not from Figma) kept for parity with
-          // the other two states — adjust freely. The reasoning is whole-sentence
-          // (no category) because excelente means the entire sentence is clean.
-          accent = AppColors.success;
-          verdictIcon = Icons.verified_outlined;
-          verdictLabel = str('¡Excelente!', 'Excelente!');
-          reasoning = str(
-            'Toda la frase está correcta de principio a fin.',
-            'A frase inteira está correta do início ao fim.',
-          );
-        case RetranslationTier.bienHecho:
-          accent = AppColors.mint;
-          verdictIcon = Icons.check_circle_outline;
-          verdictLabel = str('Bien hecho', 'Muito bem');
-          reasoning = str(
-            'La categoría de enfoque ($category) está correcta en tu traducción.',
-            'A categoria em foco ($category) está correta na sua tradução.',
-          );
-        case RetranslationTier.siguePracticando:
-          accent = AppColors.coral;
-          verdictIcon = Icons.error_outline;
-          verdictLabel = str('Sigue practicando', 'Continue praticando');
-          reasoning = str(
-            'La IA marcó en tu categoría de enfoque ($category): '
-            '${_describeErrors(resolved)}.',
-            'A IA apontou na sua categoria em foco ($category): '
-            '${_describeErrors(resolved)}.',
-          );
+      if (!resolved.isRelated) {
+        // The grader judged the attempt off-topic (or a reversed/negated
+        // scenario) rather than grading it for errors. The tier still reads
+        // as siguePracticando, but the explanation must not claim the target
+        // category was checked and left unfixed — it wasn't checked at all.
+        accent = AppColors.coral;
+        verdictIcon = Icons.error_outline;
+        verdictLabel = str('Sigue practicando', 'Continue praticando');
+        reasoning = str(
+          'Esto no aborda la frase objetivo — inténtalo de nuevo.',
+          'Isso não aborda a frase-alvo — tente de novo.',
+        );
+      } else {
+        switch (resolved.tier) {
+          case RetranslationTier.excelente:
+            // Figma 596:1160: the Excelente heading colour is #5de4a0
+            // (AppColors.success) and the label is "¡Excelente!". The frame is a
+            // fuller Phase 5 result screen with no verdict icon or reasoning
+            // subtext, so within the interim card the icon and reasoning below are
+            // documented in-house defaults (not from Figma) kept for parity with
+            // the other two states — adjust freely. The reasoning is whole-sentence
+            // (no category) because excelente means the entire sentence is clean.
+            accent = AppColors.success;
+            verdictIcon = Icons.verified_outlined;
+            verdictLabel = str('¡Excelente!', 'Excelente!');
+            reasoning = str(
+              'Toda la frase está correcta de principio a fin.',
+              'A frase inteira está correta do início ao fim.',
+            );
+          case RetranslationTier.bienHecho:
+            accent = AppColors.mint;
+            verdictIcon = Icons.check_circle_outline;
+            verdictLabel = str('Bien hecho', 'Muito bem');
+            reasoning = str(
+              'La categoría de enfoque ($category) está correcta en tu traducción.',
+              'A categoria em foco ($category) está correta na sua tradução.',
+            );
+          case RetranslationTier.siguePracticando:
+            accent = AppColors.coral;
+            verdictIcon = Icons.error_outline;
+            verdictLabel = str('Sigue practicando', 'Continue praticando');
+            reasoning = str(
+              'La IA marcó en tu categoría de enfoque ($category): '
+                  '${_describeErrors(resolved)}.',
+              'A IA apontou na sua categoria em foco ($category): '
+                  '${_describeErrors(resolved)}.',
+            );
+        }
       }
 
       body = Column(
@@ -1164,11 +1182,7 @@ class _VerdictPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                verdictIcon,
-                color: accent,
-                size: 18,
-              ),
+              Icon(verdictIcon, color: accent, size: 18),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 verdictLabel,
@@ -1221,7 +1235,9 @@ class _VerdictPanel extends StatelessWidget {
 
   String _describeErrors(RetranslationGrade grade) {
     return grade.categoryErrors
-        .map((error) => '"${error.originalPhrase}" → "${error.correctedPhrase}"')
+        .map(
+          (error) => '"${error.originalPhrase}" → "${error.correctedPhrase}"',
+        )
         .join(', ');
   }
 }
@@ -1402,7 +1418,10 @@ class _WalkthroughIntroCta extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          str('¿Lo trabajamos paso a paso?', 'Vamos trabalhar isso passo a passo?'),
+          str(
+            '¿Lo trabajamos paso a paso?',
+            'Vamos trabalhar isso passo a passo?',
+          ),
           style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 16,
@@ -1524,7 +1543,10 @@ class _ProgressLabel extends StatelessWidget {
 /// answer. Both values are sourced from the correction this game question was
 /// built from, so the label is dynamic per phrase.
 class _SavedErrorLabel extends StatelessWidget {
-  const _SavedErrorLabel({required this.category, required this.originalPhrase});
+  const _SavedErrorLabel({
+    required this.category,
+    required this.originalPhrase,
+  });
 
   final ErrorCategory category;
   final String originalPhrase;
@@ -1563,7 +1585,10 @@ class _PromptCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: 14,
+      ),
       decoration: BoxDecoration(
         color: AppColors.cyan.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),

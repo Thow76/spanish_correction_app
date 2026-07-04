@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
+import 'package:spanish_correction_app/features/corrections/application/retranslation_grade_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
@@ -30,6 +31,7 @@ void main() {
 
         final grade = await useCase.call(
           attempt: 'mi intento',
+          expectedAnswer: 'la respuesta esperada',
           savedErrorCategory: ErrorCategory.grammar,
           language: Language.spanish,
         );
@@ -45,6 +47,7 @@ void main() {
         // Full list is preserved for the walkthrough service.
         expect(grade.corrections, hasLength(2));
         expect(grade.judgedCategory, ErrorCategory.grammar);
+        expect(grade.isRelated, isTrue);
       },
     );
 
@@ -59,6 +62,7 @@ void main() {
 
         final grade = await useCase.call(
           attempt: 'mi intento',
+          expectedAnswer: 'la respuesta esperada',
           savedErrorCategory: ErrorCategory.grammar,
           language: Language.spanish,
         );
@@ -68,6 +72,7 @@ void main() {
         expect(grade.categoryErrors, hasLength(1));
         expect(grade.categoryErrors.single.category, ErrorCategory.grammar);
         expect(grade.corrections, hasLength(2));
+        expect(grade.isRelated, isTrue);
       },
     );
 
@@ -88,6 +93,7 @@ void main() {
 
         final grade = await useCase.call(
           attempt: 'mi intento',
+          expectedAnswer: 'a resposta esperada',
           savedErrorCategory: ErrorCategory.grammar,
           language: Language.portuguese,
         );
@@ -117,6 +123,7 @@ void main() {
 
         final grade = await useCase.call(
           attempt: 'Voy al cine con mis amigos',
+          expectedAnswer: 'Fui al cine con mis amigos.',
           savedErrorCategory: ErrorCategory.grammar,
           language: Language.spanish,
         );
@@ -145,6 +152,7 @@ void main() {
 
         final grade = await useCase.call(
           attempt: 'Voy a cortar mi pelo en sábado',
+          expectedAnswer: 'Voy a cortar mi pelo el sábado.',
           savedErrorCategory: ErrorCategory.grammar,
           language: Language.spanish,
         );
@@ -161,6 +169,7 @@ void main() {
 
       final grade = await useCase.call(
         attempt: 'una traducción perfecta',
+        expectedAnswer: 'una traducción perfecta.',
         savedErrorCategory: ErrorCategory.naturalLanguage,
         language: Language.spanish,
       );
@@ -189,6 +198,7 @@ void main() {
 
           final grade = await useCase.call(
             attempt: 'Voy al cine con mis amigos',
+            expectedAnswer: 'Fui al cine con mis amigos.',
             savedErrorCategory: ErrorCategory.grammar,
             language: Language.spanish,
           );
@@ -210,6 +220,7 @@ void main() {
 
           final grade = await useCase.call(
             attempt: 'mi intento',
+            expectedAnswer: 'la respuesta esperada',
             savedErrorCategory: ErrorCategory.grammar,
             language: Language.spanish,
           );
@@ -233,6 +244,7 @@ void main() {
 
           final grade = await useCase.call(
             attempt: 'Voy a cortar mi pelo en sábado',
+            expectedAnswer: 'Voy a cortar mi pelo el sábado.',
             savedErrorCategory: ErrorCategory.grammar,
             language: Language.spanish,
           );
@@ -258,6 +270,7 @@ void main() {
 
           final grade = await useCase.call(
             attempt: 'mi intento',
+            expectedAnswer: 'la respuesta esperada',
             savedErrorCategory: ErrorCategory.grammar,
             language: Language.spanish,
           );
@@ -275,33 +288,153 @@ void main() {
 
       await useCase.call(
         attempt: '   mi intento  ',
+        expectedAnswer: 'la respuesta esperada',
         savedErrorCategory: ErrorCategory.grammar,
         language: Language.spanish,
       );
 
-      expect(service.lastText, 'mi intento');
+      expect(service.lastAttempt, 'mi intento');
       expect(service.lastLanguage, Language.spanish);
+    });
+
+    test(
+      'passes expectedAnswer and savedErrorCategory straight through as '
+      'expectedAnswer/targetCategory',
+      () async {
+        final service = _FakeCorrectionService(const []);
+        final useCase = GradeRetranslationUseCase(correctionService: service);
+
+        await useCase.call(
+          attempt: 'mi intento',
+          expectedAnswer: 'la respuesta esperada',
+          savedErrorCategory: ErrorCategory.wordChoice,
+          language: Language.spanish,
+        );
+
+        expect(service.lastExpectedAnswer, 'la respuesta esperada');
+        expect(service.lastTargetCategory, ErrorCategory.wordChoice);
+      },
+    );
+
+    group('off-topic attempts (isRelated: false)', () {
+      test(
+        'the bus/bread case (Spanish): off-topic attempt is Sigue '
+        'practicando without running the tier logic',
+        () async {
+          // If the off-topic branch ever fell through to _tierFor/_isSubstantive,
+          // this would blow up or mis-tier, since the corrections list below is
+          // deliberately shaped to prove the category/substantive logic never
+          // ran: it contains a grammar error, which — if judged — would still
+          // yield Sigue practicando, masking a regression where the branch is
+          // skipped. The real proof is categoryErrors being empty (see below),
+          // which only happens when _tierFor/_isSubstantive were bypassed.
+          final service = _FakeCorrectionService(
+            [item(ErrorCategory.grammar)],
+            isRelated: false,
+          );
+          final useCase = GradeRetranslationUseCase(correctionService: service);
+
+          final grade = await useCase.call(
+            attempt: 'Tomé el autobús a casa desde el trabajo.',
+            expectedAnswer: 'Fui al supermercado a comprar pan.',
+            savedErrorCategory: ErrorCategory.grammar,
+            language: Language.spanish,
+          );
+
+          expect(grade.tier, RetranslationTier.siguePracticando);
+          expect(grade.isRelated, isFalse);
+          // categoryErrors is empty because _tierFor/_isSubstantive never ran —
+          // if they had run against the grammar correction above, categoryErrors
+          // would be non-empty instead.
+          expect(grade.categoryErrors, isEmpty);
+          // The full corrections list is still preserved for the walkthrough.
+          expect(grade.corrections, hasLength(1));
+        },
+      );
+
+      test(
+        'the bus/bread case (Portuguese): off-topic attempt is Sigue '
+        'practicando without running the tier logic',
+        () async {
+          final service = _FakeCorrectionService(
+            [item(ErrorCategory.grammar)],
+            isRelated: false,
+          );
+          final useCase = GradeRetranslationUseCase(correctionService: service);
+
+          final grade = await useCase.call(
+            attempt: 'Peguei o ônibus para casa depois do trabalho.',
+            expectedAnswer: 'Fui ao supermercado comprar pão.',
+            savedErrorCategory: ErrorCategory.grammar,
+            language: Language.portuguese,
+          );
+
+          expect(grade.tier, RetranslationTier.siguePracticando);
+          expect(grade.isRelated, isFalse);
+          expect(grade.categoryErrors, isEmpty);
+          expect(grade.corrections, hasLength(1));
+        },
+      );
+
+      test(
+        'off-topic (isRelated: false) and on-topic-but-not-fixed '
+        '(isRelated: true) are both Sigue practicando but distinguished by '
+        'isRelated',
+        () async {
+          final offTopicService = _FakeCorrectionService(
+            [item(ErrorCategory.grammar)],
+            isRelated: false,
+          );
+          final notFixedService = _FakeCorrectionService([
+            item(ErrorCategory.grammar),
+          ], isRelated: true);
+
+          final offTopicGrade = await GradeRetranslationUseCase(
+            correctionService: offTopicService,
+          ).call(
+            attempt: 'Tomé el autobús a casa.',
+            expectedAnswer: 'Fui al supermercado a comprar pan.',
+            savedErrorCategory: ErrorCategory.grammar,
+            language: Language.spanish,
+          );
+
+          final notFixedGrade = await GradeRetranslationUseCase(
+            correctionService: notFixedService,
+          ).call(
+            attempt: 'Voy al supermercado a comprar pan.',
+            expectedAnswer: 'Fui al supermercado a comprar pan.',
+            savedErrorCategory: ErrorCategory.grammar,
+            language: Language.spanish,
+          );
+
+          // Same tier...
+          expect(offTopicGrade.tier, RetranslationTier.siguePracticando);
+          expect(notFixedGrade.tier, RetranslationTier.siguePracticando);
+          // ...but distinguished by isRelated, and only the on-topic case
+          // actually ran the category-filtering logic (non-empty categoryErrors).
+          expect(offTopicGrade.isRelated, isFalse);
+          expect(notFixedGrade.isRelated, isTrue);
+          expect(offTopicGrade.categoryErrors, isEmpty);
+          expect(notFixedGrade.categoryErrors, hasLength(1));
+        },
+      );
     });
   });
 }
 
 class _FakeCorrectionService implements CorrectionService {
-  _FakeCorrectionService(this._corrections);
+  _FakeCorrectionService(this._corrections, {this.isRelated = true});
 
   final List<CorrectionItem> _corrections;
-  String? lastText;
+  final bool isRelated;
+  String? lastAttempt;
+  String? lastExpectedAnswer;
+  ErrorCategory? lastTargetCategory;
   Language? lastLanguage;
 
   @override
-  Future<CorrectionResponse> correctText(String text, Language language) async {
-    lastText = text;
-    lastLanguage = language;
-    return CorrectionResponse(
-      originalText: text,
-      correctedText: text,
-      corrections: _corrections,
-    );
-  }
+  Future<CorrectionResponse> correctText(String text, Language language) async =>
+      throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(
@@ -320,4 +453,22 @@ class _FakeCorrectionService implements CorrectionService {
     required String correctedSentence,
     required Language language,
   }) async => throw UnimplementedError();
+
+  @override
+  Future<RetranslationGradeResponse> gradeRetranslation({
+    required String attempt,
+    required String expectedAnswer,
+    required ErrorCategory targetCategory,
+    required Language language,
+  }) async {
+    lastAttempt = attempt;
+    lastExpectedAnswer = expectedAnswer;
+    lastTargetCategory = targetCategory;
+    lastLanguage = language;
+    return RetranslationGradeResponse(
+      isRelated: isRelated,
+      correctedText: attempt,
+      corrections: _corrections,
+    );
+  }
 }
