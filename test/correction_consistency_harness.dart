@@ -17,17 +17,33 @@
 // Step 5 (done): markdown report writer (_buildReport), pure — takes
 // already-collected records and returns the report string. Golden-tested
 // against a captured fixture string.
-// Step 6 (this addition): live-call wiring. The final `test(...)` in main()
-// below is a MANUAL harness — it calls the REAL, unmodified
+// Step 6 (done): live-call wiring. The final `test(...)` in main() below is
+// a MANUAL harness, tagged 'live' — it calls the REAL, unmodified
 // `OpenAiCorrectionService.correctText()` `runsPerPhrase` times for each of
 // the 12 phrases (both languages, same loop), builds a _RunRecord per call
 // via _buildRunRecord/_errorRunRecord, aggregates and writes the report via
 // _buildReport, same instantiation/auth/output pattern as
 // spanish_ab_stability.dart. It FAILS (does not silently skip) when no API
-// key is configured. Step 7 (next, not yet done): actually run it live and
-// sanity-check the output against known manual-testing behavior.
+// key is configured.
 //
-// Run:
+// Post-Step-6 fixes (error detail + call spacing): a first live run got
+// increasingly rate-limit-shaped errors from partway through PT-1 onward,
+// but every failure printed only `ERROR — Instance of
+// 'CorrectionServiceException'` — the type's default toString(), with no
+// detail. _describeError now surfaces `reason`/`message` instead (message
+// already carries the HTTP status/body where applicable — see
+// OpenAiCorrectionService._createResponse). A `callDelayMs` (default 750ms,
+// `--dart-define=CALL_DELAY_MS=...`) delay was added between calls in the
+// live loop to stop firing requests back-to-back; this is scoped entirely
+// to this test file, not the production call path.
+//
+// Step 7 (next, not yet done): actually run it live and sanity-check the
+// output against known manual-testing behavior.
+//
+// Run only the offline tests (Steps 1-5), skipping the live call entirely:
+//   flutter test test/correction_consistency_harness.dart --exclude-tags live
+//
+// Run everything, including the live harness (costs real API calls):
 //   OPENAI_API_KEY=sk-... flutter test test/correction_consistency_harness.dart --timeout none
 //
 // Writes a report to docs/correction_consistency_harness.md (override with
@@ -41,6 +57,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:spanish_correction_app/app/app_config.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
+import 'package:spanish_correction_app/features/corrections/application/correction_service_exception.dart';
 import 'package:spanish_correction_app/features/corrections/data/open_ai_correction_service.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
@@ -55,6 +72,13 @@ const String outputPath = String.fromEnvironment(
   'CONSISTENCY_OUTPUT',
   defaultValue: 'docs/correction_consistency_harness.md',
 );
+
+/// Delay after every `correctText()` call in the live run, so the harness
+/// doesn't fire ~120 requests back-to-back. A prior live run started failing
+/// partway through PT-1 with errors that looked rate-limit-shaped; this is a
+/// test-file-only mitigation (no change to the production call path), easy
+/// to tune via `--dart-define=CALL_DELAY_MS=...` without touching code.
+const int callDelayMs = int.fromEnvironment('CALL_DELAY_MS', defaultValue: 750);
 
 /// One correction this phrase is expected to trigger.
 ///
@@ -763,7 +787,7 @@ String _describeCategoryCounts(Map<String, int> counts) {
 String _describeRun(_Phrase phrase, _RunRecord record) {
   final prefix = 'Run ${record.runIndex}';
   if (record.isError) {
-    return '- $prefix: ERROR — ${record.error}';
+    return '- $prefix: ERROR — ${_describeError(record.error!)}';
   }
 
   final status = phrase.isNegativeTest
@@ -779,6 +803,22 @@ String _describeRun(_Phrase phrase, _RunRecord record) {
             .join('; ');
 
   return '- $prefix: $status · corrections: $corrections';
+}
+
+/// Renders an error for the report/console. `CorrectionServiceException` has
+/// no `toString()` override, so a bare `'$error'` prints only
+/// `Instance of 'CorrectionServiceException'` — which is exactly what made
+/// the live run's mid-battery failures unreadable (rate limit vs. something
+/// else was indistinguishable). `message` already carries the HTTP status
+/// code and response body where applicable (see
+/// `OpenAiCorrectionService._createResponse`'s `apiFailure` throw), so
+/// surfacing `reason` + `message` is sufficient — no separate status-code
+/// field exists to extract.
+String _describeError(Object error) {
+  if (error is CorrectionServiceException) {
+    return '${error.reason.name}: ${error.message}';
+  }
+  return error.toString();
 }
 
 void main() {
@@ -1413,6 +1453,7 @@ void main() {
           records.add(record);
           // ignore: avoid_print
           print(_describeRun(phrase, record));
+          await Future<void>.delayed(const Duration(milliseconds: callDelayMs));
         }
 
         recordsByPhraseId[phrase.id] = records;
@@ -1432,6 +1473,7 @@ void main() {
       print('Wrote $outputPath');
     },
     timeout: const Timeout(Duration(minutes: 60)),
+    tags: ['live'],
   );
 }
 
