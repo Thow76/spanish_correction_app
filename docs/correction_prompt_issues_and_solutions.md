@@ -210,6 +210,80 @@ designed.
 
 ---
 
+### RG-002 — Wrong-language submissions not detected (Portuguese/Spanish cross-contamination)
+
+**Status:** Resolved
+**Affected section:** Retranslation game grading — `is_related` gate
+**Prompt file:** `_gradingPromptSpanish` / `_gradingPromptPortuguese` in `prompt_builder.dart`
+
+#### Problem
+
+A Portuguese-language answer submitted for a Spanish exercise was graded
+"¡Bien hecho!" — confirmed live on device via screenshot. The grader
+attempted to "correct" the Portuguese word "transito" as if it were a
+misspelled Spanish word ("tráfico"), rather than recognizing the entire
+submission was written in a different language. The `is_related` gate from
+RG-001 correctly caught topic mismatches (e.g. bus vs. bread) but had no
+check for language identity, and topic-relatedness alone was insufficient
+here, since the submission was genuinely on-topic — a faithful Portuguese
+translation of a similar scenario — just written in the wrong language.
+
+#### Root cause
+
+The RG-001 grading prompt's `is_related` instructions checked only for
+topical/content relatedness. Spanish and Portuguese share enough vocabulary
+and structural overlap that the model read a faithful Portuguese
+translation as "Spanish with typos" rather than "not Spanish," since
+nothing in the prompt instructed it to check the attempt's language
+identity before evaluating content or grammar.
+
+#### Solution
+
+Added an explicit two-part structure to `is_related`'s Step 1, with the
+language check running first, before any content evaluation:
+
+```
+PART A — Language check (do this first, before reading for content):
+The attempt must be written in Spanish. If the attempt is written in a
+different language — including closely related languages such as
+Portuguese, Italian, French, or Catalan — mark is_related = false
+immediately, even if the vocabulary looks superficially similar to Spanish
+and even if the content describes the same topic as expectedAnswer. Do not
+treat words from another language as misspelled Spanish words, and do not
+attempt to correct them as such.
+```
+
+(Mirrored in the Portuguese prompt, rejecting Spanish and other languages.)
+
+Content/topic checking (Part B, the original RG-001 logic) only runs if
+Part A passes. This is a prompt-text-only change — no changes to
+`is_related`'s wiring, the response type, use-case branching, or the UI,
+since all of that infrastructure from RG-001 already handles a `false`
+result correctly.
+
+#### Validation test cases
+
+Validated against `gpt-5.5`: 32-case battery — the original 28 RG-001
+cases, re-run as a regression check, plus 4 new cases isolating
+language-mismatch from topic-mismatch (same content, wrong language, both
+directions).
+
+| Result | Count |
+|---|---|
+| Full battery (28 original + 4 new) | 32 PASS, 0 FAIL, 0 ERROR |
+
+| New case | Expected | Actual |
+|---|---|---|
+| Portuguese attempt on Spanish target (the exact production bug) | false | false ✅ |
+| English attempt, on-topic, on Spanish target | false | false ✅ |
+| Spanish attempt on Portuguese target | false | false ✅ |
+| English attempt, on-topic, on Portuguese target | false | false ✅ |
+
+All 28 original RG-001 cases still passed, confirming no regression to
+topic-relatedness or reversed-action detection.
+
+---
+
 ### TC-001 — Trailing-punctuation-only correction misclassified as substantive
 
 **Status:** Open
@@ -252,3 +326,4 @@ errors that happen to end in a punctuation change.
 | Jun 2026 | Portuguese | Architecture | Replaced runtime replaceAll swap with standalone `_correctionPromptPortuguese` declaration |
 | Jun 2026 | Portuguese | Natural language handling | Removed "máquina de correr" from calque bullet; added soft-register bullet (BP-001) |
 | Jul 2026 | Cross-language | Retranslation game grading | Added dedicated `is_related` relatedness gate (RG-001) — new grading prompts, new response type, use-case branching before tiering |
+| Jul 2026 | Cross-language | Retranslation game grading | Added language-identity check to `is_related` gate (RG-002) — prompt-text-only change |

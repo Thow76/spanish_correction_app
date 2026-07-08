@@ -186,6 +186,14 @@ You are given:
 Your task has two steps, in this strict order:
 
 STEP 1 — Relatedness to the target (is_related)
+This check has two parts. If EITHER part fails, is_related = false.
+
+PART A — Language check (do this first, before reading for content):
+The attempt must be written in Spanish. If the attempt is written in a different language — including closely related languages such as Portuguese, Italian, French, or Catalan — mark is_related = false immediately, even if the vocabulary looks superficially similar to Spanish and even if the content describes the same topic as expectedAnswer. Do not treat words from another language as misspelled Spanish words, and do not attempt to correct them as such. A student who writes a faithful Portuguese (or other-language) translation of the correct meaning has NOT produced a Spanish attempt, and must not be evaluated for Spanish spelling or grammar at all.
+
+Example of is_related = false (wrong language): expectedAnswer is "Fui al supermercado a comprar pan."; the attempt is "Fui ao supermercado comprar pão." This is a faithful Portuguese translation of the same meaning, but it is not Spanish — is_related = false. Do not "correct" Portuguese words as if they were misspelled Spanish.
+
+PART B — Content check (only if Part A passes, i.e. the attempt is in Spanish):
 Determine whether the student's attempt addresses the same scenario/content as expectedAnswer, regardless of whether the attempt is grammatically correct or incorrect.
 
 - Mark is_related = true if the attempt addresses the same topic, situation, or action as expectedAnswer, even if it:
@@ -199,7 +207,7 @@ Example of is_related = false (different topic entirely): expectedAnswer is abou
 
 Example of is_related = false (reversed action): expectedAnswer is "Fui al supermercado a comprar pan."; the attempt is "Fui al supermercado a vender pan." Same setting and objects, but the core action is reversed (selling vs. buying) → false.
 
-Do not confuse "incorrect" with "unrelated." An attempt can be poorly written and still be is_related = true.
+Do not confuse "incorrect" with "unrelated." An attempt can be poorly written and still be is_related = true, as long as it is written in Spanish.
 
 STEP 2 — Normal correction (ONLY if is_related = true)
 If is_related is false, leave corrected_text identical to the original attempt and corrections as an empty list — do not analyze errors.
@@ -423,6 +431,14 @@ You are given:
 Your task has two steps, in this strict order:
 
 STEP 1 — Relatedness to the target (is_related)
+This check has two parts. If EITHER part fails, is_related = false.
+
+PART A — Language check (do this first, before reading for content):
+The attempt must be written in Brazilian Portuguese. If the attempt is written in a different language — including closely related languages such as Spanish, Italian, French, or Catalan — mark is_related = false immediately, even if the vocabulary looks superficially similar to Portuguese and even if the content describes the same topic as expectedAnswer. Do not treat words from another language as misspelled Portuguese words, and do not attempt to correct them as such. A student who writes a faithful Spanish (or other-language) translation of the correct meaning has NOT produced a Portuguese attempt, and must not be evaluated for Portuguese spelling or grammar at all.
+
+Example of is_related = false (wrong language): expectedAnswer is "Fui ao supermercado comprar pão."; the attempt is "Fui al supermercado a comprar pan." This is a faithful Spanish translation of the same meaning, but it is not Portuguese — is_related = false. Do not "correct" Spanish words as if they were misspelled Portuguese.
+
+PART B — Content check (only if Part A passes, i.e. the attempt is in Portuguese):
 Determine whether the student's attempt addresses the same scenario/content as expectedAnswer, regardless of whether the attempt is grammatically correct or incorrect.
 
 - Mark is_related = true if the attempt addresses the same topic, situation, or action as expectedAnswer, even if it:
@@ -436,7 +452,7 @@ Example of is_related = false (different topic entirely): expectedAnswer is abou
 
 Example of is_related = false (reversed action): expectedAnswer is "Fui ao supermercado comprar pão."; the attempt is "Fui ao supermercado vender pão." Same setting and objects, but the core action is reversed (selling vs. buying) → false.
 
-Do not confuse "incorrect" with "unrelated." An attempt can be poorly written and still be is_related = true.
+Do not confuse "incorrect" with "unrelated." An attempt can be poorly written and still be is_related = true, as long as it is written in Portuguese.
 
 STEP 2 — Normal correction (ONLY if is_related = true)
 If is_related is false, leave corrected_text identical to the original attempt and corrections as an empty list — do not analyze errors.
