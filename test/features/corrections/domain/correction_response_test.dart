@@ -89,6 +89,11 @@ void main() {
     final response = CorrectionResponse.fromAnchoredJson(
       {
         'original_text': 'C mo est s? Qu tal?',
+        // The model's own corrected_text fixes both sentences, but only the
+        // first is itemised in corrections — corrected_text is now built
+        // solely from itemised corrections, so the second sentence stays
+        // unfixed. This is deliberate: the model's freeform corrected_text is
+        // no longer trusted as a source of un-itemised fixes.
         'corrected_text': '¿Cómo estás? ¿Qué tal?',
         'corrections': [
           {
@@ -106,7 +111,7 @@ void main() {
     );
 
     expect(response.originalText, 'Cómo estás? Qué tal?');
-    expect(response.correctedText, '¿Cómo estás? ¿Qué tal?');
+    expect(response.correctedText, '¿Cómo estás? Qué tal?');
     expect(response.corrections.single.originalPhrase, 'Cómo estás?');
     expect(response.corrections.single.startIndex, 0);
     expect(response.corrections.single.endIndex, 11);
@@ -177,44 +182,50 @@ void main() {
     expect(response.corrections.first.endIndex, 0);
   });
 
-  test('anchored parsing prefers plausible model corrected text over bad ranges', () {
-    final response = CorrectionResponse.fromAnchoredJson(
-      {
-        'original_text':
+  test(
+    'anchored parsing reconstructs literally from itemised insertions, '
+    'even when the model corrected_text disagrees',
+    () {
+      // corrected_text is no longer a trusted fallback: the model's own
+      // corrected_text here is the coherent, intended fix ("bienvenido" ->
+      // "bienvenidos"), but it is not itemised as a correction, so it is
+      // ignored. Only the two itemised (if odd) insertions are applied.
+      final response = CorrectionResponse.fromAnchoredJson(
+        {
+          'original_text':
+              'Hola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
+          'corrected_text':
+              'Hola a todos y bienvenidos a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
+          'corrections': [
+            {
+              'start_index': 0,
+              'end_index': 0,
+              'original_phrase': '',
+              'corrected_phrase': 'i',
+              'category': 'Spelling',
+              'short_explanation': 'Itemised insertion at the start.',
+            },
+            {
+              'start_index': 81,
+              'end_index': 81,
+              'original_phrase': '',
+              'corrected_phrase': '!',
+              'category': 'Grammar',
+              'short_explanation': 'Itemised insertion mid-sentence.',
+            },
+          ],
+        },
+        submittedText:
             'Hola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
-        'corrected_text':
-            'Hola a todos y bienvenidos a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
-        'corrections': [
-          {
-            'start_index': 0,
-            'end_index': 0,
-            'original_phrase': '',
-            'corrected_phrase': 'i',
-            'category': 'Spelling',
-            'short_explanation':
-                'The range is wrong, but corrected_text is coherent.',
-          },
-          {
-            'start_index': 81,
-            'end_index': 81,
-            'original_phrase': '',
-            'corrected_phrase': '!',
-            'category': 'Grammar',
-            'short_explanation':
-                'The range is wrong, but corrected_text is coherent.',
-          },
-        ],
-      },
-      submittedText:
-          'Hola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
-      allowLegacyCategories: false,
-    );
+        allowLegacyCategories: false,
+      );
 
-    expect(
-      response.correctedText,
-      'Hola a todos y bienvenidos a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
-    );
-  });
+      expect(
+        response.correctedText,
+        'iHola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y !famosa por todo el mundo.',
+      );
+    },
+  );
 
   test('anchored parsing rejects unrelated model corrected text', () {
     final response = CorrectionResponse.fromAnchoredJson(

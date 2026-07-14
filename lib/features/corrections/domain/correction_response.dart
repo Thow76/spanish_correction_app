@@ -55,26 +55,15 @@ class CorrectionResponse {
               .whereType<CorrectionItem>()
               .toList()
         : const <CorrectionItem>[];
-    final modelCorrectedText = json['corrected_text'] as String? ?? '';
-    final reconstructedCorrectedText = parsedCorrections.isEmpty
-        ? submittedText
-        : _reconstructCorrectedText(submittedText, parsedCorrections);
-
-    // Corrected-side highlight ranges come solely from the model's reported
-    // corrected_start_index/corrected_end_index (parsed onto each CorrectionItem
-    // and validated by the slice-check guard in the highlight resolver). The old
-    // arithmetic path computed them against the reconstructed text, which
-    // diverged from the rendered model text — the source of Bug 1.
+    // corrected_text is always built from the submitted text plus the anchored
+    // corrections, never taken from the model's own corrected_text — this is
+    // the sole source of truth so the corrected-side text can never diverge
+    // from what the app itself constructed.
     return CorrectionResponse(
       originalText: submittedText,
-      correctedText:
-          _shouldUseModelCorrectedText(
-            submittedText: submittedText,
-            modelCorrectedText: modelCorrectedText,
-            hasCorrections: parsedCorrections.isNotEmpty,
-          )
-          ? modelCorrectedText.trim()
-          : reconstructedCorrectedText,
+      correctedText: parsedCorrections.isEmpty
+          ? submittedText
+          : _reconstructCorrectedText(submittedText, parsedCorrections),
       corrections: parsedCorrections,
     );
   }
@@ -104,58 +93,5 @@ class CorrectionResponse {
     }
 
     return characters.join();
-  }
-
-  static bool _shouldUseModelCorrectedText({
-    required String submittedText,
-    required String modelCorrectedText,
-    required bool hasCorrections,
-  }) {
-    final trimmed = modelCorrectedText.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-
-    if (!hasCorrections) {
-      return trimmed == submittedText;
-    }
-
-    final submittedLength = submittedText.characters.length;
-    final correctedLength = trimmed.characters.length;
-    if (submittedLength == 0 || correctedLength == 0) {
-      return false;
-    }
-
-    final upperBound = submittedLength + 40;
-    if (correctedLength > upperBound || correctedLength * 3 < submittedLength) {
-      return false;
-    }
-
-    final submittedWords = _normalisedWords(submittedText);
-    if (submittedWords.isEmpty) {
-      return true;
-    }
-
-    final correctedWords = _normalisedWords(trimmed);
-    final sharedWords = submittedWords.intersection(correctedWords).length;
-    return sharedWords / submittedWords.length >= 0.5;
-  }
-
-  static Set<String> _normalisedWords(String text) {
-    return RegExp(r'[\p{L}\p{N}]+', unicode: true)
-        .allMatches(_removeSpanishDiacritics(text.toLowerCase()))
-        .map((match) => match.group(0)!)
-        .where((word) => word.length >= 3)
-        .toSet();
-  }
-
-  static String _removeSpanishDiacritics(String text) {
-    return text
-        .replaceAll(RegExp('[áàäâ]'), 'a')
-        .replaceAll(RegExp('[éèëê]'), 'e')
-        .replaceAll(RegExp('[íìïî]'), 'i')
-        .replaceAll(RegExp('[óòöô]'), 'o')
-        .replaceAll(RegExp('[úùüû]'), 'u')
-        .replaceAll('ñ', 'n');
   }
 }
