@@ -37,6 +37,15 @@
 // live loop to stop firing requests back-to-back; this is scoped entirely
 // to this test file, not the production call path.
 //
+// Post-Step-6 fix (model parameterization): the model previously came from
+// `OPENAI_CORRECTION_MODEL` via Platform.environment, falling back to
+// AppConfig's compile-time default. `consistencyModel` replaces that for
+// this harness's `model` with a `--dart-define=CONSISTENCY_MODEL=...`
+// constant (default 'gpt-5.5'), matching bare_prompt_control_test.dart's
+// `liveModel` pattern exactly, so results from different models can be
+// compared without editing this file. AppConfig is still used for the API
+// key only, unchanged.
+//
 // Step 7 (next, not yet done): actually run it live and sanity-check the
 // output against known manual-testing behavior.
 //
@@ -48,7 +57,8 @@
 //
 // Writes a report to docs/correction_consistency_harness.md (override with
 // --dart-define=CONSISTENCY_OUTPUT=...). Override run count per phrase with
-// --dart-define=RUNS_PER_PHRASE=... (default 10).
+// --dart-define=RUNS_PER_PHRASE=... (default 10). Override the model with
+// --dart-define=CONSISTENCY_MODEL=... (default 'gpt-5.5').
 
 import 'dart:convert';
 import 'dart:io';
@@ -71,6 +81,15 @@ const int runsPerPhrase = int.fromEnvironment(
 const String outputPath = String.fromEnvironment(
   'CONSISTENCY_OUTPUT',
   defaultValue: 'docs/correction_consistency_harness.md',
+);
+
+/// Model used for the live run. Override with
+/// `--dart-define=CONSISTENCY_MODEL=...` to compare a different model
+/// without editing this file — same override pattern as [outputPath] here
+/// and as `bare_prompt_control_test.dart`'s `liveModel`.
+const String consistencyModel = String.fromEnvironment(
+  'CONSISTENCY_MODEL',
+  defaultValue: 'gpt-5.5',
 );
 
 /// Delay after every `correctText()` call in the live run, so the harness
@@ -1411,10 +1430,7 @@ void main() {
         'OPENAI_API_KEY',
         defaultValue: config.openAiApiKey,
       );
-      final model = _readEnvironment(
-        'OPENAI_CORRECTION_MODEL',
-        defaultValue: config.openAiCorrectionModel,
-      );
+      const model = consistencyModel;
 
       if (apiKey.isEmpty) {
         fail(

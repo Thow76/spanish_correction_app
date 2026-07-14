@@ -137,41 +137,47 @@ Rules:
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
 - Do not create Spelling corrections for accents or Spanish characters that are already present in the submitted text.
 
-Category rules:
-- Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, and punctuation.
-- Natural Language: a phrase or construction that is unnatural, awkward, overly literal, or not how a native speaker would normally express the idea. The individual words may each be acceptable, but the combination is unidiomatic; fixing it means restructuring a phrase, not swapping a single word. Flag these actively, even when the meaning is clear — naturalness is one of the main things learners need to learn.
-- Spelling: misspellings, missing or incorrect written accents/diacritics, and orthographic errors.
-- Word Choice: a single wrong or suboptimal word where grammar and spelling are otherwise acceptable — fixing it means swapping one word for another. This includes single false-friend verbs and one-word calques from English (e.g. "realicé" used as an English-style "I realised").
-- Other: only use this for genuine edge cases that do not fit the categories above.
+What to look for:
 
-Natural language handling:
-- Actively look for phrasing that is technically valid Spanish but not how a native speaker would express the idea. Do not skip these because the meaning is understandable.
+Unnatural or overly literal phrasing:
+- Actively look for phrasing that is technically valid Spanish but not how a native speaker would express the idea. Do not skip these because the meaning is understandable — naturalness is one of the main things learners need to learn.
 - Flag overly literal English-style constructions where Spanish phrases the idea differently (e.g. "una juventud con la naturaleza alrededor" -> "una infancia rodeada de naturaleza"; "tomar una decisión sobre" -> "decidir sobre").
-- Flag clear English calques: phrasing that is grammatical and understandable but is a word-for-word import of an English expression a native Spanish speaker would not use. These are Natural Language because the fix restructures a phrase. Examples:
+- Flag clear English calques: phrasing that is grammatical and understandable but is a word-for-word import of an English expression a native Spanish speaker would not use. Fixing these means restructuring a phrase, not swapping a single word. Examples:
   - Request patterns: "¿puedo tener un café?" -> "¿me pone(s) un café?" / "¿me trae un café?"; "hacer una cita" -> "pedir cita" / "pedir hora".
   - Literal-translation phrases: "llamar para atrás" (= to call back) -> "devolver la llamada"; "tomar (mejor) cuidado de" -> "cuidar (mejor)"; "pasé un buen tiempo" -> "lo pasé bien"; "tomé silla" / "tomé lugar" -> "me senté" / "tomé asiento".
-  - False-friend construction: "realicé que" (= I realised that) -> "me di cuenta de que". The single word "realicé"/"realizar" on its own stays Word Choice per the one-word test; only the phrase-level "realicé que" construction is Natural Language.
+  - False-friend construction: "realicé que" (= I realised that) -> "me di cuenta de que". The single word "realicé"/"realizar" on its own is a single-word swap; only the phrase-level "realicé que" construction requires restructuring the phrase.
 - Flag awkward circumlocutions when a single idiomatic word or expression exists.
 - Only flag CLEAR English calques. Do not flag correct Spanish just because a tidier alternative exists, and leave context-dependent phrases alone. In particular, do NOT flag "al final del día" on calque grounds: it has a legitimate literal meaning ("late in the day") as well as the figurative English-calque sense, so flag it only when the context is clearly the figurative "in the end / ultimately" sense.
 
-Word choice handling:
-- Flag single-word anglicisms and false friends where Spanish prefers a different word, and label them Word Choice (e.g. "memorias" used to mean "memories" should be "recuerdos"; "realizar" used to mean "to notice" should be "darse cuenta"; "atender" used to mean "to attend a class" should be "asistir").
+Single wrong or awkward words:
+- Flag single-word anglicisms and false friends where Spanish prefers a different word (e.g. "memorias" used to mean "memories" should be "recuerdos"; "realizar" used to mean "to notice" should be "darse cuenta"; "atender" used to mean "to attend a class" should be "asistir").
 
-Punctuation handling:
+Punctuation:
 - Always inspect punctuation separately, even if the sentence has other errors.
-- Missing or incorrect Spanish opening question marks (¿), closing question marks (?), opening exclamation marks (¡), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are Grammar.
+- Missing or incorrect Spanish opening question marks (¿), closing question marks (?), opening exclamation marks (¡), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are errors to flag.
 - Insertion points for punctuation must sit on a word boundary. Opening marks like "¿" and "¡" go before a word; closing marks like "?", "!", ",", ".", ";", and ":" go immediately after a word, never inside one.
 - Examples:
-  - "Como estas?" -> "¿Cómo estás?" includes Grammar insertion of "¿" at start_index 0, end_index 0, original_phrase "" and Spelling edits for missing accents.
-  - "Que bonito!" -> "¡Qué bonito!" includes Grammar insertion of "¡" at start_index 0, end_index 0, original_phrase "" and Spelling edit for missing accent.
-  - "Hola como estas" -> "Hola, ¿cómo estás?" includes Grammar insertions for comma/question punctuation and Spelling edits for missing accents.
+  - "Como estas?" -> "¿Cómo estás?" includes an insertion of "¿" at start_index 0, end_index 0, original_phrase "" plus fixes for missing accents.
+  - "Que bonito!" -> "¡Qué bonito!" includes an insertion of "¡" at start_index 0, end_index 0, original_phrase "" plus a fix for a missing accent.
+  - "Hola como estas" -> "Hola, ¿cómo estás?" includes insertions for comma/question punctuation plus fixes for missing accents.
 
-Important category boundaries:
+Register:
+- Do NOT flag a word solely because it is informal, colloquial, or a different register or level of formality than the surrounding text. The app has no formal/informal setting, so register is not something it judges. If a word is grammatical and correct in meaning, leave it alone even when a more formal or more casual alternative exists (e.g. a colloquial but correct Spanish word must not be flagged on formality grounds). Keep flagging genuine errors as normal — wrong word, calque, anglicism, false friend, grammar, spelling; register is not itself an error.
+
+Labeling:
+After you have identified each error, label it with the best-fit category. Category is a label applied to an error you have already decided to flag — never a reason to flag or skip anything.
+
+- Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, and punctuation.
+- Natural Language: a phrase or construction that is unnatural, awkward, overly literal, or not how a native speaker would normally express the idea. The individual words may each be acceptable, but the combination is unidiomatic; fixing it means restructuring a phrase, not swapping a single word.
+- Spelling: misspellings, missing or incorrect written accents/diacritics, and orthographic errors.
+- Word Choice: a single wrong or suboptimal word where grammar and spelling are otherwise acceptable — fixing it means swapping one word for another. This includes single false-friend verbs and one-word calques from English (e.g. "realicé" used as an English-style "I realised").
+- Other: use this for genuine edge cases, and also whenever you are confident something is wrong or unnatural but unsure which category fits best. Never skip flagging an error because the category is unclear.
+
+Labeling boundary rules:
 - Missing accents are Spelling, not Grammar.
 - Incorrect prepositions are Grammar.
 - Punctuation is Grammar, not Other.
 - Decide between Word Choice and Natural Language with the one-word test: if fixing the error changes a single word, it is Word Choice; if fixing it restructures a phrase or construction, it is Natural Language. Single false-friend words and one-word anglicisms or calques from English are therefore Word Choice. Overly literal English-style constructions that span a phrase are Natural Language.
-- Do NOT flag a word solely because it is informal, colloquial, or a different register or level of formality than the surrounding text. The app has no formal/informal setting, so register is not something it judges. If a word is grammatical and correct in meaning, leave it alone even when a more formal or more casual alternative exists (e.g. a colloquial but correct Spanish word must not be flagged on formality grounds). Keep flagging genuine errors as normal — wrong word, calque, anglicism, false friend, grammar, spelling; register is not itself an error.
 ''';
 
   static final _gradingPromptSpanish =
@@ -374,48 +380,54 @@ Rules:
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
 - Do not create Spelling corrections for accents or characters that are already correct per Brazilian Portuguese orthography.
 
-Category rules:
-- Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, and punctuation.
-- Natural Language: a phrase or construction that is unnatural, awkward, overly literal, or not how a native Brazilian speaker would normally express the idea. The individual words may each be acceptable, but the combination is unidiomatic; fixing it means restructuring a phrase, not swapping a single word. Flag these actively, even when the meaning is clear — naturalness is one of the main things learners need to learn.
-- Spelling: misspellings, missing or incorrect written accents/diacritics, and orthographic errors. Apply Brazilian Portuguese orthographic norms, not European Portuguese rules.
-- Word Choice: a single wrong or suboptimal word where grammar and spelling are otherwise acceptable — fixing it means swapping one word for another. This includes single false-friend verbs and one-word calques or anglicisms from English (e.g. "realizar" used to mean "to notice/realise", or "printar" used for "to print").
-- Other: only use this for genuine edge cases that do not fit the categories above.
+What to look for:
 
-Natural language handling:
+Unnatural or overly literal phrasing:
 - This prompt targets Brazilian Portuguese exclusively. Assess naturalness against Brazilian norms only. Do not suggest European Portuguese vocabulary, constructions, or spelling as corrections or in short_explanation (e.g. do not suggest "passadeira", "a fazer", "dá-me", "fixe", or "giro").
-- Actively look for phrasing that is technically valid Brazilian Portuguese but not how a native Brazilian speaker would express the idea. Do not skip these because the meaning is understandable.
+- Actively look for phrasing that is technically valid Brazilian Portuguese but not how a native Brazilian speaker would express the idea. Do not skip these because the meaning is understandable — naturalness is one of the main things learners need to learn.
 - Flag calques from English where Brazilian Portuguese has a standard idiomatic equivalent (e.g. "no final do dia" used figuratively as a calque of "at the end of the day" -> "no fim das contas" or "afinal de contas").
-- Flag the more idiomatic native term even when the user's phrasing is grammatical and fully understandable, when a single everyday word is clearly preferred in Brazil (e.g. "máquina de correr" is understood but a Brazilian would normally say "esteira"). Mark these as Natural Language and make the short_explanation note that the original is understandable but the native term is what a speaker would normally use.
+- Flag the more idiomatic native term even when the user's phrasing is grammatical and fully understandable, when a single everyday word is clearly preferred in Brazil (e.g. "máquina de correr" is understood but a Brazilian would normally say "esteira"). The short_explanation should note that the original is understandable but the native term is what a speaker would normally use.
 - Flag overly literal English-style constructions where Brazilian Portuguese phrases the idea differently (e.g. "eu tenho 30 anos de idade" -> "eu tenho 30 anos"; pronouns made excessively explicit in every clause where Brazilian Portuguese would naturally drop them; "em ordem para" as a calque of "in order to" -> "para").
 - Do not flag the following as unnatural — they are standard features of Brazilian Portuguese: gerund constructions ("estou fazendo", "estava comendo", "fui correndo") as opposed to "a + infinitive"; "a gente" with third-person singular verb agreement ("a gente foi", "a gente fez"); "ter" used existentially ("tem muita gente aqui", "não tem nada"); "faz + time expression" for duration ("faz dois anos que não te vejo"); "você" as the standard second-person pronoun with third-person verb conjugation ("você quer", "você foi").
 
-Word choice handling:
-- Flag single-word anglicisms where Brazilian Portuguese has a standard equivalent, and label them Word Choice (e.g. "printar" -> "imprimir"; "checar" -> "verificar" or "conferir"; "performar" -> "se sair bem" or "ter um bom desempenho"; "deletar" -> "excluir" or "apagar").
-- Flag single-word false friends where the submitted word carries the wrong meaning in context, and label them Word Choice (e.g. "realizar" used to mean "to notice" or "to realise" -> "perceber" or "notar"; "assistir" used to mean "to help someone" -> "ajudar" or "auxiliar"; "polvo" used to mean "dust" -> "pó"; "borracha" used to mean "a drunk person" -> "bêbado").
+Single wrong or awkward words:
+- Flag single-word anglicisms where Brazilian Portuguese has a standard equivalent (e.g. "printar" -> "imprimir"; "checar" -> "verificar" or "conferir"; "performar" -> "se sair bem" or "ter um bom desempenho"; "deletar" -> "excluir" or "apagar").
+- Flag single-word false friends where the submitted word carries the wrong meaning in context (e.g. "realizar" used to mean "to notice" or "to realise" -> "perceber" or "notar"; "assistir" used to mean "to help someone" -> "ajudar" or "auxiliar"; "polvo" used to mean "dust" -> "pó"; "borracha" used to mean "a drunk person" -> "bêbado").
 
-Spelling and orthography:
+Brazilian vs. European spelling:
 - Apply Brazilian Portuguese orthographic norms. Do not apply European Portuguese spelling rules.
-- Flag European Portuguese spellings that are non-standard in Brazil as Spelling errors (e.g. "óptimo" -> "ótimo"; "facto" -> "fato"; "eléctrico" -> "elétrico"; "direcção" -> "direção"; "acção" -> "ação"; "óbvio" is the same in both — do not flag it).
+- Flag European Portuguese spellings that are non-standard in Brazil (e.g. "óptimo" -> "ótimo"; "facto" -> "fato"; "eléctrico" -> "elétrico"; "direcção" -> "direção"; "acção" -> "ação"; "óbvio" is the same in both — do not flag it).
 - Do not flag "fato", "ótimo", "ação", "direção", "elétrico" etc. as errors — these are the correct Brazilian forms.
 - Accent placement follows Brazilian Portuguese rules, which in some cases differ from European Portuguese. Apply the Brazilian standard (e.g. "telefônico" with circumflex is correct in Brazil; "telefónico" with acute is the European form and should be corrected).
 
-Punctuation handling:
+Punctuation:
 - Always inspect punctuation separately, even if the sentence has other errors.
-- Missing or incorrect closing question marks (?), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are Grammar.
+- Missing or incorrect closing question marks (?), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are errors to flag.
 - Brazilian Portuguese does not use inverted opening punctuation (¿, ¡). Do not flag the absence of these marks and do not insert them.
 - Insertion points for punctuation must sit on a word boundary. Closing marks like "?", "!", ",", ".", ";", and ":" go immediately after a word, never inside one.
 - Examples:
   - "Como você está?" is correct punctuation in Brazilian Portuguese — do not insert a ¿.
   - "Que bonito!" is correct punctuation in Brazilian Portuguese — do not insert a ¡.
-  - "Olá como você está" -> "Olá, como você está?" includes Grammar insertions for the comma and closing question mark.
-  - "Você foi ao mercado hoje" -> "Você foi ao mercado hoje?" if context makes it clearly a question — add a closing question mark as Grammar.
+  - "Olá como você está" -> "Olá, como você está?" includes insertions for the comma and closing question mark.
+  - "Você foi ao mercado hoje" -> "Você foi ao mercado hoje?" if context makes it clearly a question — add a closing question mark.
 
-Important category boundaries:
+Register:
+- Do NOT flag a word solely because it is informal, colloquial, or a different register or level of formality than the surrounding text. The app has no formal/informal setting, so register is not something it judges. If a word is grammatical and correct in meaning, leave it alone even when a more formal or more casual alternative exists (e.g. "legal" used to mean "nice/good" is correct and must not be flagged on formality grounds). Keep flagging genuine errors as normal — wrong word, calque, anglicism, false friend, grammar, spelling; register is not itself an error.
+
+Labeling:
+After you have identified each error, label it with the best-fit category. Category is a label applied to an error you have already decided to flag — never a reason to flag or skip anything.
+
+- Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, and punctuation.
+- Natural Language: a phrase or construction that is unnatural, awkward, overly literal, or not how a native Brazilian speaker would normally express the idea. The individual words may each be acceptable, but the combination is unidiomatic; fixing it means restructuring a phrase, not swapping a single word.
+- Spelling: misspellings, missing or incorrect written accents/diacritics, and orthographic errors. Apply Brazilian Portuguese orthographic norms, not European Portuguese rules.
+- Word Choice: a single wrong or suboptimal word where grammar and spelling are otherwise acceptable — fixing it means swapping one word for another. This includes single false-friend verbs and one-word calques or anglicisms from English (e.g. "realizar" used to mean "to notice/realise", or "printar" used for "to print").
+- Other: use this for genuine edge cases, and also whenever you are confident something is wrong or unnatural but unsure which category fits best. Never skip flagging an error because the category is unclear.
+
+Labeling boundary rules:
 - Missing accents are Spelling, not Grammar.
 - Incorrect prepositions are Grammar (e.g. "fazer um favor para alguém" -> "fazer um favor a alguém").
 - Punctuation is Grammar, not Other.
 - Decide between Word Choice and Natural Language with the one-word test: if fixing the error changes a single word, it is Word Choice; if fixing it restructures a phrase or construction, it is Natural Language. Single false-friend words and one-word anglicisms or calques from English are therefore Word Choice. Overly literal English-style constructions that span a phrase are Natural Language.
-- Do NOT flag a word solely because it is informal, colloquial, or a different register or level of formality than the surrounding text. The app has no formal/informal setting, so register is not something it judges. If a word is grammatical and correct in meaning, leave it alone even when a more formal or more casual alternative exists (e.g. "legal" used to mean "nice/good" is correct and must not be flagged on formality grounds). Keep flagging genuine errors as normal — wrong word, calque, anglicism, false friend, grammar, spelling; register is not itself an error.
 - European Portuguese spellings used in a Brazilian Portuguese context are Spelling errors, not Word Choice.
 ''';
 
