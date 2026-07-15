@@ -115,13 +115,12 @@ $correctionResponseJsonShape
 Rules:
 - Preserve the user's original text in original_text.
 - corrected_text must contain a polished corrected version of the whole text.
-- Each correction must identify the text being corrected with start_index, end_index, and original_phrase.
-- original_phrase must be the exact substring of the submitted text between start_index and end_index, copied character-for-character including accents, ñ, and Spanish punctuation.
-- For zero-length insertion ranges, original_phrase must be an empty string.
-- Before returning each correction, verify that original_phrase matches the slice your indexes point to; if it does not, fix the indexes so they do. The app rejects any correction where they disagree.
+- Each correction must identify the text being corrected with start_index and original_phrase.
+- original_phrase must be the exact substring of the submitted text starting at start_index, copied character-for-character including accents, ñ, and Spanish punctuation.
+- For an inserted phrase (no existing text is being replaced), original_phrase must be an empty string.
+- Before returning each correction, verify that original_phrase matches the submitted text starting at start_index; if it does not, fix start_index so it does. The app rejects any correction where they disagree.
 - start_index is zero-based and inclusive.
-- end_index is zero-based and exclusive.
-- For missing punctuation or any other inserted text, use an empty range where start_index equals end_index at the insertion point.
+- For missing punctuation or any other inserted text, set start_index to the insertion point and leave original_phrase empty.
 - Insertion points must fall on a word boundary (start of text, end of text, or next to whitespace or punctuation). Never insert in the middle of a word.
 - Do not replace a neighboring character just to add missing punctuation.
 - Indexes must refer only to the submitted Spanish text, not the instruction text or labels.
@@ -157,8 +156,8 @@ Punctuation:
 - Missing or incorrect Spanish opening question marks (¿), closing question marks (?), opening exclamation marks (¡), closing exclamation marks (!), commas, periods, colons, semicolons, or quotation marks are errors to flag.
 - Insertion points for punctuation must sit on a word boundary. Opening marks like "¿" and "¡" go before a word; closing marks like "?", "!", ",", ".", ";", and ":" go immediately after a word, never inside one.
 - Examples:
-  - "Como estas?" -> "¿Cómo estás?" includes an insertion of "¿" at start_index 0, end_index 0, original_phrase "" plus fixes for missing accents.
-  - "Que bonito!" -> "¡Qué bonito!" includes an insertion of "¡" at start_index 0, end_index 0, original_phrase "" plus a fix for a missing accent.
+  - "Como estas?" -> "¿Cómo estás?" includes an insertion of "¿" at start_index 0, original_phrase "" plus fixes for missing accents.
+  - "Que bonito!" -> "¡Qué bonito!" includes an insertion of "¡" at start_index 0, original_phrase "" plus a fix for a missing accent.
   - "Hola como estas" -> "Hola, ¿cómo estás?" includes insertions for comma/question punctuation plus fixes for missing accents.
 
 Register:
@@ -358,13 +357,12 @@ $correctionResponseJsonShape
 Rules:
 - Preserve the user's original text in original_text.
 - corrected_text must contain a polished corrected version of the whole text.
-- Each correction must identify the text being corrected with start_index, end_index, and original_phrase.
-- original_phrase must be the exact substring of the submitted text between start_index and end_index, copied character-for-character including accents and diacritics.
-- For zero-length insertion ranges, original_phrase must be an empty string.
-- Before returning each correction, verify that original_phrase matches the slice your indexes point to; if it does not, fix the indexes so they do. The app rejects any correction where they disagree.
+- Each correction must identify the text being corrected with start_index and original_phrase.
+- original_phrase must be the exact substring of the submitted text starting at start_index, copied character-for-character including accents and diacritics.
+- For an inserted phrase (no existing text is being replaced), original_phrase must be an empty string.
+- Before returning each correction, verify that original_phrase matches the submitted text starting at start_index; if it does not, fix start_index so it does. The app rejects any correction where they disagree.
 - start_index is zero-based and inclusive.
-- end_index is zero-based and exclusive.
-- For missing punctuation or any other inserted text, use an empty range where start_index equals end_index at the insertion point.
+- For missing punctuation or any other inserted text, set start_index to the insertion point and leave original_phrase empty.
 - Insertion points must fall on a word boundary (start of text, end of text, or next to whitespace or punctuation). Never insert in the middle of a word.
 - Do not replace a neighboring character just to add missing punctuation.
 - Indexes must refer only to the submitted Brazilian Portuguese text, not the instruction text or labels.

@@ -86,15 +86,13 @@ class CorrectionItem {
     }
 
     final modelStartIndex = json['start_index'];
-    final modelEndIndex = json['end_index'];
-    if (modelStartIndex is! int || modelEndIndex is! int) {
+    if (modelStartIndex is! int) {
       return null;
     }
 
     final anchored = _anchorRange(
       submittedText: submittedText,
       modelStartIndex: modelStartIndex,
-      modelEndIndex: modelEndIndex,
       echoedOriginalPhrase: echoedOriginalPhrase,
     );
     if (anchored == null) {
@@ -137,15 +135,15 @@ class CorrectionItem {
   static _Range? _anchorRange({
     required String submittedText,
     required int modelStartIndex,
-    required int modelEndIndex,
     required String echoedOriginalPhrase,
   }) {
     final graphemes = submittedText.characters.toList();
     final phraseGraphemes = echoedOriginalPhrase.characters.toList();
 
-    if (modelStartIndex >= 0 &&
-        modelEndIndex >= modelStartIndex &&
-        modelEndIndex <= graphemes.length) {
+    // end_index is no longer supplied by the model — it is always derived
+    // from start_index + the length of the (already-validated) phrase.
+    final modelEndIndex = modelStartIndex + phraseGraphemes.length;
+    if (modelStartIndex >= 0 && modelEndIndex <= graphemes.length) {
       final slice = graphemes
           .sublist(modelStartIndex, modelEndIndex)
           .join();

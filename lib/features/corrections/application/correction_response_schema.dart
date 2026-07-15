@@ -18,7 +18,6 @@ const correctionResponseJsonSchema = <String, Object?>{
         'additionalProperties': false,
         'required': [
           'start_index',
-          'end_index',
           'corrected_start_index',
           'corrected_end_index',
           'original_phrase',
@@ -30,12 +29,7 @@ const correctionResponseJsonSchema = <String, Object?>{
           'start_index': {
             'type': 'integer',
             'description':
-                'Zero-based inclusive start index in user-perceived characters. For insertions, this is the insertion point.',
-          },
-          'end_index': {
-            'type': 'integer',
-            'description':
-                'Zero-based exclusive end index in user-perceived characters. For insertions, this must equal start_index.',
+                'Zero-based inclusive start index in user-perceived characters, marking where original_phrase begins in the submitted text. For insertions, this is the insertion point.',
           },
           'corrected_start_index': {
             'type': 'integer',
@@ -50,12 +44,12 @@ const correctionResponseJsonSchema = <String, Object?>{
           'original_phrase': {
             'type': 'string',
             'description':
-                'The exact substring of the submitted text between start_index and end_index. Empty string for zero-length insertion ranges. Must match the indexed slice exactly so the app can verify the range.',
+                'The exact substring of the submitted text starting at start_index. Empty string for an inserted phrase. Must match the text at that position exactly so the app can verify the index.',
           },
           'corrected_phrase': {
             'type': 'string',
             'description':
-                'The replacement phrase for the indexed text range, or inserted text for a zero-length range.',
+                'The replacement phrase for original_phrase, or inserted text when original_phrase is empty.',
           },
           'category': {
             'type': 'string',
@@ -85,7 +79,6 @@ const correctionResponseJsonShape = '''
   "corrections": [
     {
       "start_index": 0,
-      "end_index": 0,
       "corrected_start_index": 0,
       "corrected_end_index": 0,
       "original_phrase": "string",
@@ -98,11 +91,10 @@ const correctionResponseJsonShape = '''
 ''';
 
 const correctionResponseIndexingRules = [
-  'start_index is zero-based and inclusive.',
-  'end_index is zero-based and exclusive.',
-  'For insertions, start_index and end_index are the same cursor position.',
+  'start_index is zero-based and inclusive, marking where original_phrase begins in the submitted text.',
+  'For an inserted phrase, start_index is the insertion point and original_phrase is empty.',
   'Indexes are measured in user-perceived characters, not bytes.',
-  'original_phrase must equal the exact substring of the submitted text between start_index and end_index, character-for-character.',
-  'For zero-length insertion ranges, original_phrase must be an empty string.',
-  'The app rejects any correction whose original_phrase does not match the indexed slice, so use this field to verify your own indexes before responding.',
+  'original_phrase must equal the exact substring of the submitted text starting at start_index, character-for-character.',
+  'For an inserted phrase, original_phrase must be an empty string.',
+  'The app rejects any correction whose original_phrase does not match the text at start_index, so use this field to verify your own index before responding.',
 ];

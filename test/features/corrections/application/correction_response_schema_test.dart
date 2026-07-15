@@ -10,24 +10,28 @@ void main() {
     final required = item['required'] as List<Object?>;
     final itemProperties = item['properties'] as Map<String, Object?>;
 
-    expect(
-      required,
-      containsAll(['start_index', 'end_index', 'original_phrase']),
-    );
+    expect(required, containsAll(['start_index', 'original_phrase']));
+    expect(required, isNot(contains('end_index')));
     expect(itemProperties, containsPair('start_index', isA<Map>()));
-    expect(itemProperties, containsPair('end_index', isA<Map>()));
+    expect(itemProperties, isNot(containsPair('end_index', anything)));
     expect(itemProperties, containsPair('original_phrase', isA<Map>()));
     expect(
       correctionResponseIndexingRules,
       contains(
-        'For insertions, start_index and end_index are the same cursor position.',
+        'For an inserted phrase, start_index is the insertion point and original_phrase is empty.',
       ),
     );
     expect(
       correctionResponseIndexingRules,
       contains(
-        'original_phrase must equal the exact substring of the submitted text between start_index and end_index, character-for-character.',
+        'original_phrase must equal the exact substring of the submitted text starting at start_index, character-for-character.',
       ),
+    );
+    expect(
+      correctionResponseIndexingRules.any(
+        (rule) => rule.contains('end_index'),
+      ),
+      isFalse,
     );
   });
 

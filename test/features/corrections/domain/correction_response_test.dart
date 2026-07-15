@@ -117,6 +117,68 @@ void main() {
     expect(response.corrections.single.endIndex, 11);
   });
 
+  test(
+    'anchored parsing derives endIndex from start_index + phrase length '
+    'when end_index is absent from the model JSON',
+    () {
+      // end_index is no longer part of the schema the model is sent — this
+      // confirms anchoring still works correctly using only start_index.
+      final response = CorrectionResponse.fromAnchoredJson(
+        {
+          'original_text': 'Cómo estás? Qué tal?',
+          'corrected_text': '¿Cómo estás? Qué tal?',
+          'corrections': [
+            {
+              'start_index': 0,
+              'original_phrase': 'Cómo estás?',
+              'corrected_phrase': '¿Cómo estás?',
+              'category': 'Grammar',
+              'short_explanation': 'Spanish questions need an opening mark.',
+            },
+          ],
+        },
+        submittedText: 'Cómo estás? Qué tal?',
+        allowLegacyCategories: false,
+      );
+
+      expect(response.corrections.single.originalPhrase, 'Cómo estás?');
+      expect(response.corrections.single.startIndex, 0);
+      expect(response.corrections.single.endIndex, 11);
+    },
+  );
+
+  test(
+    'anchored parsing ignores a stray end_index value in the model JSON, '
+    'since it is no longer read',
+    () {
+      // Even if a client/model sent a wrong or stale end_index, it must have
+      // zero effect: endIndex is always derived from start_index + phrase
+      // length, never from the model's end_index value.
+      final response = CorrectionResponse.fromAnchoredJson(
+        {
+          'original_text': 'Cómo estás? Qué tal?',
+          'corrected_text': '¿Cómo estás? Qué tal?',
+          'corrections': [
+            {
+              'start_index': 0,
+              'end_index': 999,
+              'original_phrase': 'Cómo estás?',
+              'corrected_phrase': '¿Cómo estás?',
+              'category': 'Grammar',
+              'short_explanation': 'Spanish questions need an opening mark.',
+            },
+          ],
+        },
+        submittedText: 'Cómo estás? Qué tal?',
+        allowLegacyCategories: false,
+      );
+
+      expect(response.corrections.single.originalPhrase, 'Cómo estás?');
+      expect(response.corrections.single.startIndex, 0);
+      expect(response.corrections.single.endIndex, 11);
+    },
+  );
+
   test('anchored parsing reconstructs corrected text from anchored edits', () {
     final response = CorrectionResponse.fromAnchoredJson(
       {

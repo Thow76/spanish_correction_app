@@ -1,6 +1,7 @@
 import 'package:characters/characters.dart';
 
 import 'correction_item.dart';
+import 'correction_overlap_resolver.dart';
 
 class CorrectionResponse {
   const CorrectionResponse({
@@ -42,7 +43,7 @@ class CorrectionResponse {
     bool allowLegacyCategories = true,
   }) {
     final rawCorrections = json['corrections'];
-    final parsedCorrections = rawCorrections is List
+    final anchoredCorrections = rawCorrections is List
         ? rawCorrections
               .whereType<Map<String, Object?>>()
               .map(
@@ -55,6 +56,14 @@ class CorrectionResponse {
               .whereType<CorrectionItem>()
               .toList()
         : const <CorrectionItem>[];
+    // Duplicate/overlapping corrections (e.g. the model reporting the same
+    // edit twice) must be resolved before corrected_text is built and before
+    // the list is handed out — every downstream position (including the
+    // corrected-side offset arithmetic) assumes each edit's length delta is
+    // counted exactly once.
+    final parsedCorrections = resolveOverlappingCorrections(
+      anchoredCorrections,
+    );
     // corrected_text is always built from the submitted text plus the anchored
     // corrections, never taken from the model's own corrected_text — this is
     // the sole source of truth so the corrected-side text can never diverge
