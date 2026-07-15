@@ -114,7 +114,6 @@ $correctionResponseJsonShape
 
 Rules:
 - Preserve the user's original text in original_text.
-- corrected_text must contain a polished corrected version of the whole text.
 - Each correction must identify the text being corrected with start_index and original_phrase.
 - original_phrase must be the exact substring of the submitted text starting at start_index, copied character-for-character including accents, ñ, and Spanish punctuation.
 - For an inserted phrase (no existing text is being replaced), original_phrase must be an empty string.
@@ -126,13 +125,9 @@ Rules:
 - Indexes must refer only to the submitted Spanish text, not the instruction text or labels.
 - Indexes are measured in user-perceived characters, not bytes.
 - Accented letters, ñ, inverted punctuation, emoji, and combining-accent sequences each count as one user-perceived character.
-- For each correction also return corrected_start_index and corrected_end_index: the zero-based start (inclusive) and end (exclusive) index of corrected_phrase within the corrected_text you yourself return, measured in user-perceived characters (an accented letter, ñ, or inverted punctuation each count as one).
-- The slice of corrected_text from corrected_start_index to corrected_end_index must equal corrected_phrase exactly, character for character.
-- Before responding, verify that slice by counting characters in the corrected_text you return; if it does not match, fix corrected_start_index and corrected_end_index so it does.
-- For deletions where corrected_phrase is empty, set corrected_start_index equal to corrected_end_index at the deletion point in corrected_text.
 - category must be exactly one of: Grammar, Natural Language, Spelling, Word Choice, Other.
 - short_explanation must be one informal but technically accurate sentence.
-- If there are no corrections, return an empty corrections array and keep corrected_text equal to original_text.
+- If there are no corrections, return an empty corrections array.
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
 - Do not create Spelling corrections for accents or Spanish characters that are already present in the submitted text.
 
@@ -356,7 +351,6 @@ $correctionResponseJsonShape
 
 Rules:
 - Preserve the user's original text in original_text.
-- corrected_text must contain a polished corrected version of the whole text.
 - Each correction must identify the text being corrected with start_index and original_phrase.
 - original_phrase must be the exact substring of the submitted text starting at start_index, copied character-for-character including accents and diacritics.
 - For an inserted phrase (no existing text is being replaced), original_phrase must be an empty string.
@@ -368,13 +362,9 @@ Rules:
 - Indexes must refer only to the submitted Brazilian Portuguese text, not the instruction text or labels.
 - Indexes are measured in user-perceived characters, not bytes.
 - Accented letters, special characters, emoji, and combining-accent sequences each count as one user-perceived character.
-- For each correction also return corrected_start_index and corrected_end_index: the zero-based start (inclusive) and end (exclusive) index of corrected_phrase within the corrected_text you yourself return, measured in user-perceived characters (an accented letter or special character each count as one).
-- The slice of corrected_text from corrected_start_index to corrected_end_index must equal corrected_phrase exactly, character for character.
-- Before responding, verify that slice by counting characters in the corrected_text you return; if it does not match, fix corrected_start_index and corrected_end_index so it does.
-- For deletions where corrected_phrase is empty, set corrected_start_index equal to corrected_end_index at the deletion point in corrected_text.
 - category must be exactly one of: Grammar, Natural Language, Spelling, Word Choice, Other.
 - short_explanation must be one informal but technically accurate sentence.
-- If there are no corrections, return an empty corrections array and keep corrected_text equal to original_text.
+- If there are no corrections, return an empty corrections array.
 - Do not include Markdown, code fences, commentary, or keys outside the requested JSON.
 - Do not create Spelling corrections for accents or characters that are already correct per Brazilian Portuguese orthography.
 

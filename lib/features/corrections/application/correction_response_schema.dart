@@ -1,15 +1,11 @@
 const correctionResponseJsonSchema = <String, Object?>{
   'type': 'object',
   'additionalProperties': false,
-  'required': ['original_text', 'corrected_text', 'corrections'],
+  'required': ['original_text', 'corrections'],
   'properties': {
     'original_text': {
       'type': 'string',
       'description': 'The submitted text copied exactly as received.',
-    },
-    'corrected_text': {
-      'type': 'string',
-      'description': 'A polished corrected version of the whole text.',
     },
     'corrections': {
       'type': 'array',
@@ -18,8 +14,6 @@ const correctionResponseJsonSchema = <String, Object?>{
         'additionalProperties': false,
         'required': [
           'start_index',
-          'corrected_start_index',
-          'corrected_end_index',
           'original_phrase',
           'corrected_phrase',
           'category',
@@ -30,16 +24,6 @@ const correctionResponseJsonSchema = <String, Object?>{
             'type': 'integer',
             'description':
                 'Zero-based inclusive start index in user-perceived characters, marking where original_phrase begins in the submitted text. For insertions, this is the insertion point.',
-          },
-          'corrected_start_index': {
-            'type': 'integer',
-            'description':
-                'Zero-based inclusive index of corrected_phrase in the corrected_text string you return, in user-perceived characters. For deletions, this must equal corrected_end_index.',
-          },
-          'corrected_end_index': {
-            'type': 'integer',
-            'description':
-                'Zero-based exclusive index of corrected_phrase in the corrected_text string you return, in user-perceived characters. The slice of corrected_text between corrected_start_index and corrected_end_index must equal corrected_phrase exactly.',
           },
           'original_phrase': {
             'type': 'string',
@@ -75,12 +59,9 @@ const correctionResponseJsonSchema = <String, Object?>{
 const correctionResponseJsonShape = '''
 {
   "original_text": "string",
-  "corrected_text": "string",
   "corrections": [
     {
       "start_index": 0,
-      "corrected_start_index": 0,
-      "corrected_end_index": 0,
       "original_phrase": "string",
       "corrected_phrase": "string",
       "category": "string",

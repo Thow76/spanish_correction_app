@@ -528,4 +528,64 @@ void main() {
 
     expect(response.corrections, isEmpty);
   });
+
+  test(
+    'anchored parsing does not crash on a response shaped like the reduced '
+    'schema — no corrected_text, corrected_start_index, or '
+    'corrected_end_index anywhere in the JSON',
+    () {
+      // Shaped exactly like what correctionResponseJsonSchema now produces:
+      // no top-level corrected_text, and no per-item corrected_start_index/
+      // corrected_end_index. fromAnchoredJson must not throw and must still
+      // build a correct, code-reconstructed correctedText.
+      final response = CorrectionResponse.fromAnchoredJson(
+        {
+          'original_text': 'Como estas? Que tal?',
+          'corrections': [
+            {
+              'start_index': 0,
+              'original_phrase': 'Como estas?',
+              'corrected_phrase': '¿Cómo estás?',
+              'category': 'Grammar',
+              'short_explanation': 'Spanish questions need an opening mark.',
+            },
+          ],
+        },
+        submittedText: 'Como estas? Que tal?',
+        allowLegacyCategories: false,
+      );
+
+      expect(response.originalText, 'Como estas? Que tal?');
+      expect(response.correctedText, '¿Cómo estás? Que tal?');
+      expect(response.corrections.single.originalPhrase, 'Como estas?');
+      expect(response.corrections.single.correctedPhrase, '¿Cómo estás?');
+      expect(response.corrections.single.correctedStartIndex, isNull);
+      expect(response.corrections.single.correctedEndIndex, isNull);
+    },
+  );
+
+  test(
+    'anchored parsing does not crash on a completely empty JSON object '
+    '(no keys at all)',
+    () {
+      expect(
+        () => CorrectionResponse.fromAnchoredJson(
+          const {},
+          submittedText: 'Cómo estás?',
+          allowLegacyCategories: false,
+        ),
+        returnsNormally,
+      );
+
+      final response = CorrectionResponse.fromAnchoredJson(
+        const {},
+        submittedText: 'Cómo estás?',
+        allowLegacyCategories: false,
+      );
+
+      expect(response.originalText, 'Cómo estás?');
+      expect(response.correctedText, 'Cómo estás?');
+      expect(response.corrections, isEmpty);
+    },
+  );
 }
