@@ -2,7 +2,7 @@ import 'package:characters/characters.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 
-/// Regression guard for Bug 1 — reopened as a known, tracked interim gap.
+/// Regression guard for Bug 1 — now permanently closed by construction.
 ///
 /// History: the corrected-side highlight range
 /// (`correctedStartIndex`/`correctedEndIndex`) used to be computed arithmetically
@@ -11,33 +11,27 @@ import 'package:spanish_correction_app/features/corrections/domain/correction_re
 /// text when `_shouldUseModelCorrectedText` was true. When the two diverged the
 /// stored range no longer pointed at the corrected phrase in the rendered text.
 ///
-/// The original fix: the model reported `corrected_start_index`/`corrected_end_index`
-/// as positions into its OWN corrected_text, parsing populated them directly, and
-/// the arithmetic path was removed — so the stored range and the rendered text
-/// shared a single source and could not decouple.
+/// An interim fix made the model report `corrected_start_index`/`corrected_end_index`
+/// as positions into its OWN corrected_text, which avoided the divergence as long
+/// as the model's corrected_text was what got rendered. That created a *different*
+/// gap when step 1 of the mechanical-work migration made `corrected_text` always
+/// the code-reconstructed text: the model's reported corrected indices (positions
+/// in its own, no-longer-rendered corrected_text) could once again miss the
+/// rendered text.
 ///
-/// Reopened by the mechanical-work migration (step 1): `corrected_text` is now
-/// always reconstructed in code from the itemised corrections and never taken
-/// from the model's own `corrected_text`. `corrected_start_index`/`corrected_end_index`
-/// are still parsed as-is from the model's JSON — positions into the model's OWN
-/// corrected_text — so the two can diverge again whenever the model's freeform
-/// corrected_text differs from the code-reconstructed one.
-///
-/// This is an accepted interim gap, not a silent-wrong-highlight bug: the
-/// corrected panel's `requireExactRange: true` guard (see
-/// `correction_highlight_spans.dart`) drops any highlight whose stored range
-/// doesn't slice out the exact corrected phrase, rather than rendering it at
-/// the wrong spot. The gap will close when corrected-side anchoring (mirroring
-/// `_anchorRange`/`_findGraphemeMatches`) is built and wired in, per the
-/// prompt-schema migration plan.
+/// The permanent fix (step 9): `corrected_start_index`/`corrected_end_index` are no
+/// longer requested from the model at all (dropped from the schema), and
+/// `computeCorrectedRanges` computes them by pure arithmetic directly from the
+/// same anchored corrections and the same code-built `correctedText` — both
+/// derived from a single source (the deduped corrections list against
+/// `submittedText`). There is no longer a second, independent source of truth
+/// that could disagree, so this class of bug cannot recur structurally, not just
+/// "usually" — it doesn't matter what a model claims about corrected_text or
+/// corrected indices; the app never reads them for this purpose.
 ///
 /// These tests feed synthetic anchored JSON through
 /// `CorrectionResponse.fromAnchoredJson` exactly as the live services
-/// (`open_ai_correction_service` / `gemini_correction_service`) do, supplying the
-/// corrected indices the model would report (positions in the corrected text
-/// handed back), then assert the slice at the stored range in the aligned case,
-/// and the safe-drop (no wrong highlight) behavior in the formerly-divergent
-/// case.
+/// (`open_ai_correction_service` / `gemini_correction_service`) do.
 
 const _original =
     'Ayer fui al supermercado para comprar fruta y leche. '
@@ -77,21 +71,20 @@ String _graphemeSlice(String text, int start, int end) {
   return g.sublist(start, end).join();
 }
 
-Map<String, Object?> _anchoredJson({required String correctedText}) {
+/// Builds anchored JSON for the "volví para casa" -> "volví a casa"
+/// correction. [staleModelCorrectedText], [staleCorrectedStartIndex], and
+/// [staleCorrectedEndIndex] simulate a non-conforming or legacy response that
+/// still includes the now-dropped model-reported fields — the app must
+/// ignore all three and compute its own values regardless.
+Map<String, Object?> _anchoredJson({
+  String? staleModelCorrectedText,
+  int? staleCorrectedStartIndex,
+  int? staleCorrectedEndIndex,
+}) {
   final paraStart = _targetParaStart();
-  // The model reports corrected_start_index/corrected_end_index as positions in
-  // its OWN corrected_text. Locate the corrected phrase "a" (from "volví a
-  // casa") inside the corrected text we hand back, exactly as the model would.
-  final correctedClause = _graphemeIndexOf(correctedText, 'volví a casa');
-  expect(
-    correctedClause,
-    isNot(-1),
-    reason: 'corrected clause must exist in the corrected text',
-  );
-  final correctedAStart = correctedClause + 'volví '.characters.length;
   return {
     'original_text': _original,
-    'corrected_text': correctedText,
+    'corrected_text': ?staleModelCorrectedText,
     'corrections': [
       {
         'original_phrase': 'para',
@@ -99,150 +92,116 @@ Map<String, Object?> _anchoredJson({required String correctedText}) {
         'category': 'Grammar',
         'short_explanation': 'Use "a" with verbs of movement: volví a casa.',
         'start_index': paraStart,
-        'end_index': paraStart + 'para'.characters.length,
-        'corrected_start_index': correctedAStart,
-        'corrected_end_index': correctedAStart + 'a'.characters.length,
+        'corrected_start_index': ?staleCorrectedStartIndex,
+        'corrected_end_index': ?staleCorrectedEndIndex,
       },
     ],
   };
 }
 
 void main() {
-  // The reconstructed corrected text: the original with ONLY the reported
-  // correction (volví para casa -> volví a casa) spliced in. This is exactly
-  // what `_reconstructCorrectedText` produces — used here as the aligned
-  // control where the model text equals the reconstruction.
+  // The code-reconstructed corrected text: the original with ONLY the
+  // reported correction (volví para casa -> volví a casa) spliced in. This is
+  // exactly what `_reconstructCorrectedText` produces, and it is always what
+  // `response.correctedText` equals now, regardless of any model input.
   final reconstructed = _original.replaceAll(
     'volví para casa',
     'volví a casa',
   );
 
-  test('ALIGNED control — model text == reconstruction', () {
-    final response = CorrectionResponse.fromAnchoredJson(
-      _anchoredJson(correctedText: reconstructed),
-      submittedText: _original,
-    );
+  test(
+    'corrected-side range is computed correctly against the code-built '
+    'corrected text (no model input for it at all)',
+    () {
+      final response = CorrectionResponse.fromAnchoredJson(
+        _anchoredJson(),
+        submittedText: _original,
+      );
 
-    expect(response.corrections, hasLength(1));
-    final item = response.corrections.single;
-    final cs = item.correctedStartIndex;
-    final ce = item.correctedEndIndex;
+      expect(response.correctedText, reconstructed);
+      expect(response.corrections, hasLength(1));
 
-    final renderedIsModel = response.correctedText == reconstructed;
-    final slice = (cs != null && ce != null)
-        ? _graphemeSlice(response.correctedText, cs, ce)
-        : '<null range>';
+      final item = response.corrections.single;
+      expect(item.correctedStartIndex, isNotNull);
+      expect(item.correctedEndIndex, isNotNull);
 
-    // ignore: avoid_print
-    print('--- ALIGNED CONTROL ---');
-    // ignore: avoid_print
-    print('correctedStartIndex/End : $cs..$ce');
-    // ignore: avoid_print
-    print('rendered corrected text : ${response.correctedText}');
-    // ignore: avoid_print
-    print('renders model/recon text: '
-        '${renderedIsModel ? "model==recon" : "reconstructed"}');
-    // ignore: avoid_print
-    print('slice at stored range   : "$slice"  (expected "a")');
-
-    expect(cs, isNotNull, reason: 'corrected range should be populated');
-    expect(ce, isNotNull);
-    expect(
-      slice,
-      'a',
-      reason: 'with no divergence the stored range must point at the '
-          'corrected phrase',
-    );
-  });
+      final slice = _graphemeSlice(
+        response.correctedText,
+        item.correctedStartIndex!,
+        item.correctedEndIndex!,
+      );
+      expect(
+        slice,
+        'a',
+        reason:
+            'the computed range must point at the corrected phrase in the '
+            'code-built corrected text',
+      );
+    },
+  );
 
   test(
-    'REOPENED GAP — model silently also fixed an earlier phrase; '
-    'stored corrected range no longer lands on the rendered text, '
-    'but is safely dropped rather than mis-highlighted',
+    'a stale/divergent corrected_text, corrected_start_index, and '
+    'corrected_end_index in the JSON have zero effect — the app computes '
+    'its own consistent values regardless',
     () {
-      // Realistic divergence: the model returns a corrected_text that ALSO
-      // tidied up the earlier "para comprar" -> "a comprar" WITHOUT itemising it
-      // in the corrections list (LLMs routinely fix more than they report). The
-      // reported correction is still only "volví para casa" -> "volví a casa".
-      //
-      // Everything after "...supermercado a comprar..." shifts left by 3 graphemes
-      // in the MODEL text. Since step 1 of the mechanical-work migration,
-      // response.correctedText is always the code-reconstructed text (built only
-      // from itemised corrections), never the model's own corrected_text — so
-      // this un-itemised model fix never makes it into the rendered text at all.
-      final modelText = reconstructed.replaceAll(
+      // Simulates exactly the scenario that used to reopen this bug: a model
+      // response whose corrected_text silently also fixed an earlier phrase
+      // ("para comprar" -> "a comprar") without itemising it, plus
+      // corrected_start_index/corrected_end_index pointing at "a" inside
+      // THAT (divergent) corrected_text. None of these fields exist in the
+      // schema anymore, but nothing stops a non-conforming response from
+      // including them — the app must not be fooled by them.
+      final staleModelText = reconstructed.replaceAll(
         'supermercado para comprar',
         'supermercado a comprar',
       );
       expect(
-        modelText,
+        staleModelText,
         isNot(reconstructed),
-        reason: 'divergent model text must differ from reconstruction',
+        reason: 'stale model text must differ from the reconstruction',
       );
+      // Position of "a" (from "volví a casa") inside the STALE model text —
+      // shifted 3 graphemes left of where it sits in the real reconstruction,
+      // because of the un-itemised fix baked into staleModelText.
+      final staleClause = _graphemeIndexOf(staleModelText, 'volví a casa');
+      expect(staleClause, isNot(-1));
+      final staleAStart = staleClause + 'volví '.characters.length;
 
       final response = CorrectionResponse.fromAnchoredJson(
-        _anchoredJson(correctedText: modelText),
+        _anchoredJson(
+          staleModelCorrectedText: staleModelText,
+          staleCorrectedStartIndex: staleAStart,
+          staleCorrectedEndIndex: staleAStart + 'a'.characters.length,
+        ),
         submittedText: _original,
       );
 
+      // corrected_text is always the code reconstruction, never the stale
+      // model value, and never influenced by it.
+      expect(response.correctedText, reconstructed);
+      expect(response.correctedText, isNot(staleModelText));
+
       expect(response.corrections, hasLength(1));
       final item = response.corrections.single;
-      final cs = item.correctedStartIndex;
-      final ce = item.correctedEndIndex;
 
-      final rendered = response.correctedText;
-      // corrected_text is now always the reconstruction, never the model's text.
-      final rendersReconstruction = rendered == reconstructed;
-      final slice = (cs != null && ce != null)
-          ? _graphemeSlice(rendered, cs, ce)
-          : '<null range>';
+      // The computed range does NOT equal the stale corrected_start_index
+      // supplied in the JSON — it is computed fresh, ignoring that value.
+      expect(item.correctedStartIndex, isNot(staleAStart));
 
-      // ignore: avoid_print
-      print('--- REOPENED GAP (reconstruction rendered, not model text) ---');
-      // ignore: avoid_print
-      print('correctedStartIndex/End  : $cs..$ce  (positions in the MODEL '
-          'corrected_text, not the rendered one)');
-      // ignore: avoid_print
-      print('rendered corrected text  : $rendered');
-      // ignore: avoid_print
-      print('renders reconstruction?  : $rendersReconstruction');
-      // ignore: avoid_print
-      print('slice at stored range    : "$slice"  (expected to NOT be "a" — '
-          'this is the reopened gap)');
-
-      // corrected_text is now always the code-built reconstruction.
-      expect(
-        rendersReconstruction,
-        isTrue,
-        reason: 'step 1 of the migration makes corrected_text always the '
-            'code-reconstructed text, regardless of the model corrected_text',
+      final slice = _graphemeSlice(
+        response.correctedText,
+        item.correctedStartIndex!,
+        item.correctedEndIndex!,
       );
-
-      // The gap: cs/ce are positions in the model's OWN corrected_text, which is
-      // no longer what gets rendered, so they generally will not slice out the
-      // corrected phrase from the rendered (reconstructed) text.
       expect(
         slice,
-        isNot('a'),
-        reason: 'REOPENED GAP: corrected_start_index/corrected_end_index are '
-            'positions in the model corrected_text, which is no longer rendered, '
-            'so the stored range no longer reliably slices the corrected phrase '
-            'out of response.correctedText',
-      );
-
-      // Not a regression to a *wrong* highlight, though: the corrected panel's
-      // requireExactRange guard (correction_highlight_spans.dart) only accepts a
-      // highlight when the slice at the stored range equals the phrase exactly,
-      // so this mismatch means the highlight is dropped (plain text), never
-      // rendered at the wrong spot. This gap closes once corrected-side
-      // anchoring (mirroring _anchorRange/_findGraphemeMatches) is built and
-      // wired in, per the prompt-schema migration plan.
-      expect(
-        slice != item.correctedPhrase,
-        isTrue,
+        'a',
         reason:
-            'confirms requireExactRange would drop this highlight rather than '
-            'accept a wrong one',
+            'the app computes its own correct range against the real '
+            'reconstruction, regardless of whatever the (now nonexistent) '
+            'model-reported corrected_text/corrected_start_index/'
+            'corrected_end_index fields claimed',
       );
     },
   );

@@ -1,8 +1,8 @@
 # Correction Consistency Harness
 
 Model: `gpt-5.5`  
-Commit: `89042e59261e59713fc977e860563173defdf69c`  
-Generated: 2026-07-15T00:24:40.699055  
+Commit: `dfbf5260565509b8885ca2e97b63e9517508fe89`  
+Generated: 2026-07-15T12:08:42.136466  
 Runs per phrase: 10
 
 ## ES-1-repeated-word
@@ -15,21 +15,21 @@ Runs per phrase: 10
 
 - Target 1 ("para casa"): 100.0% (10/10)
 - Fully caught (all targets in one run): 100.0% (10/10)
-- Span-width distribution: word 6, phrase 12, clause 0
-- Category distribution: Grammar 15, Natural Language 3
+- Span-width distribution: word 6, phrase 7, clause 0
+- Category distribution: Grammar 11, Natural Language 2
 
 ### Run detail
 
-- Run 1: targets caught = [true] · corrections: [Grammar] "a casa" (phrase)
-- Run 2: targets caught = [true] · corrections: [Natural Language] "a comprar" (phrase); [Grammar] "a casa" (phrase)
-- Run 3: targets caught = [true] · corrections: [Grammar] "a" (word); [Grammar] "a casa" (phrase)
-- Run 4: targets caught = [true] · corrections: [Grammar] "a comprar" (phrase); [Grammar] "a casa" (phrase)
-- Run 5: targets caught = [true] · corrections: [Grammar] "a" (word); [Grammar] "a" (word)
+- Run 1: targets caught = [true] · corrections: [Grammar] "a" (word)
+- Run 2: targets caught = [true] · corrections: [Grammar] "a casa" (phrase)
+- Run 3: targets caught = [true] · corrections: [Natural Language] "a comprar" (phrase); [Grammar] "a casa" (phrase)
+- Run 4: targets caught = [true] · corrections: [Grammar] "a casa" (phrase)
+- Run 5: targets caught = [true] · corrections: [Grammar] "a casa" (phrase)
 - Run 6: targets caught = [true] · corrections: [Grammar] "a" (word)
-- Run 7: targets caught = [true] · corrections: [Grammar] "a comprar" (phrase); [Grammar] "a casa" (phrase)
-- Run 8: targets caught = [true] · corrections: [Natural Language] "a comprar" (phrase); [Grammar] "a casa" (phrase)
+- Run 7: targets caught = [true] · corrections: [Grammar] "a casa" (phrase)
+- Run 8: targets caught = [true] · corrections: [Natural Language] "a" (word); [Grammar] "a" (word)
 - Run 9: targets caught = [true] · corrections: [Grammar] "a" (word); [Grammar] "a" (word)
-- Run 10: targets caught = [true] · corrections: [Natural Language] "a comprar" (phrase); [Grammar] "a casa" (phrase)
+- Run 10: targets caught = [true] · corrections: [Grammar] "a casa" (phrase)
 
 ## ES-2-single-char
 
@@ -39,22 +39,22 @@ Runs per phrase: 10
 
 ### Summary (10 runs, 0 error(s))
 
-- Stayed clean: 40.0% (4/10)
-- Span-width distribution: word 3, phrase 5, clause 0
-- Category distribution: Grammar 3, Natural Language 5
+- Stayed clean: 80.0% (8/10)
+- Span-width distribution: word 0, phrase 2, clause 0
+- Category distribution: Natural Language 2
 
 ### Run detail
 
 - Run 1: stayed clean = true · corrections: (no corrections)
-- Run 2: stayed clean = false · corrections: [Natural Language] "termino de trabajar" (phrase)
+- Run 2: stayed clean = true · corrections: (no corrections)
 - Run 3: stayed clean = false · corrections: [Natural Language] "termino de trabajar" (phrase)
 - Run 4: stayed clean = true · corrections: (no corrections)
-- Run 5: stayed clean = false · corrections: [Natural Language] "termino de trabajar" (phrase); [Grammar] "a" (word)
-- Run 6: stayed clean = false · corrections: [Natural Language] "termino de trabajar" (phrase)
-- Run 7: stayed clean = false · corrections: [Grammar] "a" (word)
-- Run 8: stayed clean = false · corrections: [Natural Language] "termino de trabajar" (phrase); [Grammar] "a" (word)
+- Run 5: stayed clean = true · corrections: (no corrections)
+- Run 6: stayed clean = true · corrections: (no corrections)
+- Run 7: stayed clean = true · corrections: (no corrections)
+- Run 8: stayed clean = true · corrections: (no corrections)
 - Run 9: stayed clean = true · corrections: (no corrections)
-- Run 10: stayed clean = true · corrections: (no corrections)
+- Run 10: stayed clean = false · corrections: [Natural Language] "termino de trabajar" (phrase)
 
 ## ES-3-multi-correction
 
@@ -72,16 +72,16 @@ Runs per phrase: 10
 
 ### Run detail
 
-- Run 1: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "volvieron a llamar" (phrase)
-- Run 2: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "volvieron a llamar" (phrase)
+- Run 1: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
+- Run 2: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
 - Run 3: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
-- Run 4: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
+- Run 4: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "volvieron a llamar" (phrase)
 - Run 5: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
 - Run 6: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
 - Run 7: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
 - Run 8: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
 - Run 9: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
-- Run 10: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "devolvieron la llamada" (phrase)
+- Run 10: targets caught = [true, true] · corrections: [Spelling] "tráfico" (word); [Natural Language] "volvieron a llamar" (phrase)
 
 ## ES-4-calque
 
@@ -94,20 +94,20 @@ Runs per phrase: 10
 - Target 1 ("Puedo tener una cerveza"): 100.0% (10/10)
 - Target 2 ("pasar un buen tiempo"): 100.0% (10/10)
 - Fully caught (all targets in one run): 100.0% (10/10)
-- Span-width distribution: word 0, phrase 20, clause 0
+- Span-width distribution: word 0, phrase 19, clause 1
 - Category distribution: Natural Language 20
 
 ### Run detail
 
 - Run 1: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
-- Run 2: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
+- Run 2: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "Quiero pasarlo bien con mis amigos esta noche." (clause)
 - Run 3: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
 - Run 4: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
 - Run 5: targets caught = [true, true] · corrections: [Natural Language] "¿Me trae una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
 - Run 6: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
 - Run 7: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
 - Run 8: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
-- Run 9: targets caught = [true, true] · corrections: [Natural Language] "¿Me trae una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
+- Run 9: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
 - Run 10: targets caught = [true, true] · corrections: [Natural Language] "¿Me pone una cerveza?" (phrase); [Natural Language] "pasarlo bien" (phrase)
 
 ## ES-5-accents
@@ -116,15 +116,15 @@ Runs per phrase: 10
 - Text: `Vivo en Espana desde hace tres anos y mi cumpleanos es en otono.`
 - Note: Four independent accent targets in one phrase — track catch rate per individual word, not just phrase-level.
 
-### Summary (10 runs, 0 error(s))
+### Summary (10 runs, 1 error(s))
 
-- Target 1 ("Espana"): 100.0% (10/10)
-- Target 2 ("anos"): 100.0% (10/10)
-- Target 3 ("cumpleanos"): 100.0% (10/10)
-- Target 4 ("otono"): 100.0% (10/10)
-- Fully caught (all targets in one run): 100.0% (10/10)
-- Span-width distribution: word 40, phrase 0, clause 0
-- Category distribution: Spelling 40
+- Target 1 ("Espana"): 100.0% (9/9)
+- Target 2 ("anos"): 100.0% (9/9)
+- Target 3 ("cumpleanos"): 100.0% (9/9)
+- Target 4 ("otono"): 100.0% (9/9)
+- Fully caught (all targets in one run): 100.0% (9/9)
+- Span-width distribution: word 36, phrase 0, clause 0
+- Category distribution: Spelling 36
 
 ### Run detail
 
@@ -136,7 +136,7 @@ Runs per phrase: 10
 - Run 6: targets caught = [true, true, true, true] · corrections: [Spelling] "España" (word); [Spelling] "años" (word); [Spelling] "cumpleaños" (word); [Spelling] "otoño" (word)
 - Run 7: targets caught = [true, true, true, true] · corrections: [Spelling] "España" (word); [Spelling] "años" (word); [Spelling] "cumpleaños" (word); [Spelling] "otoño" (word)
 - Run 8: targets caught = [true, true, true, true] · corrections: [Spelling] "España" (word); [Spelling] "años" (word); [Spelling] "cumpleaños" (word); [Spelling] "otoño" (word)
-- Run 9: targets caught = [true, true, true, true] · corrections: [Spelling] "España" (word); [Spelling] "años" (word); [Spelling] "cumpleaños" (word); [Spelling] "otoño" (word)
+- Run 9: ERROR — apiFailure: OpenAI correction timed out: TimeoutException after 0:00:30.000000: Future not completed
 - Run 10: targets caught = [true, true, true, true] · corrections: [Spelling] "España" (word); [Spelling] "años" (word); [Spelling] "cumpleaños" (word); [Spelling] "otoño" (word)
 
 ## ES-6-redundant-pronoun
@@ -145,26 +145,26 @@ Runs per phrase: 10
 - Text: `Yo fui a casa, yo estudié, y yo hice la cena.`
 - Note: Spanish is pro-drop; repeating "yo" before every verb is grammatical but unnatural. Expect the 2nd and/or 3rd "yo" dropped (first "yo" typically kept). Category assignment itself may be unstable between Grammar and Natural Language — both accepted.
 
-### Summary (10 runs, 1 error(s))
+### Summary (10 runs, 0 error(s))
 
-- Target 1 ("yo estudié"): 88.9% (8/9)
-- Target 2 ("yo hice la cena"): 55.6% (5/9)
-- Fully caught (all targets in one run): 55.6% (5/9)
-- Span-width distribution: word 4, phrase 16, clause 2
-- Category distribution: Grammar 7, Natural Language 15
+- Target 1 ("yo estudié"): 90.0% (9/10)
+- Target 2 ("yo hice la cena"): 80.0% (8/10)
+- Fully caught (all targets in one run): 80.0% (8/10)
+- Span-width distribution: word 0, phrase 1, clause 9
+- Category distribution: Grammar 1, Natural Language 9
 
 ### Run detail
 
-- Run 1: targets caught = [true, true] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudié" (phrase); [Grammar] "e" (word)
+- Run 1: targets caught = [true, true] · corrections: [Natural Language] "Fui a casa, estudié e hice la cena." (clause)
 - Run 2: targets caught = [true, true] · corrections: [Natural Language] "Fui a casa, estudié e hice la cena." (clause)
-- Run 3: targets caught = [true, false] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] ", estudié" (phrase); [Grammar] " e hice" (phrase)
-- Run 4: targets caught = [true, true] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudié" (phrase); [Grammar] "e" (word); [Natural Language] "hice" (phrase)
-- Run 5: targets caught = [true, false] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudié" (phrase); [Grammar] " e hice" (phrase)
-- Run 6: targets caught = [false, false] · corrections: [Natural Language] "Fui" (phrase); [Grammar] " e" (phrase)
-- Run 7: targets caught = [true, true] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudié" (phrase); [Grammar] "e" (word)
-- Run 8: ERROR — apiFailure: OpenAI correction timed out: TimeoutException after 0:00:30.000000: Future not completed
-- Run 9: targets caught = [true, false] · corrections: [Natural Language] "Fui a casa, estudié e hice" (clause)
-- Run 10: targets caught = [true, true] · corrections: [Natural Language] "Fui" (phrase); [Grammar] "e" (word)
+- Run 3: targets caught = [true, false] · corrections: [Natural Language] "Fui a casa, estudié e hice" (clause)
+- Run 4: targets caught = [true, true] · corrections: [Natural Language] "Fui a casa, estudié e hice la cena." (clause)
+- Run 5: targets caught = [true, true] · corrections: [Natural Language] "Fui a casa, estudié e hice la cena." (clause)
+- Run 6: targets caught = [true, true] · corrections: [Natural Language] "Fui a casa, estudié e hice la cena." (clause)
+- Run 7: targets caught = [false, false] · corrections: [Grammar] " e" (phrase)
+- Run 8: targets caught = [true, true] · corrections: [Natural Language] "Fui a casa, estudié e hice la cena." (clause)
+- Run 9: targets caught = [true, true] · corrections: [Natural Language] "Fui a casa, estudié e hice la cena." (clause)
+- Run 10: targets caught = [true, true] · corrections: [Natural Language] "Fui a casa, estudié e hice la cena." (clause)
 
 ## PT-1-repeated-word
 
@@ -176,20 +176,20 @@ Runs per phrase: 10
 
 - Target 1 ("esqueci para pegar"): 100.0% (10/10)
 - Fully caught (all targets in one run): 100.0% (10/10)
-- Span-width distribution: word 10, phrase 0, clause 0
+- Span-width distribution: word 5, phrase 5, clause 0
 - Category distribution: Grammar 10
 
 ### Run detail
 
-- Run 1: targets caught = [true] · corrections: [Grammar] "de" (word)
-- Run 2: targets caught = [true] · corrections: [Grammar] "de" (word)
+- Run 1: targets caught = [true] · corrections: [Grammar] "esqueci de pegar" (phrase)
+- Run 2: targets caught = [true] · corrections: [Grammar] "esqueci de pegar" (phrase)
 - Run 3: targets caught = [true] · corrections: [Grammar] "de" (word)
-- Run 4: targets caught = [true] · corrections: [Grammar] "de" (word)
+- Run 4: targets caught = [true] · corrections: [Grammar] "esqueci de pegar" (phrase)
 - Run 5: targets caught = [true] · corrections: [Grammar] "de" (word)
 - Run 6: targets caught = [true] · corrections: [Grammar] "de" (word)
 - Run 7: targets caught = [true] · corrections: [Grammar] "de" (word)
-- Run 8: targets caught = [true] · corrections: [Grammar] "de" (word)
-- Run 9: targets caught = [true] · corrections: [Grammar] "de" (word)
+- Run 8: targets caught = [true] · corrections: [Grammar] "esqueci de pegar" (phrase)
+- Run 9: targets caught = [true] · corrections: [Grammar] "esqueci de pegar" (phrase)
 - Run 10: targets caught = [true] · corrections: [Grammar] "de" (word)
 
 ## PT-2-single-char
@@ -200,10 +200,10 @@ Runs per phrase: 10
 
 ### Summary (10 runs, 0 error(s))
 
-- Target 1 ("a praia"): 90.0% (9/10)
-- Fully caught (all targets in one run): 90.0% (9/10)
+- Target 1 ("a praia"): 60.0% (6/10)
+- Fully caught (all targets in one run): 60.0% (6/10)
 - Span-width distribution: word 9, phrase 1, clause 0
-- Category distribution: Grammar 9, Spelling 1
+- Category distribution: Grammar 6, Spelling 4
 
 ### Run detail
 
@@ -212,11 +212,11 @@ Runs per phrase: 10
 - Run 3: targets caught = [true] · corrections: [Grammar] "à" (word)
 - Run 4: targets caught = [true] · corrections: [Grammar] "à" (word)
 - Run 5: targets caught = [true] · corrections: [Grammar] "à" (word)
-- Run 6: targets caught = [true] · corrections: [Grammar] "à" (word)
-- Run 7: targets caught = [true] · corrections: [Grammar] "à praia" (phrase)
-- Run 8: targets caught = [true] · corrections: [Grammar] "à" (word)
-- Run 9: targets caught = [true] · corrections: [Grammar] "à" (word)
-- Run 10: targets caught = [true] · corrections: [Grammar] "à" (word)
+- Run 6: targets caught = [false] · corrections: [Spelling] "à" (word)
+- Run 7: targets caught = [true] · corrections: [Grammar] "à" (word)
+- Run 8: targets caught = [false] · corrections: [Spelling] "à" (word)
+- Run 9: targets caught = [false] · corrections: [Spelling] "à" (word)
+- Run 10: targets caught = [true] · corrections: [Grammar] "à praia" (phrase)
 
 ## PT-3-multi-correction
 
@@ -251,27 +251,27 @@ Runs per phrase: 10
 - Text: `Posso ter uma cerveja? Quero passar um bom tempo com meus amigos essa noite.`
 - Note: Three targets: "Posso ter uma cerveja", "passar um bom tempo" -> "me divertir"/"curtir", and possibly "essa noite" -> "hoje à noite" — track all three.
 
-### Summary (10 runs, 1 error(s))
+### Summary (10 runs, 0 error(s))
 
-- Target 1 ("Posso ter uma cerveja"): 66.7% (6/9)
-- Target 2 ("passar um bom tempo"): 100.0% (9/9)
-- Target 3 ("essa noite"): 11.1% (1/9)
-- Fully caught (all targets in one run): 11.1% (1/9)
-- Span-width distribution: word 3, phrase 16, clause 0
-- Category distribution: Natural Language 16, Word Choice 3
+- Target 1 ("Posso ter uma cerveja"): 80.0% (8/10)
+- Target 2 ("passar um bom tempo"): 100.0% (10/10)
+- Target 3 ("essa noite"): 0.0% (0/10)
+- Fully caught (all targets in one run): 0.0% (0/10)
+- Span-width distribution: word 2, phrase 18, clause 0
+- Category distribution: Natural Language 18, Word Choice 2
 
 ### Run detail
 
-- Run 1: targets caught = [true, true, false] · corrections: [Natural Language] "Você pode me trazer" (phrase); [Natural Language] "me divertir" (phrase)
-- Run 2: targets caught = [false, true, false] · corrections: [Word Choice] "pegar" (word); [Natural Language] "me divertir" (phrase)
-- Run 3: targets caught = [false, true, false] · corrections: [Word Choice] "tomar" (word); [Natural Language] "me divertir" (phrase)
-- Run 4: targets caught = [true, true, false] · corrections: [Natural Language] "Você pode me trazer uma cerveja" (phrase); [Natural Language] "me divertir" (phrase)
-- Run 5: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer" (phrase); [Natural Language] "me divertir" (phrase)
-- Run 6: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer" (phrase); [Natural Language] "me divertir" (phrase)
-- Run 7: targets caught = [false, true, false] · corrections: [Word Choice] "pegar" (word); [Natural Language] "me divertir" (phrase)
-- Run 8: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer uma cerveja?" (phrase); [Natural Language] "me divertir" (phrase)
-- Run 9: ERROR — apiFailure: OpenAI correction timed out: TimeoutException after 0:00:30.000000: Future not completed
-- Run 10: targets caught = [true, true, true] · corrections: [Natural Language] "Pode me trazer uma cerveja" (phrase); [Natural Language] "me divertir" (phrase); [Natural Language] "hoje à noite" (phrase)
+- Run 1: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer uma cerveja?" (phrase); [Natural Language] "me divertir" (phrase)
+- Run 2: targets caught = [true, true, false] · corrections: [Natural Language] "Você pode me trazer uma cerveja?" (phrase); [Natural Language] "me divertir" (phrase)
+- Run 3: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer uma cerveja?" (phrase); [Natural Language] "me divertir" (phrase)
+- Run 4: targets caught = [true, true, false] · corrections: [Natural Language] "Posso pedir" (phrase); [Natural Language] "me divertir" (phrase)
+- Run 5: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer uma cerveja?" (phrase); [Natural Language] "me divertir" (phrase)
+- Run 6: targets caught = [false, true, false] · corrections: [Word Choice] "pedir" (word); [Natural Language] "me divertir" (phrase)
+- Run 7: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer uma cerveja?" (phrase); [Natural Language] "me divertir" (phrase)
+- Run 8: targets caught = [false, true, false] · corrections: [Word Choice] "pedir" (word); [Natural Language] "me divertir" (phrase)
+- Run 9: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer uma cerveja?" (phrase); [Natural Language] "me divertir" (phrase)
+- Run 10: targets caught = [true, true, false] · corrections: [Natural Language] "Pode me trazer uma cerveja" (phrase); [Natural Language] "me divertir" (phrase)
 
 ## PT-5-accents
 
@@ -279,14 +279,14 @@ Runs per phrase: 10
 - Text: `Morei em Sao Paulo por tres anos mas agora vivo em Curitiba e meu aniversario é em julho.`
 - Note: Three independent accent targets in one phrase — track catch rate per individual word.
 
-### Summary (10 runs, 1 error(s))
+### Summary (10 runs, 0 error(s))
 
-- Target 1 ("Sao"): 100.0% (9/9)
-- Target 2 ("tres"): 100.0% (9/9)
-- Target 3 ("aniversario"): 100.0% (9/9)
-- Fully caught (all targets in one run): 100.0% (9/9)
-- Span-width distribution: word 38, phrase 0, clause 0
-- Category distribution: Grammar 9, Spelling 27, Word Choice 2
+- Target 1 ("Sao"): 100.0% (10/10)
+- Target 2 ("tres"): 100.0% (10/10)
+- Target 3 ("aniversario"): 100.0% (10/10)
+- Fully caught (all targets in one run): 100.0% (10/10)
+- Span-width distribution: word 40, phrase 0, clause 0
+- Category distribution: Grammar 10, Spelling 30
 
 ### Run detail
 
@@ -294,12 +294,12 @@ Runs per phrase: 10
 - Run 2: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
 - Run 3: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
 - Run 4: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
-- Run 5: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Word Choice] "moro" (word); [Spelling] "aniversário" (word)
+- Run 5: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
 - Run 6: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
 - Run 7: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
-- Run 8: ERROR — apiFailure: OpenAI correction timed out: TimeoutException after 0:00:30.000000: Future not completed
+- Run 8: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
 - Run 9: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
-- Run 10: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Word Choice] "moro" (word); [Spelling] "aniversário" (word)
+- Run 10: targets caught = [true, true, true] · corrections: [Spelling] "São" (word); [Spelling] "três" (word); [Grammar] "," (word); [Spelling] "aniversário" (word)
 
 ## PT-6-redundant-pronoun
 
@@ -309,24 +309,24 @@ Runs per phrase: 10
 
 ### Summary (10 runs, 0 error(s))
 
-- Target 1 ("eu estudei"): 70.0% (7/10)
-- Target 2 ("eu fiz o jantar"): 20.0% (2/10)
-- Fully caught (all targets in one run): 20.0% (2/10)
-- Span-width distribution: word 0, phrase 7, clause 6
-- Category distribution: Natural Language 13
+- Target 1 ("eu estudei"): 90.0% (9/10)
+- Target 2 ("eu fiz o jantar"): 60.0% (6/10)
+- Fully caught (all targets in one run): 60.0% (6/10)
+- Span-width distribution: word 0, phrase 7, clause 7
+- Category distribution: Grammar 1, Natural Language 13
 
 ### Run detail
 
-- Run 1: targets caught = [true, false] · corrections: [Natural Language] "Fui para casa, estudei e fiz" (clause)
-- Run 2: targets caught = [true, false] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] ", estudei e fiz" (clause)
-- Run 3: targets caught = [false, false] · corrections: (no corrections)
-- Run 4: targets caught = [true, false] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudei e fiz" (clause)
-- Run 5: targets caught = [true, true] · corrections: [Natural Language] "Fui para casa, estudei e fiz o jantar." (clause)
-- Run 6: targets caught = [true, false] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudei e fiz" (clause)
-- Run 7: targets caught = [true, true] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudei" (phrase); [Natural Language] "fiz" (phrase)
-- Run 8: targets caught = [true, false] · corrections: [Natural Language] "estudei e fiz" (clause)
-- Run 9: targets caught = [false, false] · corrections: (no corrections)
-- Run 10: targets caught = [false, false] · corrections: [Natural Language] "Fui" (phrase)
+- Run 1: targets caught = [true, false] · corrections: [Natural Language] ", estudei e" (clause)
+- Run 2: targets caught = [true, false] · corrections: [Natural Language] "Fui para casa, estudei e fiz" (clause)
+- Run 3: targets caught = [true, false] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudei" (phrase); [Natural Language] " e fiz" (phrase)
+- Run 4: targets caught = [true, true] · corrections: [Natural Language] "Fui para casa, estudei e fiz o jantar." (clause)
+- Run 5: targets caught = [false, false] · corrections: (no corrections)
+- Run 6: targets caught = [true, true] · corrections: [Natural Language] "Fui para casa, estudei e fiz o jantar." (clause)
+- Run 7: targets caught = [true, true] · corrections: [Natural Language] "Fui" (phrase); [Natural Language] "estudei" (phrase); [Grammar] " e" (phrase); [Natural Language] "fiz" (phrase)
+- Run 8: targets caught = [true, true] · corrections: [Natural Language] "Eu fui para casa, estudei e fiz o jantar." (clause)
+- Run 9: targets caught = [true, true] · corrections: [Natural Language] "Fui para casa, estudei e fiz o jantar." (clause)
+- Run 10: targets caught = [true, true] · corrections: [Natural Language] "Fui para casa, estudei e fiz o jantar." (clause)
 
 ---
 
@@ -335,14 +335,14 @@ Runs per phrase: 10
 | Phrase | Runs | Errors | Headline rate | Per-target rates |
 | --- | --- | --- | --- | --- |
 | ES-1-repeated-word | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
-| ES-2-single-char | 10 | 0 | 40.0% (4/10) (clean) | — |
+| ES-2-single-char | 10 | 0 | 80.0% (8/10) (clean) | — |
 | ES-3-multi-correction | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10), 100.0% (10/10) |
 | ES-4-calque | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10), 100.0% (10/10) |
-| ES-5-accents | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10), 100.0% (10/10), 100.0% (10/10), 100.0% (10/10) |
-| ES-6-redundant-pronoun | 10 | 1 | 55.6% (5/9) (fully caught) | 88.9% (8/9), 55.6% (5/9) |
+| ES-5-accents | 10 | 1 | 100.0% (9/9) (fully caught) | 100.0% (9/9), 100.0% (9/9), 100.0% (9/9), 100.0% (9/9) |
+| ES-6-redundant-pronoun | 10 | 0 | 80.0% (8/10) (fully caught) | 90.0% (9/10), 80.0% (8/10) |
 | PT-1-repeated-word | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
-| PT-2-single-char | 10 | 0 | 90.0% (9/10) (fully caught) | 90.0% (9/10) |
+| PT-2-single-char | 10 | 0 | 60.0% (6/10) (fully caught) | 60.0% (6/10) |
 | PT-3-multi-correction | 10 | 0 | 0.0% (0/10) (fully caught) | 100.0% (10/10), 0.0% (0/10) |
-| PT-4-calque | 10 | 1 | 11.1% (1/9) (fully caught) | 66.7% (6/9), 100.0% (9/9), 11.1% (1/9) |
-| PT-5-accents | 10 | 1 | 100.0% (9/9) (fully caught) | 100.0% (9/9), 100.0% (9/9), 100.0% (9/9) |
-| PT-6-redundant-pronoun | 10 | 0 | 20.0% (2/10) (fully caught) | 70.0% (7/10), 20.0% (2/10) |
+| PT-4-calque | 10 | 0 | 0.0% (0/10) (fully caught) | 80.0% (8/10), 100.0% (10/10), 0.0% (0/10) |
+| PT-5-accents | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10), 100.0% (10/10), 100.0% (10/10) |
+| PT-6-redundant-pronoun | 10 | 0 | 60.0% (6/10) (fully caught) | 90.0% (9/10), 60.0% (6/10) |

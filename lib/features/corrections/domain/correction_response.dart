@@ -1,5 +1,6 @@
 import 'package:characters/characters.dart';
 
+import 'correction_corrected_range_calculator.dart';
 import 'correction_item.dart';
 import 'correction_overlap_resolver.dart';
 
@@ -61,19 +62,28 @@ class CorrectionResponse {
     // the list is handed out — every downstream position (including the
     // corrected-side offset arithmetic) assumes each edit's length delta is
     // counted exactly once.
-    final parsedCorrections = resolveOverlappingCorrections(
+    final resolvedCorrections = resolveOverlappingCorrections(
       anchoredCorrections,
     );
     // corrected_text is always built from the submitted text plus the anchored
     // corrections, never taken from the model's own corrected_text — this is
     // the sole source of truth so the corrected-side text can never diverge
     // from what the app itself constructed.
+    final correctedText = resolvedCorrections.isEmpty
+        ? submittedText
+        : _reconstructCorrectedText(submittedText, resolvedCorrections);
+    // Corrected-side highlight ranges are computed by arithmetic against that
+    // same code-built corrected_text (see computeCorrectedRanges), never
+    // taken from the model — the schema no longer even asks for
+    // corrected_start_index/corrected_end_index. The stored range and the
+    // rendered corrected text share a single source and can no longer
+    // decouple.
+    final corrections = computeCorrectedRanges(resolvedCorrections);
+
     return CorrectionResponse(
       originalText: submittedText,
-      correctedText: parsedCorrections.isEmpty
-          ? submittedText
-          : _reconstructCorrectedText(submittedText, parsedCorrections),
-      corrections: parsedCorrections,
+      correctedText: correctedText,
+      corrections: corrections,
     );
   }
 

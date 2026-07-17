@@ -108,6 +108,12 @@ class CorrectionItem {
       return null;
     }
 
+    // correctedStartIndex/correctedEndIndex are intentionally left unset here:
+    // the schema no longer asks the model for corrected_start_index/
+    // corrected_end_index, and even if a non-conforming response included
+    // them, CorrectionResponse.fromAnchoredJson unconditionally recomputes
+    // both via computeCorrectedRanges immediately after this — so reading
+    // them here would be dead code that could never affect the result.
     final item = CorrectionItem(
       originalPhrase: echoedOriginalPhrase,
       correctedPhrase: correctedPhrase,
@@ -115,8 +121,6 @@ class CorrectionItem {
       shortExplanation: json['short_explanation'] as String? ?? '',
       startIndex: anchored.start,
       endIndex: anchored.end,
-      correctedStartIndex: _optionalInt(json['corrected_start_index']),
-      correctedEndIndex: _optionalInt(json['corrected_end_index']),
     );
 
     if (!item.isInsertion && item.correctedPhrase == item.originalPhrase) {

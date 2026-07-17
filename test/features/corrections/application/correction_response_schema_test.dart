@@ -35,6 +35,42 @@ void main() {
     );
   });
 
+  test(
+    'does not ask the model for corrected_text, corrected_start_index, or '
+    'corrected_end_index — those are computed in code, never model-provided',
+    () {
+      final required = correctionResponseJsonSchema['required'] as List<Object?>;
+      final properties =
+          correctionResponseJsonSchema['properties'] as Map<String, Object?>;
+      final corrections = properties['corrections'] as Map<String, Object?>;
+      final item = corrections['items'] as Map<String, Object?>;
+      final itemRequired = item['required'] as List<Object?>;
+      final itemProperties = item['properties'] as Map<String, Object?>;
+
+      expect(required, isNot(contains('corrected_text')));
+      expect(properties, isNot(containsPair('corrected_text', anything)));
+      expect(itemRequired, isNot(contains('corrected_start_index')));
+      expect(itemRequired, isNot(contains('corrected_end_index')));
+      expect(
+        itemProperties,
+        isNot(containsPair('corrected_start_index', anything)),
+      );
+      expect(
+        itemProperties,
+        isNot(containsPair('corrected_end_index', anything)),
+      );
+      expect(correctionResponseJsonShape, isNot(contains('corrected_text')));
+      expect(
+        correctionResponseJsonShape,
+        isNot(contains('corrected_start_index')),
+      );
+      expect(
+        correctionResponseJsonShape,
+        isNot(contains('corrected_end_index')),
+      );
+    },
+  );
+
   test('keeps the supported correction categories in the schema', () {
     final properties =
         correctionResponseJsonSchema['properties'] as Map<String, Object?>;

@@ -536,8 +536,10 @@ void main() {
     () {
       // Shaped exactly like what correctionResponseJsonSchema now produces:
       // no top-level corrected_text, and no per-item corrected_start_index/
-      // corrected_end_index. fromAnchoredJson must not throw and must still
-      // build a correct, code-reconstructed correctedText.
+      // corrected_end_index. fromAnchoredJson must not throw, must still
+      // build a correct, code-reconstructed correctedText, and must compute
+      // (not read from JSON) the corrected-side range via
+      // computeCorrectedRanges.
       final response = CorrectionResponse.fromAnchoredJson(
         {
           'original_text': 'Como estas? Que tal?',
@@ -559,8 +561,11 @@ void main() {
       expect(response.correctedText, '¿Cómo estás? Que tal?');
       expect(response.corrections.single.originalPhrase, 'Como estas?');
       expect(response.corrections.single.correctedPhrase, '¿Cómo estás?');
-      expect(response.corrections.single.correctedStartIndex, isNull);
-      expect(response.corrections.single.correctedEndIndex, isNull);
+      // Computed by computeCorrectedRanges: nothing to its left, so
+      // correctedStartIndex == its own startIndex (0), and correctedEndIndex
+      // is 0 + "¿Cómo estás?".length (12 graphemes).
+      expect(response.corrections.single.correctedStartIndex, 0);
+      expect(response.corrections.single.correctedEndIndex, 12);
     },
   );
 
