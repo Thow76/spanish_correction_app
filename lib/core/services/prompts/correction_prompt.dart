@@ -274,3 +274,128 @@ final String correctionPromptPortuguese =
     _ptRegisterGuardrail +
     _ptLabeling +
     _ptLabelingBoundaryRules;
+
+// ── Stage 1 bare-detection prompt (experimental, not wired into any live
+// path) ──────────────────────────────────────────────────────────────────
+//
+// Not named with an `_es`/`_pt` prefix deliberately: those prefixes are
+// source-scraped by
+// `test/core/services/prompts/correction_prompt_symmetry_test.dart`, which
+// fails on any `_es*`/`_pt*` section with no cross-language counterpart. This
+// constant is a standalone single-call detection experiment, not a section of
+// `correctionPromptSpanish`, so it stays outside that scrape entirely rather
+// than requiring an allowlist entry for an asymmetry that isn't real.
+//
+// Referenced only by `test/stage1_detection_harness.dart`. Nothing in
+// `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+const String stage1DetectionSpanish = '''
+You are a Spanish tutor proofreading a learner's work. Identify anything a native speaker would consider wrong or would not naturally say. Do not rework correct language for style, elegance, or register. Quote each problematic phrase exactly as it appears in the work. If there is nothing wrong, return none.
+
+Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["volví para casa", "trafico"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
+''';
+
+// ── Stage 1 dialect-flagging variant (experimental, not wired into any live
+// path) ──────────────────────────────────────────────────────────────────
+//
+// A variant of `stage1DetectionSpanish` above, kept side by side rather than
+// replacing it, so the two can be run against the same battery for direct
+// comparison — see `test/stage1_detection_dialect_harness.dart`. The ONLY
+// difference from `stage1DetectionSpanish` is the inserted sentence "Flag
+// standard dialect differences." in the first paragraph; everything else,
+// including the JSON-array output instruction, is unchanged. Enforced by an
+// automated diff test in the harness file, not just this comment.
+//
+// Same naming reasoning as `stage1DetectionSpanish`/`stage2CategorizationSpanish`/
+// `stage3FeedbackSpanish`: no `_es`/`_pt` prefix, so
+// `correction_prompt_symmetry_test.dart`'s scrape doesn't pick it up.
+//
+// Referenced only by `test/stage1_detection_dialect_harness.dart`. Nothing
+// in `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+const String stage1DetectionDialectSpanish = '''
+You are a Spanish tutor proofreading a learner's work. Identify anything a native speaker would consider wrong or would not naturally say. Flag standard dialect differences. Do not rework correct language for style, elegance, or register. Quote each problematic phrase exactly as it appears in the work. If there is nothing wrong, return none.
+
+Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["volví para casa", "trafico"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
+''';
+
+// ── Stage 2 categorization prompt (experimental, not wired into any live
+// path) ──────────────────────────────────────────────────────────────────
+//
+// Same reasoning as `stage1DetectionSpanish` above for the naming: no
+// `_es`/`_pt` prefix, so `correction_prompt_symmetry_test.dart`'s scrape
+// doesn't pick it up and demand a cross-language counterpart that doesn't
+// exist yet.
+//
+// Takes Stage 1's flagged-phrase output (or any hand-written stand-in list —
+// see `test/stage2_categorization_harness.dart`, which tests this prompt in
+// isolation against fixed inputs rather than chaining to a live Stage 1
+// call) and classifies each phrase: corrected form, category, and verdict
+// (error / dialectal / not_an_error).
+//
+// Referenced only by `test/stage2_categorization_harness.dart`. Nothing in
+// `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+const String stage2CategorizationSpanish = '''
+You are a Spanish tutor. A proofreader has read a learner's work and flagged some phrases as possibly wrong. Your job is to look at each flagged phrase in its full context and decide three things: what the correct version would be, what kind of issue it is, and whether it's actually wrong at all.
+
+You will be given the learner's full text and a list of phrases the proofreader flagged within it.
+
+Return only valid JSON, one object per flagged phrase, in this shape: [{"original_phrase": "...", "corrected_phrase": "...", "occurrence": 1, "category": "...", "verdict": "..."}]
+
+For each flagged phrase:
+- occurrence is which instance of this exact original_phrase in the learner's text you are correcting, counting only that phrase, left to right, starting at 1. If the phrase appears only once, occurrence is 1. Example: if "para" appears three times and you are correcting the second one, occurrence is 2. Do not report a character position — only this count.
+- verdict is exactly one of: error, dialectal, not_an_error.
+  - error: not standard, idiomatic usage in any established variety of Spanish — includes calques and overliteral English translations that no dialect actually uses.
+  - dialectal: standard, idiomatic usage in at least one established variety, but carrying a materially different status elsewhere — unfamiliar, non-standard, or (as with "coger el autobús" in parts of Latin America) vulgar. Not a mistake. Flag it so the learner knows the split exists — don't present it as a "fix."
+  - not_an_error: standard across varieties generally, with no regional split worth mentioning.
+- corrected_phrase is what the phrase should become. For dialectal, give a pan-dialectal alternative if one exists, otherwise leave it identical to the original — there often isn't a single "right" answer to substitute. Leave it identical to original_phrase when verdict is not_an_error.
+- category is exactly one of: Grammar, Spelling, Word Choice, Natural Language, Other. Assign as normal for error. For dialectal, category is always Other. not_an_error gets no category.
+
+Category definitions:
+- Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, punctuation.
+- Natural Language: a phrase or construction that's unnatural or overly literal — the words are each fine, but the combination isn't how a native speaker would say it. Fixing it restructures a phrase, not one word.
+- Spelling: misspellings, missing or incorrect accents, orthographic errors.
+- Word Choice: one wrong or suboptimal word where grammar and spelling are otherwise fine — fixing it swaps one word for another.
+- Other: genuine edge cases, or anywhere you're confident something's wrong but unsure which category fits. Never withhold a category for that reason — pick the closest fit.
+
+Boundary rules:
+- Accents and diacritics are orthography, not punctuation. Missing or incorrect accents are Spelling — never Grammar's punctuation clause — except when the missing accent is created by a required preposition-plus-article contraction, in which case the preposition rule wins: label it Grammar.
+- Incorrect prepositions are Grammar.
+- Punctuation means sentence-level marks only — commas, periods, question marks, exclamation marks, colons, semicolons, quotation marks. It is Grammar, not Other, and does not include accents or diacritics.
+- Word Choice vs. Natural Language — collocation test. The one-word test above isn't sufficient alone: a single-word fix can still be Natural Language when the correct word is only correct as the fixed half of a set collocation or idiom — one where no other word of similar general meaning would work in its place.
+  - Natural Language: "ponerse al día" (to catch up) — only "poner(se)" completes it; "coger" or any near-synonym for "to take/get" would not. "Nos cogemos al día" -> "nos ponemos al día" is Natural Language, not Word Choice, even though it's a one-word swap.
+  - Word Choice: "¿Cuánto tiempo tienes aquí?" -> "¿Cuánto tiempo llevas aquí?" is Word Choice. "Llevar" is the correct verb for duration here, but the construction is productive and generalizes — the error is a wrong verb for the intended meaning, not a broken fixed pairing.
+
+Calque test: a phrase is error on calque grounds only if no established variety uses it natively for that meaning. If any variety treats it as normal, it isn't a calque error — decide between dialectal and not_an_error instead.
+
+Restraint: don't use dialectal for ordinary regional vocabulary (coche/carro/auto, ordenador/computadora). Reserve it for splits with real risk of confusion or offense — not just a different, equally correct word.
+''';
+
+// ── Stage 3 feedback prompt (experimental, not wired into any live path)
+// ──────────────────────────────────────────────────────────────────────
+//
+// Same reasoning as `stage1DetectionSpanish`/`stage2CategorizationSpanish`
+// above for the naming: no `_es`/`_pt` prefix, so
+// `correction_prompt_symmetry_test.dart`'s scrape doesn't pick it up and
+// demand a cross-language counterpart that doesn't exist yet.
+//
+// Takes Stage 2's categorized-correction output (or any hand-written
+// stand-in list — see `test/stage3_feedback_harness.dart`, which tests this
+// prompt in isolation against fixed inputs rather than chaining to a live
+// Stage 2 call) and writes one short_explanation per correction, joined back
+// by start_index. Deliberately does not receive the full submission text —
+// see the harness file for why that's an open question, not an oversight.
+//
+// Referenced only by `test/stage3_feedback_harness.dart`. Nothing in
+// `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+const String stage3FeedbackSpanish = '''
+You are a Spanish tutor writing feedback for a learner. You will be given a list of corrections that have already been identified and categorized, each with start_index (assigned by the app), original_phrase, corrected_phrase, category, and verdict.
+
+Return only valid JSON, one object per correction, in this shape: [{"start_index": 0, "short_explanation": "..."}]
+
+Each output object's start_index must match the start_index of the correction it explains.
+
+For each correction:
+- short_explanation is exactly one sentence, informal but technically accurate — the kind of aside a tutor would say out loud, not a textbook definition.
+- For verdict error: say what's wrong and why the correction is right. Name the rule or idiom being broken, don't just restate the fix.
+- For verdict dialectal: never say "wrong," "error," or "incorrect." Explain the split plainly — where the original is standard, and where it would sound off or land differently.
+- Assume the learner is intermediate-to-advanced. No basic grammar terms defined, no preamble, no hedging.
+''';
