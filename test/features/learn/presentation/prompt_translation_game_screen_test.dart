@@ -20,7 +20,6 @@ import 'package:spanish_correction_app/features/saved/domain/saved_explanation.d
 import 'package:spanish_correction_app/features/write/application/transcription_service.dart';
 import 'package:spanish_correction_app/core/models/walkthrough_activity.dart';
 import 'package:spanish_correction_app/core/services/walkthrough_service.dart';
-import 'package:spanish_correction_app/features/corrections/domain/queued_submission.dart';
 
 /// Default walkthrough questions returned by the fake service.
 final _defaultWalkthroughQuestions = <WalkthroughQuestion>[
@@ -200,11 +199,6 @@ class _FakeCorrectionRepository implements CorrectionRepository {
   }) async => const [];
 
   @override
-  Future<List<QueuedSubmission>> getQueuedSubmissions({
-    Language? language,
-  }) async => const [];
-
-  @override
   Future<List<WalkthroughActivity>> getWalkthroughActivities({
     Language? language,
   }) async => const [];
@@ -220,12 +214,6 @@ class _FakeCorrectionRepository implements CorrectionRepository {
 
   @override
   Future<void> removeSavedCorrection(String id) async {}
-
-  @override
-  Future<void> enqueueSubmission(QueuedSubmission submission) async {}
-
-  @override
-  Future<void> removeQueuedSubmission(String id) async {}
 
   @override
   Future<void> addWalkthroughActivity(WalkthroughActivity activity) async {}

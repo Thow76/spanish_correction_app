@@ -2,7 +2,6 @@ import '../../../core/enums/language.dart';
 import '../../../core/models/walkthrough_activity.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/domain/saved_correction.dart';
-import '../domain/queued_submission.dart';
 
 abstract interface class CorrectionRepository {
   Future<List<CorrectionSubmission>> getRecentSubmissions({Language? language});
@@ -16,12 +15,6 @@ abstract interface class CorrectionRepository {
   Future<void> addSavedCorrection(SavedCorrection correction);
 
   Future<void> removeSavedCorrection(String id);
-
-  Future<List<QueuedSubmission>> getQueuedSubmissions({Language? language});
-
-  Future<void> enqueueSubmission(QueuedSubmission submission);
-
-  Future<void> removeQueuedSubmission(String id);
 
   Future<List<WalkthroughActivity>> getWalkthroughActivities({
     Language? language,

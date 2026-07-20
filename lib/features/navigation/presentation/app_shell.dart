@@ -1,16 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/enums/language.dart';
 import '../../../core/services/walkthrough_service.dart';
 import '../../../shared/design/app_colors.dart';
-import '../../../shared/network/network_status_service.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
 import '../../corrections/application/submit_correction_use_case.dart';
-import '../../corrections/application/sync_queued_submissions_use_case.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../learn/presentation/learn_screen.dart';
 import '../../saved/application/save_correction_use_case.dart';
@@ -24,7 +20,6 @@ class AppShell extends StatefulWidget {
   const AppShell({
     required this.correctionService,
     required this.repositoryController,
-    required this.networkStatusService,
     required this.transcriptionService,
     required this.walkthroughService,
     required this.language,
@@ -34,7 +29,6 @@ class AppShell extends StatefulWidget {
 
   final CorrectionService correctionService;
   final CorrectionRepositoryController repositoryController;
-  final NetworkStatusService networkStatusService;
   final TranscriptionService transcriptionService;
   final WalkthroughService walkthroughService;
   final Language language;
@@ -46,23 +40,11 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
-  StreamSubscription<bool>? _connectionSubscription;
-  bool _isSyncingQueue = false;
   bool _skipLanguageSelection = false;
 
   @override
   void initState() {
     super.initState();
-    widget.repositoryController.loadQueuedSubmissions();
-    _connectionSubscription = widget.networkStatusService.connectionChanges
-        .listen((hasConnection) {
-          if (hasConnection) {
-            _syncQueuedSubmissions();
-          }
-        });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _syncQueuedSubmissions();
-    });
     _loadSettings();
   }
 
@@ -77,17 +59,10 @@ class _AppShellState extends State<AppShell> {
   }
 
   @override
-  void dispose() {
-    _connectionSubscription?.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final submitCorrectionUseCase = SubmitCorrectionUseCase(
       correctionService: widget.correctionService,
       repositoryController: widget.repositoryController,
-      networkStatusService: widget.networkStatusService,
     );
     final saveCorrectionUseCase = SaveCorrectionUseCase(
       correctionService: widget.correctionService,
@@ -251,30 +226,4 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Future<void> _syncQueuedSubmissions() async {
-    if (_isSyncingQueue) {
-      return;
-    }
-
-    _isSyncingQueue = true;
-    try {
-      final syncedCount = await SyncQueuedSubmissionsUseCase(
-        correctionService: widget.correctionService,
-        repositoryController: widget.repositoryController,
-      )();
-
-      if (!mounted || syncedCount == 0) {
-        return;
-      }
-
-      final label = syncedCount == 1 ? 'submission' : 'submissions';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Synced $syncedCount queued $label')),
-      );
-    } catch (_) {
-      // Sync will be retried the next time connectivity changes or the app restarts.
-    } finally {
-      _isSyncingQueue = false;
-    }
-  }
 }

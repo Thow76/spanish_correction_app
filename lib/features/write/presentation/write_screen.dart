@@ -171,23 +171,12 @@ class _WriteScreenState extends State<WriteScreen> {
     setState(() => _isReviewing = true);
 
     try {
-      final result = await widget.submitCorrectionUseCase(
+      final response = await widget.submitCorrectionUseCase(
         _controller.text.trim(),
         widget.language,
       );
 
       if (!mounted) {
-        return;
-      }
-
-      if (result.wasQueued) {
-        _showSnackBar('No internet available. Submission queued for sync.');
-        return;
-      }
-
-      final response = result.response;
-      if (response == null) {
-        _showSnackBar('Something went wrong. Please try again.');
         return;
       }
 

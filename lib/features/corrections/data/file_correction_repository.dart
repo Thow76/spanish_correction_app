@@ -9,7 +9,6 @@ import '../../../core/models/walkthrough_activity.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/domain/saved_correction.dart';
 import '../application/correction_repository.dart';
-import '../domain/queued_submission.dart';
 
 class FileCorrectionRepository implements CorrectionRepository {
   FileCorrectionRepository({File? file}) : _file = file;
@@ -92,39 +91,6 @@ class FileCorrectionRepository implements CorrectionRepository {
     }
 
     await _writeState(state.copyWith(savedCorrections: nextSaved));
-  }
-
-  @override
-  Future<List<QueuedSubmission>> getQueuedSubmissions({
-    Language? language,
-  }) async {
-    final state = await _readState();
-    final all = state.queuedSubmissions;
-    final filtered = language == null
-        ? all
-        : all.where((s) => s.language == language).toList();
-    return List.unmodifiable(filtered);
-  }
-
-  @override
-  Future<void> enqueueSubmission(QueuedSubmission submission) async {
-    final state = await _readState();
-    final nextQueue = [
-      ...state.queuedSubmissions.where((item) => item.id != submission.id),
-      submission,
-    ];
-
-    await _writeState(state.copyWith(queuedSubmissions: nextQueue));
-  }
-
-  @override
-  Future<void> removeQueuedSubmission(String id) async {
-    final state = await _readState();
-    final nextQueue = state.queuedSubmissions
-        .where((submission) => submission.id != id)
-        .toList();
-
-    await _writeState(state.copyWith(queuedSubmissions: nextQueue));
   }
 
   @override
@@ -221,21 +187,23 @@ class _CorrectionStoreState {
   const _CorrectionStoreState({
     required this.recentSubmissions,
     required this.savedCorrections,
-    required this.queuedSubmissions,
     required this.walkthroughActivities,
   });
 
   const _CorrectionStoreState.empty()
     : recentSubmissions = const [],
       savedCorrections = const [],
-      queuedSubmissions = const [],
       walkthroughActivities = const [];
 
   final List<CorrectionSubmission> recentSubmissions;
   final List<SavedCorrection> savedCorrections;
-  final List<QueuedSubmission> queuedSubmissions;
   final List<WalkthroughActivity> walkthroughActivities;
 
+  // Deliberately does not read a `queued_submissions` key: the queued-
+  // submission feature has been removed. Any such key left over in an
+  // existing install's store file from before this change is simply
+  // ignored here and dropped from the file on the next write, via toJson()
+  // below no longer emitting it — no explicit migration needed.
   factory _CorrectionStoreState.fromJson(Map<String, Object?> json) {
     return _CorrectionStoreState(
       recentSubmissions: _readList(
@@ -245,10 +213,6 @@ class _CorrectionStoreState {
       savedCorrections: _readList(
         json['saved_corrections'],
         SavedCorrection.fromJson,
-      ),
-      queuedSubmissions: _readList(
-        json['queued_submissions'],
-        QueuedSubmission.fromJson,
       ),
       walkthroughActivities: _readList(
         json['walkthrough_activities'],
@@ -260,13 +224,11 @@ class _CorrectionStoreState {
   _CorrectionStoreState copyWith({
     List<CorrectionSubmission>? recentSubmissions,
     List<SavedCorrection>? savedCorrections,
-    List<QueuedSubmission>? queuedSubmissions,
     List<WalkthroughActivity>? walkthroughActivities,
   }) {
     return _CorrectionStoreState(
       recentSubmissions: recentSubmissions ?? this.recentSubmissions,
       savedCorrections: savedCorrections ?? this.savedCorrections,
-      queuedSubmissions: queuedSubmissions ?? this.queuedSubmissions,
       walkthroughActivities:
           walkthroughActivities ?? this.walkthroughActivities,
     );
@@ -279,9 +241,6 @@ class _CorrectionStoreState {
           .toList(),
       'saved_corrections': savedCorrections
           .map((correction) => correction.toJson())
-          .toList(),
-      'queued_submissions': queuedSubmissions
-          .map((submission) => submission.toJson())
           .toList(),
       'walkthrough_activities': walkthroughActivities
           .map((activity) => activity.toJson())

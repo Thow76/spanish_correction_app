@@ -7,7 +7,6 @@ import 'package:spanish_correction_app/features/corrections/data/file_correction
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
-import 'package:spanish_correction_app/features/corrections/domain/queued_submission.dart';
 import 'package:spanish_correction_app/features/history/domain/correction_submission.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_correction.dart';
 import 'package:spanish_correction_app/features/saved/domain/saved_explanation.dart';
@@ -71,36 +70,6 @@ void main() {
     expect(savedCorrections.single.category, ErrorCategory.grammar);
   });
 
-  test('queues and removes offline submissions', () async {
-    await repository.enqueueSubmission(
-      QueuedSubmission(
-        id: 'queued-1',
-        text: 'Ayer yo fue al mercado.',
-        createdAt: DateTime(2026, 5, 24, 10),
-        language: Language.spanish,
-      ),
-    );
-    await repository.enqueueSubmission(
-      QueuedSubmission(
-        id: 'queued-2',
-        text: 'Compre frutas fresco.',
-        createdAt: DateTime(2026, 5, 24, 11),
-        language: Language.spanish,
-      ),
-    );
-
-    expect((await repository.getQueuedSubmissions()).map((item) => item.id), [
-      'queued-1',
-      'queued-2',
-    ]);
-
-    await repository.removeQueuedSubmission('queued-1');
-
-    expect((await repository.getQueuedSubmissions()).map((item) => item.id), [
-      'queued-2',
-    ]);
-  });
-
   test(
     'skips a malformed walkthrough activity without dropping other records',
     () async {
@@ -125,17 +94,22 @@ void main() {
 
       // One valid activity, one map-shaped but invalid activity (unrecognised
       // language -> WalkthroughActivity.fromJson throws), alongside valid
-      // entries of every other record type, all in a single store file.
+      // entries of every other record type, all in a single store file. Also
+      // includes a leftover 'queued_submissions' key, hand-written rather
+      // than built from the (now-removed) QueuedSubmission class — this is
+      // what an existing install's store file looks like from before the
+      // queued-submission feature was removed, confirming reading such a
+      // file is still safe (no migration needed; the key is simply ignored).
       final storeJson = {
         'recent_submissions': [_submission(0).toJson()],
         'saved_corrections': [_savedCorrection().toJson()],
         'queued_submissions': [
-          QueuedSubmission(
-            id: 'queued-1',
-            text: 'Ayer yo fue al mercado.',
-            createdAt: DateTime(2026, 5, 24, 10),
-            language: Language.spanish,
-          ).toJson(),
+          {
+            'id': 'queued-1',
+            'text': 'Ayer yo fue al mercado.',
+            'created_at': DateTime(2026, 5, 24, 10).toIso8601String(),
+            'language': 'spanish',
+          },
         ],
         'walkthrough_activities': [
           activityJson(sourcePhraseId: 'phrase-1', language: 'spanish'),
@@ -153,10 +127,43 @@ void main() {
       expect(activities, hasLength(1));
       expect(activities.single.sourcePhraseId, 'phrase-1');
 
-      // Every other record type is unaffected by the corrupt walkthrough entry.
+      // Every other record type is unaffected by the corrupt walkthrough
+      // entry, or by the leftover queued_submissions key.
       expect(await repository.getRecentSubmissions(), hasLength(1));
       expect(await repository.getSavedCorrections(), hasLength(1));
-      expect(await repository.getQueuedSubmissions(), hasLength(1));
+    },
+  );
+
+  test(
+    'a leftover queued_submissions key from before the queueing feature was '
+    'removed is dropped from the store file on the next write, with no '
+    'explicit migration step',
+    () async {
+      final storeFile = File('${tempDirectory.path}/store.json');
+      await storeFile.writeAsString(
+        jsonEncode({
+          'recent_submissions': <Object?>[],
+          'saved_corrections': <Object?>[],
+          'queued_submissions': [
+            {
+              'id': 'queued-1',
+              'text': 'Ayer yo fue al mercado.',
+              'created_at': DateTime(2026, 5, 24, 10).toIso8601String(),
+              'language': 'spanish',
+            },
+          ],
+          'walkthrough_activities': <Object?>[],
+        }),
+      );
+
+      // Any write at all rewrites the whole store — here, adding a new
+      // submission.
+      await repository.addSubmission(_submission(0));
+
+      final rewritten =
+          jsonDecode(await storeFile.readAsString()) as Map<String, Object?>;
+      expect(rewritten.containsKey('queued_submissions'), isFalse);
+      expect(rewritten['recent_submissions'], hasLength(1));
     },
   );
 }

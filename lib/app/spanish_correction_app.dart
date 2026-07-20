@@ -13,8 +13,6 @@ import '../features/navigation/presentation/app_shell.dart';
 import '../features/write/application/transcription_service.dart';
 import '../features/write/data/open_ai_whisper_transcription_service.dart';
 import '../shared/design/app_colors.dart';
-import '../shared/network/connectivity_network_status_service.dart';
-import '../shared/network/network_status_service.dart';
 import 'app_config.dart';
 import 'app_theme.dart';
 
@@ -31,7 +29,6 @@ class SpanishCorrectionApp extends StatefulWidget {
 class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   late final CorrectionService _correctionService;
   late final CorrectionRepositoryController _repositoryController;
-  late final NetworkStatusService _networkStatusService;
   late final TranscriptionService _transcriptionService;
   late final WalkthroughService _walkthroughService;
   Language? _selectedLanguage;
@@ -53,7 +50,6 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
     _repositoryController = CorrectionRepositoryController(
       FileCorrectionRepository(),
     );
-    _networkStatusService = ConnectivityNetworkStatusService();
 
     _init();
   }
@@ -110,7 +106,6 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
       home: AppShell(
         correctionService: _correctionService,
         repositoryController: _repositoryController,
-        networkStatusService: _networkStatusService,
         transcriptionService: _transcriptionService,
         walkthroughService: _walkthroughService,
         language: selectedLanguage,

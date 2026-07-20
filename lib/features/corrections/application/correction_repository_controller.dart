@@ -4,7 +4,6 @@ import '../../../core/enums/language.dart';
 import '../../../core/models/walkthrough_activity.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/domain/saved_correction.dart';
-import '../domain/queued_submission.dart';
 import 'correction_repository.dart';
 
 class CorrectionRepositoryController extends ChangeNotifier {
@@ -14,14 +13,12 @@ class CorrectionRepositoryController extends ChangeNotifier {
 
   List<CorrectionSubmission> _recentSubmissions = const [];
   List<SavedCorrection> _savedCorrections = const [];
-  List<QueuedSubmission> _queuedSubmissions = const [];
   List<WalkthroughActivity> _walkthroughActivities = const [];
   bool _isLoadingHistory = false;
   Language? _activeLanguage;
 
   List<CorrectionSubmission> get recentSubmissions => _recentSubmissions;
   List<SavedCorrection> get savedCorrections => _savedCorrections;
-  List<QueuedSubmission> get queuedSubmissions => _queuedSubmissions;
   List<WalkthroughActivity> get walkthroughActivities => _walkthroughActivities;
   bool get isLoadingHistory => _isLoadingHistory;
   Language? get activeLanguage => _activeLanguage;
@@ -31,7 +28,6 @@ class CorrectionRepositoryController extends ChangeNotifier {
     await Future.wait([
       _refreshRecentSubmissions(),
       _refreshSavedCorrections(),
-      _refreshQueuedSubmissions(),
       _refreshWalkthroughActivities(),
     ]);
     notifyListeners();
@@ -90,24 +86,6 @@ class CorrectionRepositoryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Queue is always loaded unfiltered — sync drains all languages.
-  Future<void> loadQueuedSubmissions() async {
-    _queuedSubmissions = await _repository.getQueuedSubmissions();
-    notifyListeners();
-  }
-
-  Future<void> enqueueSubmission(QueuedSubmission submission) async {
-    await _repository.enqueueSubmission(submission);
-    _queuedSubmissions = await _repository.getQueuedSubmissions();
-    notifyListeners();
-  }
-
-  Future<void> removeQueuedSubmission(String id) async {
-    await _repository.removeQueuedSubmission(id);
-    _queuedSubmissions = await _repository.getQueuedSubmissions();
-    notifyListeners();
-  }
-
   Future<void> loadWalkthroughActivities() async {
     _walkthroughActivities = await _repository.getWalkthroughActivities(
       language: _activeLanguage,
@@ -141,10 +119,6 @@ class CorrectionRepositoryController extends ChangeNotifier {
     _savedCorrections = await _repository.getSavedCorrections(
       language: _activeLanguage,
     );
-  }
-
-  Future<void> _refreshQueuedSubmissions() async {
-    _queuedSubmissions = await _repository.getQueuedSubmissions();
   }
 
   Future<void> _refreshWalkthroughActivities() async {
