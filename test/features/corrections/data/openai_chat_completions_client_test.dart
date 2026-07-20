@@ -122,6 +122,63 @@ void main() {
       throwsA(isA<ChatCompletionsException>()),
     );
   });
+
+  group('ChatCompletionsException.kind classification', () {
+    Future<ChatCompletionsException> completeAndCaptureException(
+      HttpClient client,
+    ) async {
+      try {
+        await OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+        ).complete(model: 'gpt-5.5', systemPrompt: 'sys', userText: 'user');
+      } on ChatCompletionsException catch (error) {
+        return error;
+      }
+      fail('Expected a ChatCompletionsException to be thrown.');
+    }
+
+    test('a SocketException classifies as connectivity', () async {
+      final client = _ThrowingHttpClient(
+        const SocketException('Failed host lookup'),
+      );
+
+      final error = await completeAndCaptureException(client);
+
+      expect(error.kind, ChatCompletionsFailureKind.connectivity);
+    });
+
+    test(
+      'a TimeoutException classifies as serviceFailure, not connectivity — '
+      'matching the legacy /v1/responses path, which treats a timeout as '
+      'apiFailure rather than networkUnavailable',
+      () async {
+        final client = _ThrowingHttpClient(
+          TimeoutException('timed out'),
+        );
+
+        final error = await completeAndCaptureException(client);
+
+        expect(error.kind, ChatCompletionsFailureKind.serviceFailure);
+      },
+    );
+
+    test('a non-2xx HTTP status classifies as serviceFailure', () async {
+      final client = _CapturingHttpClient('upstream error', statusCode: 500);
+
+      final error = await completeAndCaptureException(client);
+
+      expect(error.kind, ChatCompletionsFailureKind.serviceFailure);
+    });
+
+    test('malformed JSON classifies as serviceFailure', () async {
+      final client = _CapturingHttpClient(jsonEncode([1, 2, 3]));
+
+      final error = await completeAndCaptureException(client);
+
+      expect(error.kind, ChatCompletionsFailureKind.serviceFailure);
+    });
+  });
 }
 
 /// Wraps [content] in a minimal `/v1/chat/completions` response envelope.
@@ -233,6 +290,24 @@ class _FakeHttpClientResponse extends Stream<List<int>>
       onDone: onDone,
       cancelOnError: cancelOnError,
     );
+  }
+
+  @override
+  Object? noSuchMethod(Invocation invocation) => null;
+}
+
+/// Minimal fake that throws [exception] as soon as a request is opened —
+/// simulating a failure that happens before any response is received at
+/// all (a `SocketException` or `TimeoutException`), rather than a bad
+/// response arriving.
+class _ThrowingHttpClient implements HttpClient {
+  _ThrowingHttpClient(this.exception);
+
+  final Object exception;
+
+  @override
+  Future<HttpClientRequest> postUrl(Uri url) {
+    throw exception;
   }
 
   @override

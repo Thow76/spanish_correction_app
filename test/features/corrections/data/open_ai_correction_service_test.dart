@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/core/services/prompt_builder.dart';
 import 'package:spanish_correction_app/core/services/prompts/correction_prompt.dart';
+import 'package:spanish_correction_app/features/corrections/application/correction_service_exception.dart';
 import 'package:spanish_correction_app/features/corrections/data/open_ai_correction_service.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 
@@ -275,6 +276,101 @@ void main() {
       },
     );
   });
+
+  group('correctText failure classification parity (legacy vs staged)', () {
+    test(
+      'a SocketException classifies as networkUnavailable on BOTH paths, '
+      'for the same underlying fault',
+      () async {
+        const fault = SocketException('Failed host lookup');
+        const submitted = 'Vi mucho trafico ayer.';
+
+        Object? legacyError;
+        try {
+          await serviceWith(
+            _ThrowingHttpClient(fault),
+          ).correctText(submitted, Language.spanish);
+        } catch (error) {
+          legacyError = error;
+        }
+
+        Object? stagedError;
+        try {
+          await serviceWith(
+            _ThrowingHttpClient(fault),
+            useStagedSpanishPipeline: true,
+          ).correctText(submitted, Language.spanish);
+        } catch (error) {
+          stagedError = error;
+        }
+
+        expect(legacyError, isA<CorrectionServiceException>());
+        expect(
+          (legacyError as CorrectionServiceException).reason,
+          CorrectionFailureReason.networkUnavailable,
+        );
+
+        expect(stagedError, isA<CorrectionServiceException>());
+        expect(
+          (stagedError as CorrectionServiceException).reason,
+          CorrectionFailureReason.networkUnavailable,
+        );
+      },
+    );
+
+    test(
+      'on the staged path, a TimeoutException classifies as apiFailure, not '
+      'networkUnavailable — matching the legacy path\'s own treatment of a '
+      'timeout as apiFailure',
+      () async {
+        final client = _ThrowingHttpClient(TimeoutException('timed out'));
+
+        Object? caught;
+        try {
+          await serviceWith(
+            client,
+            useStagedSpanishPipeline: true,
+          ).correctText('Vi mucho trafico ayer.', Language.spanish);
+        } catch (error) {
+          caught = error;
+        }
+
+        expect(caught, isA<CorrectionServiceException>());
+        expect(
+          (caught as CorrectionServiceException).reason,
+          CorrectionFailureReason.apiFailure,
+        );
+      },
+    );
+
+    test(
+      'on the staged path, a bad response (malformed JSON body) classifies '
+      'as apiFailure, not networkUnavailable — the two failure kinds do not '
+      'collapse into the same reason',
+      () async {
+        // A JSON array instead of an object — decodes fine but fails the
+        // "root is an object" check, the same "API responded, just not
+        // usably" case a non-2xx status represents.
+        final client = _CapturingHttpClient(jsonEncode([1, 2, 3]));
+
+        Object? caught;
+        try {
+          await serviceWith(
+            client,
+            useStagedSpanishPipeline: true,
+          ).correctText('Vi mucho trafico ayer.', Language.spanish);
+        } catch (error) {
+          caught = error;
+        }
+
+        expect(caught, isA<CorrectionServiceException>());
+        expect(
+          (caught as CorrectionServiceException).reason,
+          CorrectionFailureReason.apiFailure,
+        );
+      },
+    );
+  });
 }
 
 /// Wraps [outputText] in the OpenAI `/v1/responses` `output_text` envelope.
@@ -435,6 +531,28 @@ class _RoutingRequest implements HttpClientRequest {
     }
 
     return _FakeHttpClientResponse(responseBody: reply);
+  }
+
+  @override
+  Object? noSuchMethod(Invocation invocation) => null;
+}
+
+/// Minimal fake that throws [exception] as soon as a request is opened —
+/// simulating a failure that happens before any response is received at
+/// all (a `SocketException` or `TimeoutException`), same fake as
+/// `openai_chat_completions_client_test.dart`'s `_ThrowingHttpClient`.
+/// Works for both the legacy path (`/v1/responses`, single call) and the
+/// staged path (`/v1/chat/completions`, first call fails the same way)
+/// since the fault happens at `postUrl`, before either path's endpoint
+/// even matters.
+class _ThrowingHttpClient implements HttpClient {
+  _ThrowingHttpClient(this.exception);
+
+  final Object exception;
+
+  @override
+  Future<HttpClientRequest> postUrl(Uri url) {
+    throw exception;
   }
 
   @override

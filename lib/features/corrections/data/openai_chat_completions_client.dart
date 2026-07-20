@@ -2,13 +2,53 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+/// Classifies why [OpenAiChatCompletionsClient.complete] failed — see
+/// [ChatCompletionsException.kind].
+///
+/// Deliberately just two values, not a 1:1 mirror of every catch clause in
+/// [OpenAiChatCompletionsClient.complete]: this exists so a caller can
+/// decide whether retrying later could plausibly help, and that's a binary
+/// question. [connectivity] mirrors exactly the one case the legacy
+/// `/v1/responses` path (`OpenAiCorrectionService._createResponse`) treats
+/// as "the device has no network" — a `SocketException` — since that's the
+/// only case retrying is actually expected to fix. A timeout, a bad HTTP
+/// status, and a malformed response body are grouped into [serviceFailure]
+/// because the legacy path itself treats a timeout the same as a bad
+/// status (both `CorrectionFailureReason.apiFailure`), not as
+/// `networkUnavailable` — a timeout means the service didn't answer in
+/// time, not that the device is offline, so it doesn't get the same
+/// "queue and retry" treatment as a socket-level failure.
+enum ChatCompletionsFailureKind {
+  /// The request never reached the network at all (`SocketException`) —
+  /// the device itself has no connectivity. The only kind for which
+  /// retrying once connectivity returns is expected to succeed.
+  connectivity,
+
+  /// Everything else: a timeout, a non-2xx HTTP status, or a response body
+  /// that doesn't match the expected shape. The service was reachable (or
+  /// the failure isn't attributable to the device being offline); retrying
+  /// the exact same request is not expected to help.
+  serviceFailure,
+}
+
 /// Thrown when [OpenAiChatCompletionsClient.complete] cannot produce a reply
 /// — a network failure, a non-2xx HTTP status, or a response shape that
-/// doesn't match what `/v1/chat/completions` is expected to return.
+/// doesn't match what `/v1/chat/completions` is expected to return. See
+/// [kind] for which of those this was.
 class ChatCompletionsException implements Exception {
-  const ChatCompletionsException(this.message);
+  const ChatCompletionsException(
+    this.message, {
+    this.kind = ChatCompletionsFailureKind.serviceFailure,
+  });
 
   final String message;
+
+  /// Defaults to [ChatCompletionsFailureKind.serviceFailure] — the
+  /// conservative choice for any call site that doesn't specify a kind,
+  /// since treating an unclassified failure as retriable-on-reconnect when
+  /// it might not be would risk queueing something that will never
+  /// succeed.
+  final ChatCompletionsFailureKind kind;
 
   @override
   String toString() => 'ChatCompletionsException: $message';
@@ -71,6 +111,7 @@ class OpenAiChatCompletionsClient {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw ChatCompletionsException(
           'Chat completions call failed with HTTP ${response.statusCode}: $body',
+          kind: ChatCompletionsFailureKind.serviceFailure,
         );
       }
 
@@ -83,12 +124,23 @@ class OpenAiChatCompletionsClient {
 
       return _extractReplyText(decoded);
     } on SocketException catch (error) {
-      throw ChatCompletionsException('No internet available: $error');
+      throw ChatCompletionsException(
+        'No internet available: $error',
+        kind: ChatCompletionsFailureKind.connectivity,
+      );
     } on TimeoutException catch (error) {
-      throw ChatCompletionsException('Chat completions call timed out: $error');
+      // Matches the legacy `/v1/responses` path's own classification
+      // (`OpenAiCorrectionService._createResponse`): a timeout is
+      // `serviceFailure`, not `connectivity` — it means the service didn't
+      // answer in time, not that the device is offline.
+      throw ChatCompletionsException(
+        'Chat completions call timed out: $error',
+        kind: ChatCompletionsFailureKind.serviceFailure,
+      );
     } on FormatException catch (error) {
       throw ChatCompletionsException(
         'Chat completions returned an invalid response: $error',
+        kind: ChatCompletionsFailureKind.serviceFailure,
       );
     }
   }

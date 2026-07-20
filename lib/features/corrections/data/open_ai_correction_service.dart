@@ -83,15 +83,19 @@ class OpenAiCorrectionService implements CorrectionService {
   /// [CorrectionServiceException] specifically, e.g. to detect
   /// `networkUnavailable` and queue the submission for offline sync).
   ///
-  /// This translation is coarser than the legacy path's: `ChatCompletionsException`
-  /// (thrown by `OpenAiChatCompletionsClient`, a prior-step production file
-  /// this change does not modify) flattens network failure, timeout, and a
-  /// bad HTTP status into one type with no distinguishing reason, so all of
-  /// those map to `apiFailure` here — never `networkUnavailable`. In
-  /// practice this means the staged path does not currently trigger
-  /// `SubmitCorrectionUseCase`'s offline-queue-and-retry behaviour on a
-  /// genuine network outage the way the legacy path does; it surfaces as an
-  /// ordinary error instead.
+  /// `ChatCompletionsException.kind` is classified at its source
+  /// (`OpenAiChatCompletionsClient`) to match the legacy `/v1/responses`
+  /// path's own classification for the same underlying failure exactly:
+  /// [ChatCompletionsFailureKind.connectivity] (a `SocketException` — the
+  /// device has no network) maps to `networkUnavailable`, the same as the
+  /// legacy path; everything else
+  /// ([ChatCompletionsFailureKind.serviceFailure] — a timeout, a bad HTTP
+  /// status, or a malformed response body) maps to `apiFailure`, again the
+  /// same as the legacy path. This is deliberately not a two-way split of
+  /// "network vs. everything" — the legacy path itself treats a timeout as
+  /// `apiFailure`, not `networkUnavailable` (a timeout doesn't mean the
+  /// device is offline), so this mirrors that rather than retrying
+  /// something that isn't actually a connectivity problem.
   Future<CorrectionResponse> _correctSpanishTextViaStagedPipeline(
     String text,
   ) async {
@@ -102,8 +106,11 @@ class OpenAiCorrectionService implements CorrectionService {
         submittedText: text,
       );
     } on ChatCompletionsException catch (error) {
+      final reason = error.kind == ChatCompletionsFailureKind.connectivity
+          ? CorrectionFailureReason.networkUnavailable
+          : CorrectionFailureReason.apiFailure;
       throw CorrectionServiceException(
-        CorrectionFailureReason.apiFailure,
+        reason,
         'Staged Spanish correction pipeline failed: $error',
       );
     } on FormatException catch (error) {
