@@ -12,23 +12,43 @@ import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
 import '../domain/error_category.dart';
 import '../../saved/domain/saved_explanation.dart';
+import 'openai_chat_completions_client.dart';
+import 'staged_correction_pipeline.dart';
 
 class OpenAiCorrectionService implements CorrectionService {
   OpenAiCorrectionService({
     required String apiKey,
     required String model,
     HttpClient? httpClient,
+    this.useStagedSpanishPipeline = false,
   }) : _apiKey = apiKey.trim(),
        _model = model.trim(),
-       _httpClient = httpClient ?? HttpClient();
+       _httpClient = httpClient ?? HttpClient() {
+    _chatCompletionsClient = OpenAiChatCompletionsClient(
+      apiKey: _apiKey,
+      httpClient: _httpClient,
+    );
+  }
 
   final String _apiKey;
   final String _model;
   final HttpClient _httpClient;
+  late final OpenAiChatCompletionsClient _chatCompletionsClient;
+
+  /// Off by default. When true, Spanish submissions run through the staged
+  /// correction pipeline (Stage 1/1B/2/3 — see
+  /// `staged_correction_pipeline.dart`) instead of the existing single-call
+  /// prompt. Portuguese is never affected by this flag, in either state —
+  /// there is no staged Portuguese prompt to route to.
+  final bool useStagedSpanishPipeline;
 
   @override
   Future<CorrectionResponse> correctText(String text, Language language) async {
     _ensureConfigured();
+
+    if (language == Language.spanish && useStagedSpanishPipeline) {
+      return _correctSpanishTextViaStagedPipeline(text);
+    }
 
     final responseText = await _createResponse(
       systemInstruction: PromptBuilder.correctionSystemPrompt(language),
@@ -53,6 +73,43 @@ class OpenAiCorrectionService implements CorrectionService {
       throw CorrectionServiceException(
         CorrectionFailureReason.invalidResponse,
         'OpenAI returned an invalid correction response: $error',
+      );
+    }
+  }
+
+  /// Runs the staged pipeline and translates its exceptions into
+  /// [CorrectionServiceException], matching the contract every other method
+  /// on this class already upholds (`SubmitCorrectionUseCase` catches
+  /// [CorrectionServiceException] specifically, e.g. to detect
+  /// `networkUnavailable` and queue the submission for offline sync).
+  ///
+  /// This translation is coarser than the legacy path's: `ChatCompletionsException`
+  /// (thrown by `OpenAiChatCompletionsClient`, a prior-step production file
+  /// this change does not modify) flattens network failure, timeout, and a
+  /// bad HTTP status into one type with no distinguishing reason, so all of
+  /// those map to `apiFailure` here — never `networkUnavailable`. In
+  /// practice this means the staged path does not currently trigger
+  /// `SubmitCorrectionUseCase`'s offline-queue-and-retry behaviour on a
+  /// genuine network outage the way the legacy path does; it surfaces as an
+  /// ordinary error instead.
+  Future<CorrectionResponse> _correctSpanishTextViaStagedPipeline(
+    String text,
+  ) async {
+    try {
+      return await runStagedCorrectionPipeline(
+        client: _chatCompletionsClient,
+        model: _model,
+        submittedText: text,
+      );
+    } on ChatCompletionsException catch (error) {
+      throw CorrectionServiceException(
+        CorrectionFailureReason.apiFailure,
+        'Staged Spanish correction pipeline failed: $error',
+      );
+    } on FormatException catch (error) {
+      throw CorrectionServiceException(
+        CorrectionFailureReason.invalidResponse,
+        'Staged Spanish correction pipeline returned an invalid response: $error',
       );
     }
   }

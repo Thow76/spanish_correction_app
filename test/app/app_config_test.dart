@@ -40,6 +40,61 @@ void main() {
     expect(config.openAiWalkthroughModel, 'gpt-5.5');
   });
 
+  test(
+    'the staged Spanish pipeline toggle defaults to off, both on the '
+    'AppConfig constructor and on AppConfig.fromEnvironment()',
+    () {
+      const config = AppConfig(
+        correctionProvider: CorrectionProvider.openAi,
+        geminiApiKey: 'gemini-key',
+        geminiModel: 'gemini-model',
+        openAiApiKey: 'openai-key',
+        openAiCorrectionModel: 'openai-model',
+        openAiWalkthroughModel: 'walkthrough-model',
+      );
+      expect(config.useStagedSpanishPipeline, isFalse);
+
+      expect(AppConfig.fromEnvironment().useStagedSpanishPipeline, isFalse);
+    },
+  );
+
+  test(
+    'buildCorrectionService passes the staged Spanish pipeline toggle '
+    'through to the constructed OpenAiCorrectionService',
+    () {
+      final serviceWithDefault = buildCorrectionService(
+        const AppConfig(
+          correctionProvider: CorrectionProvider.openAi,
+          geminiApiKey: 'gemini-key',
+          geminiModel: 'gemini-model',
+          openAiApiKey: 'openai-key',
+          openAiCorrectionModel: 'openai-model',
+          openAiWalkthroughModel: 'walkthrough-model',
+        ),
+      );
+      expect(
+        (serviceWithDefault as OpenAiCorrectionService).useStagedSpanishPipeline,
+        isFalse,
+      );
+
+      final serviceWithToggleOn = buildCorrectionService(
+        const AppConfig(
+          correctionProvider: CorrectionProvider.openAi,
+          geminiApiKey: 'gemini-key',
+          geminiModel: 'gemini-model',
+          openAiApiKey: 'openai-key',
+          openAiCorrectionModel: 'openai-model',
+          openAiWalkthroughModel: 'walkthrough-model',
+          useStagedSpanishPipeline: true,
+        ),
+      );
+      expect(
+        (serviceWithToggleOn as OpenAiCorrectionService).useStagedSpanishPipeline,
+        isTrue,
+      );
+    },
+  );
+
   test('builds Gemini correction service for Gemini provider', () {
     final service = buildCorrectionService(
       const AppConfig(

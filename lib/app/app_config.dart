@@ -6,6 +6,7 @@ class AppConfig {
     required this.openAiApiKey,
     required this.openAiCorrectionModel,
     required this.openAiWalkthroughModel,
+    this.useStagedSpanishPipeline = false,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -42,6 +43,13 @@ class AppConfig {
         'OPENAI_WALKTHROUGH_MODEL',
         defaultValue: openAiCorrectionModel,
       ),
+      // Off by default: a deliberate product decision. The staged pipeline
+      // (Stage 1/1B/2/3, see staged_correction_pipeline.dart) only takes
+      // effect for OpenAI + Spanish when this is explicitly turned on;
+      // nothing changes for real users until it's flipped.
+      useStagedSpanishPipeline: const bool.fromEnvironment(
+        'USE_STAGED_SPANISH_PIPELINE',
+      ),
     );
   }
 
@@ -51,6 +59,7 @@ class AppConfig {
   final String openAiApiKey;
   final String openAiCorrectionModel;
   final String openAiWalkthroughModel;
+  final bool useStagedSpanishPipeline;
 }
 
 enum CorrectionProvider {

@@ -129,6 +129,7 @@ CorrectionService buildCorrectionService(AppConfig config) {
     CorrectionProvider.openAi => OpenAiCorrectionService(
       apiKey: config.openAiApiKey,
       model: config.openAiCorrectionModel,
+      useStagedSpanishPipeline: config.useStagedSpanishPipeline,
     ),
   };
 }
