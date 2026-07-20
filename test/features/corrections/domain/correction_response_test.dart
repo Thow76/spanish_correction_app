@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_note.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 
@@ -593,4 +595,58 @@ void main() {
       expect(response.corrections, isEmpty);
     },
   );
+
+  test('notes defaults to empty when not provided', () {
+    const response = CorrectionResponse(
+      originalText: 'Hola',
+      correctedText: 'Hola',
+      corrections: [],
+    );
+
+    expect(response.notes, isEmpty);
+  });
+
+  test('notes round-trips when provided explicitly', () {
+    const notes = [
+      CorrectionNote(
+        phrase: 'coger el autobús',
+        note: 'Standard in Spain; avoided in parts of Latin America.',
+      ),
+    ];
+    const response = CorrectionResponse(
+      originalText: 'Hola',
+      correctedText: 'Hola',
+      corrections: [],
+      notes: notes,
+    );
+
+    expect(response.notes, notes);
+  });
+
+  test('hasCorrections is false when corrections is empty', () {
+    const response = CorrectionResponse(
+      originalText: 'Hola',
+      correctedText: 'Hola',
+      corrections: [],
+    );
+
+    expect(response.hasCorrections, isFalse);
+  });
+
+  test('hasCorrections is true when corrections is non-empty', () {
+    const response = CorrectionResponse(
+      originalText: 'Hola bien',
+      correctedText: 'Hola bueno',
+      corrections: [
+        CorrectionItem(
+          originalPhrase: 'bien',
+          correctedPhrase: 'bueno',
+          category: ErrorCategory.wordChoice,
+          shortExplanation: 'Bueno fits the noun being described.',
+        ),
+      ],
+    );
+
+    expect(response.hasCorrections, isTrue);
+  });
 }

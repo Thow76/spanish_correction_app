@@ -2,6 +2,7 @@ import 'package:characters/characters.dart';
 
 import 'correction_corrected_range_calculator.dart';
 import 'correction_item.dart';
+import 'correction_note.dart';
 import 'correction_overlap_resolver.dart';
 
 class CorrectionResponse {
@@ -9,11 +10,22 @@ class CorrectionResponse {
     required this.originalText,
     required this.correctedText,
     required this.corrections,
+    this.notes = const [],
   });
 
   final String originalText;
   final String correctedText;
+
+  /// Error-verdict corrections only. Dialectal and not-an-error items never
+  /// become `CorrectionItem`s — they are represented separately in [notes]
+  /// (dialectal) or dropped entirely (not-an-error), never mixed into this
+  /// list. `correctedText` and the highlighted spans are both built from
+  /// this list, so anything added here is treated as a real error.
   final List<CorrectionItem> corrections;
+  final List<CorrectionNote> notes;
+
+  /// Whether the submitted text had any real (error-verdict) corrections.
+  bool get hasCorrections => corrections.isNotEmpty;
 
   factory CorrectionResponse.fromJson(
     Map<String, Object?> json, {

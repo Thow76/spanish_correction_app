@@ -7,6 +7,7 @@ import '../../../shared/design/app_spacing.dart';
 import '../../../shared/text/correction_highlight_spans.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../domain/correction_item.dart';
+import '../domain/correction_note.dart';
 import '../domain/correction_response.dart';
 
 class CorrectionsScreen extends StatelessWidget {
@@ -50,20 +51,28 @@ class CorrectionsScreen extends StatelessWidget {
                       _showCorrectionSheet(context, item),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                _TextPanel(
-                  title: 'Corrected',
-                  text: response.correctedText,
-                  corrections: response.corrections,
-                  rangeSelector: (item) =>
-                      (item.correctedStartIndex, item.correctedEndIndex),
-                  phraseSelector: (item) => item.correctedPhrase,
-                  // The corrected indices are reported by the model against its
-                  // own corrected text; trust only an exact slice match and drop
-                  // any highlight that does not validate (never a wrong span).
-                  requireExactRange: true,
-                  onTapCorrection: (item) =>
-                      _showCorrectionSheet(context, item),
-                ),
+                if (response.hasCorrections)
+                  _TextPanel(
+                    title: 'Corrected',
+                    text: response.correctedText,
+                    corrections: response.corrections,
+                    rangeSelector: (item) =>
+                        (item.correctedStartIndex, item.correctedEndIndex),
+                    phraseSelector: (item) => item.correctedPhrase,
+                    // The corrected indices are reported by the model against
+                    // its own corrected text; trust only an exact slice match
+                    // and drop any highlight that does not validate (never a
+                    // wrong span).
+                    requireExactRange: true,
+                    onTapCorrection: (item) =>
+                        _showCorrectionSheet(context, item),
+                  )
+                else
+                  const _NoCorrectionsPanel(),
+                if (response.notes.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  _NotesPanel(notes: response.notes),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 OutlinedButton.icon(
                   onPressed: () {
@@ -186,6 +195,48 @@ class _TextPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _PanelContainer(
+      title: title,
+      child: Text.rich(
+        TextSpan(
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 15,
+            height: 24 / 15,
+          ),
+          children: _buildSpans(),
+        ),
+      ),
+    );
+  }
+
+  List<InlineSpan> _buildSpans() {
+    // Range resolution and span assembly are shared with the Traducir frases
+    // walkthrough (buildHighlightedSpans). This screen keeps its two distinct
+    // behaviours by passing them in: per-error-category colours and a
+    // tap-to-open-detail recognizer.
+    return buildHighlightedSpans(
+      text: text,
+      corrections: corrections,
+      color: AppColors.textPrimary,
+      rangeSelector: rangeSelector,
+      phraseSelector: phraseSelector,
+      requireExactRange: requireExactRange,
+      colorOf: (item) => item.category.color,
+      recognizerOf: (item) =>
+          TapGestureRecognizerFactory.build(() => onTapCorrection(item)),
+    );
+  }
+}
+
+class _PanelContainer extends StatelessWidget {
+  const _PanelContainer({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -206,36 +257,82 @@ class _TextPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Text.rich(
-            TextSpan(
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-                height: 24 / 15,
-              ),
-              children: _buildSpans(),
-            ),
-          ),
+          child,
         ],
       ),
     );
   }
+}
 
-  List<InlineSpan> _buildSpans() {
-    // Range resolution and span assembly are shared with the Traducir frases
-    // walkthrough (buildHighlightedSpans). This screen keeps its two distinct
-    // behaviours by passing them in: per-error-category colours and a
-    // tap-to-open-detail recognizer.
-    return buildHighlightedSpans(
-      text: text,
-      corrections: corrections,
-      color: AppColors.textPrimary,
-      rangeSelector: rangeSelector,
-      phraseSelector: phraseSelector,
-      requireExactRange: requireExactRange,
-      colorOf: (item) => item.category.color,
-      recognizerOf: (item) =>
-          TapGestureRecognizerFactory.build(() => onTapCorrection(item)),
+class _NoCorrectionsPanel extends StatelessWidget {
+  const _NoCorrectionsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _PanelContainer(
+      title: 'Corrected',
+      child: Text(
+        'No corrections required',
+        style: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 15,
+          height: 24 / 15,
+        ),
+      ),
+    );
+  }
+}
+
+class _NotesPanel extends StatelessWidget {
+  const _NotesPanel({required this.notes});
+
+  final List<CorrectionNote> notes;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PanelContainer(
+      title: 'Notes',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final (index, note) in notes.indexed) ...[
+            if (index > 0) const SizedBox(height: AppSpacing.md),
+            _NoteEntry(note: note),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _NoteEntry extends StatelessWidget {
+  const _NoteEntry({required this.note});
+
+  final CorrectionNote note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          note.phrase,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            height: 24 / 15,
+          ),
+        ),
+        Text(
+          note.note,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 15,
+            height: 24 / 15,
+          ),
+        ),
+      ],
     );
   }
 }
