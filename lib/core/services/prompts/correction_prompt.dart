@@ -317,6 +317,40 @@ You are a Spanish tutor proofreading a learner's work. Identify anything a nativ
 Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["volví para casa", "trafico"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
 ''';
 
+// ── Stage 1B dedicated redundancy pass (experimental, not wired into any
+// live path) ────────────────────────────────────────────────────────────
+//
+// A separate, narrower detection pass whose only job is unnecessary
+// repeated subject pronouns and unnecessary emphatic pronoun phrases — see
+// `test/stage1_redundancy_pass_harness.dart`. Run independently from
+// `stage1DetectionDialectSpanish` and never merged into it: an earlier
+// attempt to fold span-cleanliness guidance directly into the main
+// detection prompt (`stage1DetectionCleanSpanSpanish`, retired — see git
+// history) caused a regression on ES-4-calque, so redundancy detection is
+// kept fully separate to keep its specificity from leaking into swap-type
+// detection.
+//
+// Same JSON-array-of-quoted-phrases output shape as
+// `stage1DetectionDialectSpanish`, same naming reasoning as the other
+// stage1/2/3 constants: no `_es`/`_pt` prefix, so
+// `correction_prompt_symmetry_test.dart`'s scrape doesn't pick it up.
+//
+// Referenced only by `test/stage1_redundancy_pass_harness.dart`. Nothing in
+// `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+const String stage1RedundancyDetectionSpanish = '''
+You are a Spanish tutor reviewing a learner's work for one specific pattern: unnecessary repeated subject pronouns and unnecessary emphatic pronoun phrases.
+
+Spanish is a pro-drop language — the verb ending already shows who the subject is, so subject pronouns (yo, tú, él, ella, nosotros, ellos, etc.) are normally used only once for emphasis or contrast, not repeated before every verb in a series. Emphatic pronoun phrases (a mí, a ti, a él, a ella, etc.) added next to a verb like "gustar" that already marks the person are usually only needed for genuine contrast or emphasis too.
+
+Do not flag a pronoun used once for legitimate emphasis or contrast between two different people (for example, "A mí me gusta el fútbol, pero a ella le gusta el tenis" — both are contrastive, neither is redundant). Also do not flag a pronoun that appears only once in the whole text with nothing to contrast against — a single emphatic pronoun used on its own (for example, "A mí me encantó la película" said by itself) is normal, ordinary Spanish, not an error. Only flag a pronoun that is repeated across multiple clauses where the repetition itself adds nothing.
+
+For each unnecessary pronoun, quote only the pronoun or short emphatic phrase itself, exactly as it appears — never the surrounding clause or sentence.
+
+If there is nothing to flag, return none.
+
+Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["yo", "a mí"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
+''';
+
 // ── Stage 2 categorization prompt (experimental, not wired into any live
 // path) ──────────────────────────────────────────────────────────────────
 //
