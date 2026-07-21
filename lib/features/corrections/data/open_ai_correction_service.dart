@@ -20,7 +20,6 @@ class OpenAiCorrectionService implements CorrectionService {
     required String apiKey,
     required String model,
     HttpClient? httpClient,
-    this.useStagedSpanishPipeline = false,
   }) : _apiKey = apiKey.trim(),
        _model = model.trim(),
        _httpClient = httpClient ?? HttpClient() {
@@ -35,18 +34,11 @@ class OpenAiCorrectionService implements CorrectionService {
   final HttpClient _httpClient;
   late final OpenAiChatCompletionsClient _chatCompletionsClient;
 
-  /// Off by default. When true, Spanish submissions run through the staged
-  /// correction pipeline (Stage 1/1B/2/3 — see
-  /// `staged_correction_pipeline.dart`) instead of the existing single-call
-  /// prompt. Portuguese is never affected by this flag, in either state —
-  /// there is no staged Portuguese prompt to route to.
-  final bool useStagedSpanishPipeline;
-
   @override
   Future<CorrectionResponse> correctText(String text, Language language) async {
     _ensureConfigured();
 
-    if (language == Language.spanish && useStagedSpanishPipeline) {
+    if (language == Language.spanish) {
       return _correctSpanishTextViaStagedPipeline(text);
     }
 

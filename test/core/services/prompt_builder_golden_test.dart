@@ -20,10 +20,6 @@ void main() {
           jsonDecode(fixtureFile.readAsStringSync()) as Map<String, Object?>;
 
       expect(
-        PromptBuilder.correctionSystemPrompt(Language.spanish),
-        golden['correctionSystemPromptSpanish'],
-      );
-      expect(
         PromptBuilder.correctionSystemPrompt(Language.portuguese),
         golden['correctionSystemPromptPortuguese'],
       );

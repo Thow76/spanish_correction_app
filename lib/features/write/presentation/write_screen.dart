@@ -361,7 +361,7 @@ class _WriteScreenState extends State<WriteScreen> {
   String _messageForCorrectionError(CorrectionServiceException error) {
     return switch (error.reason) {
       CorrectionFailureReason.missingConfiguration =>
-        'Gemini API key is missing. Run with --dart-define=GEMINI_API_KEY=...',
+        'OpenAI API key is missing. Run with --dart-define=OPENAI_API_KEY=...',
       CorrectionFailureReason.networkUnavailable =>
         'No internet available. Please check your connection.',
       CorrectionFailureReason.apiFailure ||

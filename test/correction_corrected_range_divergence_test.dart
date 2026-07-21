@@ -30,8 +30,8 @@ import 'package:spanish_correction_app/features/corrections/domain/correction_re
 /// corrected indices; the app never reads them for this purpose.
 ///
 /// These tests feed synthetic anchored JSON through
-/// `CorrectionResponse.fromAnchoredJson` exactly as the live services
-/// (`open_ai_correction_service` / `gemini_correction_service`) do.
+/// `CorrectionResponse.fromAnchoredJson` exactly as the live service
+/// (`open_ai_correction_service`) does.
 
 const _original =
     'Ayer fui al supermercado para comprar fruta y leche. '

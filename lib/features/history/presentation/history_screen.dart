@@ -230,7 +230,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _messageForCorrectionError(CorrectionServiceException error) {
     return switch (error.reason) {
       CorrectionFailureReason.missingConfiguration =>
-        'Gemini API key is missing.',
+        'OpenAI API key is missing.',
       CorrectionFailureReason.networkUnavailable =>
         'No internet available. Please check your connection.',
       CorrectionFailureReason.apiFailure ||

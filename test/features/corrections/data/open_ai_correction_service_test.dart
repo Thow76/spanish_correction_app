@@ -12,15 +12,12 @@ import 'package:spanish_correction_app/features/corrections/data/open_ai_correct
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 
 void main() {
-  OpenAiCorrectionService serviceWith(
-    HttpClient client, {
-    bool useStagedSpanishPipeline = false,
-  }) => OpenAiCorrectionService(
-    apiKey: 'test-key',
-    model: 'gpt-5.5',
-    httpClient: client,
-    useStagedSpanishPipeline: useStagedSpanishPipeline,
-  );
+  OpenAiCorrectionService serviceWith(HttpClient client) =>
+      OpenAiCorrectionService(
+        apiKey: 'test-key',
+        model: 'gpt-5.5',
+        httpClient: client,
+      );
 
   group('gradeRetranslation', () {
     test('sends the grading system prompt and grading user content', () async {
@@ -50,9 +47,15 @@ void main() {
         systemMessage['content'],
         PromptBuilder.gradingSystemPrompt(Language.spanish),
       );
-      expect(userMessage['content'], contains('expectedAnswer: "Fui al mercado ayer"'));
+      expect(
+        userMessage['content'],
+        contains('expectedAnswer: "Fui al mercado ayer"'),
+      );
       expect(userMessage['content'], contains('targetCategory: Grammar'));
-      expect(userMessage['content'], contains('attempt: "Voy al mercado ayer"'));
+      expect(
+        userMessage['content'],
+        contains('attempt: "Voy al mercado ayer"'),
+      );
     });
 
     test('sends the Portuguese grading system prompt for Portuguese', () async {
@@ -138,46 +141,11 @@ void main() {
   });
 
   group('correctText regression (unaffected by grading feature)', () {
-    test('still parses a well-formed anchored correction response', () async {
-      const submitted = 'Ayer yo fue al mercado.';
-      final client = _CapturingHttpClient(
-        _responsesEnvelope(
-          jsonEncode({
-            'original_text': submitted,
-            'corrected_text': submitted,
-            'corrections': <Object?>[],
-          }),
-        ),
-      );
-
-      final result = await serviceWith(client).correctText(
-        submitted,
-        Language.spanish,
-      );
-
-      expect(result.originalText, submitted);
-      expect(result.correctedText, submitted);
-      expect(result.corrections, isEmpty);
-
-      final sent = jsonDecode(client.lastRequest!.bodyAsString) as Map;
-      final input = sent['input'] as List;
-      expect(
-        (input[0] as Map)['content'],
-        PromptBuilder.correctionSystemPrompt(Language.spanish),
-      );
-      expect(
-        (input[1] as Map)['content'],
-        PromptBuilder.correctionUserContent(Language.spanish, submitted),
-      );
-    });
-  });
-
-  group('correctText staged Spanish pipeline toggle', () {
     test(
-      'with the toggle OFF, Spanish still uses the existing single-call '
-      'path — the staged pipeline is never invoked',
+      'still parses a well-formed anchored correction response '
+      '(Portuguese — the language still on the legacy single-call path)',
       () async {
-        const submitted = 'Vi mucho trafico ayer.';
+        const submitted = 'Ontem eu fui ao mercado.';
         final client = _CapturingHttpClient(
           _responsesEnvelope(
             jsonEncode({
@@ -188,24 +156,31 @@ void main() {
           ),
         );
 
-        final result = await serviceWith(client).correctText(
-          submitted,
-          Language.spanish,
-        );
+        final result = await serviceWith(
+          client,
+        ).correctText(submitted, Language.portuguese);
 
         expect(result.originalText, submitted);
         expect(result.correctedText, submitted);
+        expect(result.corrections, isEmpty);
 
-        // Exactly one call, to the legacy /v1/responses endpoint — the
-        // staged pipeline calls /v1/chat/completions, up to four times, so
-        // this proves it was never reached.
-        expect(client.requestedUris, hasLength(1));
-        expect(client.requestedUris.single.path, '/v1/responses');
+        final sent = jsonDecode(client.lastRequest!.bodyAsString) as Map;
+        final input = sent['input'] as List;
+        expect(
+          (input[0] as Map)['content'],
+          PromptBuilder.correctionSystemPrompt(Language.portuguese),
+        );
+        expect(
+          (input[1] as Map)['content'],
+          PromptBuilder.correctionUserContent(Language.portuguese, submitted),
+        );
       },
     );
+  });
 
+  group('correctText Spanish staged pipeline', () {
     test(
-      'with the toggle ON, Spanish routes through the real staged pipeline '
+      'Spanish routes through the real staged pipeline '
       '(network layer faked, same pattern as the pipeline\'s own tests)',
       () async {
         const submitted = 'Vi mucho trafico ayer.';
@@ -224,7 +199,6 @@ void main() {
 
         final result = await serviceWith(
           client,
-          useStagedSpanishPipeline: true,
         ).correctText(submitted, Language.spanish);
 
         expect(result.correctedText, 'Vi mucho tráfico ayer.');
@@ -236,140 +210,126 @@ void main() {
         // path's /v1/responses was never hit.
         expect(client.requestedUris, isNotEmpty);
         expect(
-          client.requestedUris.every((uri) => uri.path == '/v1/chat/completions'),
+          client.requestedUris.every(
+            (uri) => uri.path == '/v1/chat/completions',
+          ),
           isTrue,
         );
       },
     );
 
-    test(
-      'Portuguese always uses the existing single-call path, regardless of '
-      'the toggle',
-      () async {
-        const submitted = 'Oi, tudo bem?';
-        final client = _CapturingHttpClient(
-          _responsesEnvelope(
-            jsonEncode({
-              'original_text': submitted,
-              'corrected_text': submitted,
-              'corrections': <Object?>[],
-            }),
-          ),
-        );
+    test('Portuguese still uses the existing single-call path — there is no '
+        'staged Portuguese pipeline', () async {
+      const submitted = 'Oi, tudo bem?';
+      final client = _CapturingHttpClient(
+        _responsesEnvelope(
+          jsonEncode({
+            'original_text': submitted,
+            'corrected_text': submitted,
+            'corrections': <Object?>[],
+          }),
+        ),
+      );
 
-        final result = await serviceWith(
-          client,
-          useStagedSpanishPipeline: true,
-        ).correctText(submitted, Language.portuguese);
+      final result = await serviceWith(
+        client,
+      ).correctText(submitted, Language.portuguese);
 
-        expect(result.originalText, submitted);
+      expect(result.originalText, submitted);
 
-        expect(client.requestedUris, hasLength(1));
-        expect(client.requestedUris.single.path, '/v1/responses');
+      expect(client.requestedUris, hasLength(1));
+      expect(client.requestedUris.single.path, '/v1/responses');
 
-        final sent = jsonDecode(client.lastRequest!.bodyAsString) as Map;
-        final input = sent['input'] as List;
-        expect(
-          (input[0] as Map)['content'],
-          PromptBuilder.correctionSystemPrompt(Language.portuguese),
-        );
-      },
-    );
+      final sent = jsonDecode(client.lastRequest!.bodyAsString) as Map;
+      final input = sent['input'] as List;
+      expect(
+        (input[0] as Map)['content'],
+        PromptBuilder.correctionSystemPrompt(Language.portuguese),
+      );
+    });
   });
 
-  group('correctText failure classification parity (legacy vs staged)', () {
-    test(
-      'a SocketException classifies as networkUnavailable on BOTH paths, '
-      'for the same underlying fault',
-      () async {
-        const fault = SocketException('Failed host lookup');
-        const submitted = 'Vi mucho trafico ayer.';
+  group('correctText failure classification parity (Spanish staged vs '
+      'Portuguese legacy)', () {
+    test('a SocketException classifies as networkUnavailable on BOTH paths, '
+        'for the same underlying fault', () async {
+      const fault = SocketException('Failed host lookup');
 
-        Object? legacyError;
-        try {
-          await serviceWith(
-            _ThrowingHttpClient(fault),
-          ).correctText(submitted, Language.spanish);
-        } catch (error) {
-          legacyError = error;
-        }
+      Object? stagedError;
+      try {
+        await serviceWith(
+          _ThrowingHttpClient(fault),
+        ).correctText('Vi mucho trafico ayer.', Language.spanish);
+      } catch (error) {
+        stagedError = error;
+      }
 
-        Object? stagedError;
-        try {
-          await serviceWith(
-            _ThrowingHttpClient(fault),
-            useStagedSpanishPipeline: true,
-          ).correctText(submitted, Language.spanish);
-        } catch (error) {
-          stagedError = error;
-        }
+      Object? legacyError;
+      try {
+        await serviceWith(
+          _ThrowingHttpClient(fault),
+        ).correctText('Oi, tudo bem?', Language.portuguese);
+      } catch (error) {
+        legacyError = error;
+      }
 
-        expect(legacyError, isA<CorrectionServiceException>());
-        expect(
-          (legacyError as CorrectionServiceException).reason,
-          CorrectionFailureReason.networkUnavailable,
-        );
+      expect(stagedError, isA<CorrectionServiceException>());
+      expect(
+        (stagedError as CorrectionServiceException).reason,
+        CorrectionFailureReason.networkUnavailable,
+      );
 
-        expect(stagedError, isA<CorrectionServiceException>());
-        expect(
-          (stagedError as CorrectionServiceException).reason,
-          CorrectionFailureReason.networkUnavailable,
-        );
-      },
-    );
+      expect(legacyError, isA<CorrectionServiceException>());
+      expect(
+        (legacyError as CorrectionServiceException).reason,
+        CorrectionFailureReason.networkUnavailable,
+      );
+    });
 
-    test(
-      'on the staged path, a TimeoutException classifies as apiFailure, not '
-      'networkUnavailable — matching the legacy path\'s own treatment of a '
-      'timeout as apiFailure',
-      () async {
-        final client = _ThrowingHttpClient(TimeoutException('timed out'));
+    test('on the staged Spanish path, a TimeoutException classifies as '
+        'apiFailure, not networkUnavailable — matching the legacy path\'s own '
+        'treatment of a timeout as apiFailure', () async {
+      final client = _ThrowingHttpClient(TimeoutException('timed out'));
 
-        Object? caught;
-        try {
-          await serviceWith(
-            client,
-            useStagedSpanishPipeline: true,
-          ).correctText('Vi mucho trafico ayer.', Language.spanish);
-        } catch (error) {
-          caught = error;
-        }
+      Object? caught;
+      try {
+        await serviceWith(
+          client,
+        ).correctText('Vi mucho trafico ayer.', Language.spanish);
+      } catch (error) {
+        caught = error;
+      }
 
-        expect(caught, isA<CorrectionServiceException>());
-        expect(
-          (caught as CorrectionServiceException).reason,
-          CorrectionFailureReason.apiFailure,
-        );
-      },
-    );
+      expect(caught, isA<CorrectionServiceException>());
+      expect(
+        (caught as CorrectionServiceException).reason,
+        CorrectionFailureReason.apiFailure,
+      );
+    });
 
-    test(
-      'on the staged path, a bad response (malformed JSON body) classifies '
-      'as apiFailure, not networkUnavailable — the two failure kinds do not '
-      'collapse into the same reason',
-      () async {
-        // A JSON array instead of an object — decodes fine but fails the
-        // "root is an object" check, the same "API responded, just not
-        // usably" case a non-2xx status represents.
-        final client = _CapturingHttpClient(jsonEncode([1, 2, 3]));
+    test('on the staged Spanish path, a bad response (malformed JSON body) '
+        'classifies as apiFailure, not networkUnavailable — the two failure '
+        'kinds do not collapse into the same reason', () async {
+      // A JSON array instead of an object — decodes fine but fails the
+      // "root is an object" check, the same "API responded, just not
+      // usably" case a non-2xx status represents.
+      final client = _CapturingHttpClient(jsonEncode([1, 2, 3]));
 
-        Object? caught;
-        try {
-          await serviceWith(
-            client,
-            useStagedSpanishPipeline: true,
-          ).correctText('Vi mucho trafico ayer.', Language.spanish);
-        } catch (error) {
-          caught = error;
-        }
+      Object? caught;
+      try {
+        await serviceWith(
+          client,
+        ).correctText('Vi mucho trafico ayer.', Language.spanish);
+      } catch (error) {
+        caught = error;
+      }
 
-        expect(caught, isA<CorrectionServiceException>());
-        expect(
-          (caught as CorrectionServiceException).reason,
-          CorrectionFailureReason.apiFailure,
-        );
-      },
-    );
+      expect(caught, isA<CorrectionServiceException>());
+      expect(
+        (caught as CorrectionServiceException).reason,
+        CorrectionFailureReason.apiFailure,
+      );
+    });
   });
 }
 
@@ -439,7 +399,8 @@ class _FakeHttpHeaders implements HttpHeaders {
 
 class _FakeHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
-  _FakeHttpClientResponse({required String responseBody}) : _body = responseBody;
+  _FakeHttpClientResponse({required String responseBody})
+    : _body = responseBody;
 
   final String _body;
 

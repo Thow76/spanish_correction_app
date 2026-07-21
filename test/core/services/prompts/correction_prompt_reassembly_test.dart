@@ -10,8 +10,8 @@ import 'package:spanish_correction_app/core/services/prompts/correction_prompt.d
 // than pasting a second copy of the same giant string.
 void main() {
   test(
-    'correctionPromptSpanish/correctionPromptPortuguese reassemble byte-for-byte '
-    'from their section constants',
+    'correctionPromptPortuguese reassembles byte-for-byte from its section '
+    'constants',
     () {
       final fixtureFile = File(
         'test/core/services/golden_correction_prompts.json',
@@ -19,10 +19,6 @@ void main() {
       final golden =
           jsonDecode(fixtureFile.readAsStringSync()) as Map<String, Object?>;
 
-      expect(
-        correctionPromptSpanish,
-        golden['correctionSystemPromptSpanish'],
-      );
       expect(
         correctionPromptPortuguese,
         golden['correctionSystemPromptPortuguese'],

@@ -6,7 +6,6 @@ import '../core/services/walkthrough_service.dart';
 import '../features/corrections/application/correction_repository_controller.dart';
 import '../features/corrections/application/correction_service.dart';
 import '../features/corrections/data/file_correction_repository.dart';
-import '../features/corrections/data/gemini_correction_service.dart';
 import '../features/corrections/data/open_ai_correction_service.dart';
 import '../features/language_selection/language_selection_screen.dart';
 import '../features/navigation/presentation/app_shell.dart';
@@ -39,7 +38,10 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
     super.initState();
 
     final config = AppConfig.fromEnvironment();
-    _correctionService = buildCorrectionService(config);
+    _correctionService = OpenAiCorrectionService(
+      apiKey: config.openAiApiKey,
+      model: config.openAiCorrectionModel,
+    );
     _transcriptionService = OpenAiWhisperTranscriptionService(
       apiKey: config.openAiApiKey,
     );
@@ -93,9 +95,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
         debugShowCheckedModeBanner: false,
         title: 'Corrector de Espanol',
         theme: buildAppTheme(),
-        home: LanguageSelectionScreen(
-          onLanguageSelected: _onLanguageSelected,
-        ),
+        home: LanguageSelectionScreen(onLanguageSelected: _onLanguageSelected),
       );
     }
 
@@ -113,18 +113,4 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
       ),
     );
   }
-}
-
-CorrectionService buildCorrectionService(AppConfig config) {
-  return switch (config.correctionProvider) {
-    CorrectionProvider.gemini => GeminiCorrectionService(
-      apiKey: config.geminiApiKey,
-      model: config.geminiModel,
-    ),
-    CorrectionProvider.openAi => OpenAiCorrectionService(
-      apiKey: config.openAiApiKey,
-      model: config.openAiCorrectionModel,
-      useStagedSpanishPipeline: config.useStagedSpanishPipeline,
-    ),
-  };
 }
