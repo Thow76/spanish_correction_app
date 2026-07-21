@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/services/prompts/correction_prompt.dart';
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/staged_correction_pipeline.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_original_range_resolver.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 
 const _submittedText = 'Vi mucho trafico ayer.';
@@ -213,6 +214,196 @@ void main() {
       expect(response.hasCorrections, isTrue);
     },
   );
+
+  group(
+    'pure-deletion corrections (empty corrected_phrase) do not leave a '
+    'double space behind',
+    () {
+      test(
+        'the live-observed bug: two redundant "yo"s removed from a '
+        'sentence leave no double spaces',
+        () async {
+          const text = 'Yo fui a casa, yo estudié, y yo hice la cena.';
+          final client = _RoutingHttpClient(
+            _redundantPronounDeletionReplies(
+              text: text,
+              deletedPhrases: const ['yo', 'yo'],
+              occurrences: const [1, 2],
+            ),
+          );
+
+          final response = await runStagedCorrectionPipeline(
+            client: OpenAiChatCompletionsClient(
+              apiKey: 'test-key',
+              httpClient: client,
+            ),
+            model: 'gpt-5.5',
+            submittedText: text,
+          );
+
+          expect(
+            response.correctedText,
+            'Yo fui a casa, estudié, y hice la cena.',
+          );
+          expect(response.corrections, hasLength(2));
+        },
+      );
+
+      test(
+        'a deletion at the very start of the text absorbs the trailing '
+        'space, leaving no leading stray space',
+        () async {
+          const text = 'Yo fui a casa.';
+          final client = _RoutingHttpClient(
+            _redundantPronounDeletionReplies(
+              text: text,
+              deletedPhrases: const ['Yo'],
+              occurrences: const [1],
+            ),
+          );
+
+          final response = await runStagedCorrectionPipeline(
+            client: OpenAiChatCompletionsClient(
+              apiKey: 'test-key',
+              httpClient: client,
+            ),
+            model: 'gpt-5.5',
+            submittedText: text,
+          );
+
+          expect(response.correctedText, 'fui a casa.');
+        },
+      );
+
+      test(
+        'a deletion at the very end of the text (nothing trailing) falls '
+        'back to absorbing the leading space',
+        () async {
+          const text = 'Estudié mucho yo';
+          final client = _RoutingHttpClient(
+            _redundantPronounDeletionReplies(
+              text: text,
+              deletedPhrases: const ['yo'],
+              occurrences: const [1],
+            ),
+          );
+
+          final response = await runStagedCorrectionPipeline(
+            client: OpenAiChatCompletionsClient(
+              apiKey: 'test-key',
+              httpClient: client,
+            ),
+            model: 'gpt-5.5',
+            submittedText: text,
+          );
+
+          expect(response.correctedText, 'Estudié mucho');
+        },
+      );
+
+      test(
+        'a deletion directly followed by punctuation (no trailing space) '
+        'absorbs the leading space instead, avoiding a space-then-comma '
+        'artifact',
+        () async {
+          const text = 'Estudié yo, y comí.';
+          final client = _RoutingHttpClient(
+            _redundantPronounDeletionReplies(
+              text: text,
+              deletedPhrases: const ['yo'],
+              occurrences: const [1],
+            ),
+          );
+
+          final response = await runStagedCorrectionPipeline(
+            client: OpenAiChatCompletionsClient(
+              apiKey: 'test-key',
+              httpClient: client,
+            ),
+            model: 'gpt-5.5',
+            submittedText: text,
+          );
+
+          expect(response.correctedText, 'Estudié, y comí.');
+        },
+      );
+
+      test(
+        'three separate deletions in one sentence each resolve '
+        'independently, none leaking a double space',
+        () async {
+          const text = 'yo fui a casa, yo estudié, y yo hice la cena.';
+          final client = _RoutingHttpClient(
+            _redundantPronounDeletionReplies(
+              text: text,
+              deletedPhrases: const ['yo', 'yo', 'yo'],
+              occurrences: const [1, 2, 3],
+            ),
+          );
+
+          final response = await runStagedCorrectionPipeline(
+            client: OpenAiChatCompletionsClient(
+              apiKey: 'test-key',
+              httpClient: client,
+            ),
+            model: 'gpt-5.5',
+            submittedText: text,
+          );
+
+          expect(
+            response.correctedText,
+            'fui a casa, estudié, y hice la cena.',
+          );
+          expect(response.corrections, hasLength(3));
+        },
+      );
+    },
+  );
+}
+
+/// Builds `_RoutingHttpClient` replies for a Stage 1B redundant-pronoun
+/// pass where every flagged phrase in [deletedPhrases] (paired positionally
+/// with [occurrences]) is categorized as an `error` with an empty
+/// `corrected_phrase` — i.e. "remove this entirely" — exactly how a
+/// redundant-pronoun deletion is represented by the real Stage 2 output.
+/// Stage 1 (general detection) flags nothing, so only the redundancy pass
+/// contributes candidates. Each Stage 3 explanation's `start_index` is
+/// derived the same way the real pipeline resolves it
+/// (`resolveOccurrenceCorrections`), so the fake reply always matches the
+/// position the pipeline actually computes, however the test's example
+/// text is indexed.
+Map<String, String> _redundantPronounDeletionReplies({
+  required String text,
+  required List<String> deletedPhrases,
+  required List<int> occurrences,
+}) {
+  final stage2Entries = <String>[];
+  final stage3Entries = <String>[];
+  for (var i = 0; i < deletedPhrases.length; i++) {
+    final phrase = deletedPhrases[i];
+    final occurrence = occurrences[i];
+    stage2Entries.add(
+      '{"original_phrase": "$phrase", "corrected_phrase": "", '
+      '"occurrence": $occurrence, "category": "Grammar", "verdict": "error"}',
+    );
+
+    final resolved = resolveOccurrenceCorrections(text, [
+      OccurrenceCorrection(originalPhrase: phrase, occurrence: occurrence),
+    ]);
+    stage3Entries.add(
+      '{"start_index": ${resolved.single.startIndex}, '
+      '"short_explanation": "Redundant subject pronoun."}',
+    );
+  }
+
+  return {
+    stage1DetectionDialectSpanish: _arrayEnvelope(const []),
+    stage1RedundancyDetectionSpanish: _arrayEnvelope([
+      for (final phrase in deletedPhrases) '"$phrase"',
+    ]),
+    stage2CategorizationSpanish: _arrayEnvelope(stage2Entries),
+    stage3FeedbackSpanish: _arrayEnvelope(stage3Entries),
+  };
 }
 
 /// Wraps a hand-written list of already-JSON-encoded array element strings

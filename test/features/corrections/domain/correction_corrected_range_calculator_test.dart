@@ -235,4 +235,164 @@ void main() {
       );
     },
   );
+
+  group('pure-deletion corrections absorb one adjacent whitespace', () {
+    test(
+      'a later correction is shifted by the deletion\'s word length PLUS '
+      'the absorbed trailing space, when submittedText is supplied',
+      () {
+        // "AAAA BBBB CCCC": "AAAA" (4 graphemes) deleted at 0..4, trailing
+        // space at index 4 absorbed -> corrected text is "BBBB CCCC", 5
+        // characters shorter than "AAAA BBBB CCCC", not 4.
+        const text = 'AAAA BBBB CCCC';
+        final deletion = _item(original: 'AAAA', corrected: '', start: 0, end: 4);
+        final later = _item(original: 'CCCC', corrected: 'X', start: 10, end: 14);
+
+        final result = computeCorrectedRanges(
+          [deletion, later],
+          submittedText: text,
+        );
+
+        expect(result[0].correctedStartIndex, 0);
+        expect(result[0].correctedEndIndex, 0);
+        // Naive delta would be -4 (10 - 4 = 6); with the absorbed space it's
+        // -5 (10 - 5 = 5).
+        expect(result[1].correctedStartIndex, 5);
+        expect(result[1].correctedEndIndex, 6);
+      },
+    );
+
+    test(
+      'falls back to leading-space absorption when there is no trailing '
+      'space to absorb (deletion directly followed by punctuation)',
+      () {
+        // "AAAA BBBB, CCCC": "BBBB" (5..9) is directly followed by ',' (no
+        // trailing space), so it falls back to its leading space (index 4).
+        // Absorbing that widens the removed span to " BBBB" (5 characters),
+        // not just "BBBB" (4) -> the later correction shifts by 5.
+        const text = 'AAAA BBBB, CCCC';
+        final deletion = _item(
+          original: 'BBBB',
+          corrected: '',
+          start: 5,
+          end: 9,
+        );
+        final later = _item(
+          original: 'CCCC',
+          corrected: 'X',
+          start: 11,
+          end: 15,
+        );
+
+        final result = computeCorrectedRanges(
+          [deletion, later],
+          submittedText: text,
+        );
+
+        // Own range is unaffected (still empty at its own corrected start,
+        // which is unchanged since nothing to its own left moved).
+        expect(result[0].correctedStartIndex, 5);
+        expect(result[0].correctedEndIndex, 5);
+        // Naive delta would be -4 (11 - 4 = 7); with the absorbed leading
+        // space it's -5 (11 - 5 = 6).
+        expect(result[1].correctedStartIndex, 6);
+      },
+    );
+
+    test(
+      'no absorption when the deletion has no adjacent space at all '
+      '(sits at index 0 directly before punctuation)',
+      () {
+        const text = 'AAAA,BBBB';
+        final deletion = _item(
+          original: 'AAAA',
+          corrected: '',
+          start: 0,
+          end: 4,
+        );
+        final later = _item(original: 'BBBB', corrected: 'X', start: 5, end: 9);
+
+        final result = computeCorrectedRanges(
+          [deletion, later],
+          submittedText: text,
+        );
+
+        // Naive delta (-4) applies unchanged: nothing adjacent to absorb.
+        expect(result[1].correctedStartIndex, 1);
+      },
+    );
+
+    test(
+      'multiple deletions in the same call each resolve their own '
+      'absorption independently and compound correctly',
+      () {
+        // "AAAA BBBB CCCC DDDD": "AAAA" and "CCCC" both deleted, each with a
+        // trailing space to absorb (5 characters removed each), "DDDD"
+        // survives and must shift left by 10 (5 + 5), not 8 (4 + 4).
+        const text = 'AAAA BBBB CCCC DDDD';
+        final firstDeletion = _item(
+          original: 'AAAA',
+          corrected: '',
+          start: 0,
+          end: 4,
+        );
+        final secondDeletion = _item(
+          original: 'CCCC',
+          corrected: '',
+          start: 10,
+          end: 14,
+        );
+        final later = _item(
+          original: 'DDDD',
+          corrected: 'X',
+          start: 15,
+          end: 19,
+        );
+
+        final result = computeCorrectedRanges(
+          [firstDeletion, secondDeletion, later],
+          submittedText: text,
+        );
+
+        expect(result[2].correctedStartIndex, 5);
+      },
+    );
+
+    test(
+      'without submittedText, absorption is skipped and the naive delta is '
+      'used (backward-compatible default)',
+      () {
+        final deletion = _item(original: 'AAAA', corrected: '', start: 0, end: 4);
+        final later = _item(original: 'CCCC', corrected: 'X', start: 10, end: 14);
+
+        final result = computeCorrectedRanges([deletion, later]);
+
+        expect(result[1].correctedStartIndex, 6);
+      },
+    );
+
+    test(
+      'a swap-type (non-empty correctedPhrase) correction is completely '
+      'unaffected by submittedText being supplied',
+      () {
+        final item = _item(
+          original: 'para',
+          corrected: 'a',
+          start: 10,
+          end: 14,
+        );
+        final later = _item(original: 'b', corrected: 'B', start: 20, end: 21);
+
+        final withText = computeCorrectedRanges(
+          [item, later],
+          submittedText: 'volví para casa para siempre.',
+        );
+        final withoutText = computeCorrectedRanges([item, later]);
+
+        expect(withText[0].correctedStartIndex, withoutText[0].correctedStartIndex);
+        expect(withText[1].correctedStartIndex, withoutText[1].correctedStartIndex);
+        expect(withText[1].correctedStartIndex, 17);
+      },
+    );
+  });
 }

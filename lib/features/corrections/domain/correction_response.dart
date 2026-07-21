@@ -90,7 +90,10 @@ class CorrectionResponse {
     // corrected_start_index/corrected_end_index. The stored range and the
     // rendered corrected text share a single source and can no longer
     // decouple.
-    final corrections = computeCorrectedRanges(resolvedCorrections);
+    final corrections = computeCorrectedRanges(
+      resolvedCorrections,
+      submittedText: submittedText,
+    );
 
     return CorrectionResponse(
       originalText: submittedText,
@@ -107,22 +110,54 @@ class CorrectionResponse {
     };
   }
 
+  /// [corrections] is processed rightmost edit first so earlier edits'
+  /// indexes stay valid as the text is rewritten. A pure-deletion correction
+  /// (empty `correctedPhrase`) additionally absorbs one adjacent whitespace
+  /// character — the trailing character if it's a space, else the leading
+  /// character if that's a space, else nothing — so removing a word doesn't
+  /// leave a double space (or a leading/trailing stray space) behind. That
+  /// absorption decision is always made against [originalCharacters], an
+  /// untouched snapshot of [submittedText] kept separate from the list being
+  /// mutated: consulting the in-progress (already-spliced) list instead
+  /// could see a neighbour correction's edit rather than the real original
+  /// character, since corrections at higher indexes are already applied by
+  /// the time an earlier one is processed.
   static String _reconstructCorrectedText(
     String submittedText,
     List<CorrectionItem> corrections,
   ) {
-    final characters = submittedText.characters.toList();
+    final originalCharacters = submittedText.characters.toList();
+    final characters = [...originalCharacters];
     final sortedCorrections = [...corrections]
       ..sort((left, right) => right.startIndex!.compareTo(left.startIndex!));
 
     for (final correction in sortedCorrections) {
-      characters.replaceRange(
-        correction.startIndex!,
-        correction.endIndex!,
-        correction.correctedPhrase.characters,
-      );
+      final (start, end) = correction.correctedPhrase.isEmpty
+          ? _deletionRangeAbsorbingWhitespace(
+              originalCharacters,
+              correction.startIndex!,
+              correction.endIndex!,
+            )
+          : (correction.startIndex!, correction.endIndex!);
+      characters.replaceRange(start, end, correction.correctedPhrase.characters);
     }
 
     return characters.join();
+  }
+
+  /// Widens a pure-deletion correction's `[start, end)` span by one
+  /// adjacent space in [originalCharacters] — see [_reconstructCorrectedText].
+  static (int, int) _deletionRangeAbsorbingWhitespace(
+    List<String> originalCharacters,
+    int start,
+    int end,
+  ) {
+    if (end < originalCharacters.length && originalCharacters[end] == ' ') {
+      return (start, end + 1);
+    }
+    if (start > 0 && originalCharacters[start - 1] == ' ') {
+      return (start - 1, end);
+    }
+    return (start, end);
   }
 }
