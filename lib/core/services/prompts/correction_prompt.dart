@@ -266,7 +266,7 @@ For each flagged phrase:
 - occurrence is which instance of this exact original_phrase in the learner's text you are correcting, counting only that phrase, left to right, starting at 1. If the phrase appears only once, occurrence is 1. Example: if "para" appears three times and you are correcting the second one, occurrence is 2. Do not report a character position — only this count.
 - verdict is exactly one of: error, dialectal, not_an_error.
   - error: not standard, idiomatic usage in any established variety of Spanish — includes calques and overliteral English translations that no dialect actually uses.
-  - dialectal: standard, idiomatic usage in at least one established variety, but carrying a materially different status elsewhere — unfamiliar, non-standard, or (as with "coger el autobús" in parts of Latin America) vulgar. Not a mistake. Flag it so the learner knows the split exists — don't present it as a "fix."
+  - dialectal: standard, idiomatic usage in at least one established variety, but carrying a materially different status elsewhere — unfamiliar, non-standard, or (as with "coger el autobús" in parts of Latin America) vulgar. Not a mistake. Flag it so the learner knows the split exists — don't present it as a "fix." Established means accepted in that variety's educated, written norm — not merely common in casual speech. A construction every established norm rejects remains `error`, however common it is colloquially.
   - not_an_error: standard across varieties generally, with no regional split worth mentioning.
 - corrected_phrase is what the phrase should become. For dialectal, give a pan-dialectal alternative if one exists, otherwise leave it identical to the original — there often isn't a single "right" answer to substitute. Leave it identical to original_phrase when verdict is not_an_error.
 - category is exactly one of: Grammar, Spelling, Word Choice, Natural Language, Other. Assign as normal for error. For dialectal, category is always Other. not_an_error gets no category.
@@ -280,6 +280,7 @@ Category definitions:
 
 Boundary rules:
 - Accents and diacritics are orthography, not punctuation. Missing or incorrect accents are Spelling — never Grammar's punctuation clause — except when the missing accent is created by a required preposition-plus-article contraction, in which case the preposition rule wins: label it Grammar.
+- Unnecessary repeated or redundant pronoun use — a correct pronoun that shouldn't be there at all, not one formed or used incorrectly — is Natural Language, not Grammar's pronoun-use clause. Grammar's pronoun-use clause covers incorrect pronoun form, agreement, or case, not stylistic redundancy of an otherwise correctly used pronoun.
 - Incorrect prepositions are Grammar.
 - Punctuation means sentence-level marks only — commas, periods, question marks, exclamation marks, colons, semicolons, quotation marks. It is Grammar, not Other, and does not include accents or diacritics.
 - Word Choice vs. Natural Language — collocation test. The one-word test above isn't sufficient alone: a single-word fix can still be Natural Language when the correct word is only correct as the fixed half of a set collocation or idiom — one where no other word of similar general meaning would work in its place.
@@ -288,7 +289,7 @@ Boundary rules:
 
 Calque test: a phrase is error on calque grounds only if no established variety uses it natively for that meaning. If any variety treats it as normal, it isn't a calque error — decide between dialectal and not_an_error instead.
 
-Restraint: don't use dialectal for ordinary regional vocabulary (coche/carro/auto, ordenador/computadora). Reserve it for splits with real risk of confusion or offense — not just a different, equally correct word.
+Restraint: don't use dialectal for ordinary regional vocabulary (coche/carro/auto, ordenador/computadora). Reserve it for splits with real risk of confusion or offense — not just a different, equally correct word. Do not use `dialectal` for ordinary regional preferences that carry no risk of confusion or offense (for example: tense preferences, preposition choice, pronoun systems like voseo or ustedes/vosotros). These are `not_an_error`. Reserve `dialectal` only for cases where both are true: the form is standard in at least one established variety, AND using it elsewhere risks real confusion or offense.
 ''';
 
 // ── Stage 3 feedback prompt (experimental, not wired into any live path)
@@ -317,7 +318,7 @@ Each output object's start_index must match the start_index of the correction it
 
 For each correction:
 - short_explanation is exactly one sentence, informal but technically accurate — the kind of aside a tutor would say out loud, not a textbook definition.
-- For verdict error: say what's wrong and why the correction is right. Name the rule or idiom being broken, don't just restate the fix.
+- For verdict error: say what's wrong and why the correction is right. Name the rule or idiom being broken, don't just restate the fix. Whenever a construction is marked error but is genuinely widespread in educated everyday speech (not merely regional slang or a rare mistake), the explanation MUST state that explicitly — for example, "you'll hear this constantly in conversation, but it's not accepted in careful writing." Do not present a widespread construction as simply wrong with no acknowledgment of how common it is. This does not apply to constructions that are rare or genuinely nonstandard even in casual speech — only to the specific case of common-but-proscribed usage.
 - For verdict dialectal: never say "wrong," "error," or "incorrect." Explain the split plainly — where the original is standard, and where it would sound off or land differently.
 - Assume the learner is intermediate-to-advanced. No basic grammar terms defined, no preamble, no hedging.
 ''';

@@ -219,6 +219,30 @@ const List<_Case> _cases = [
     ],
     note: 'Four independent missing-accent targets, all plain Spelling.',
   ),
+  _Case(
+    id: 'ES-6',
+    group: _CaseGroup.core,
+    text: 'Yo fui a casa, yo estudié, y yo hice la cena.',
+    flaggedPhrases: ['yo'],
+    expectations: [
+      _ExpectedResult(
+        flaggedPhrase: 'yo',
+        acceptedVerdicts: {'error'},
+        expectedCategory: 'Natural Language',
+        expectedCorrectedPhrase: '',
+      ),
+    ],
+    note:
+        'Category-stability check for the redundant-pronoun boundary rule — '
+        'the live bug this case guards against: a redundant "yo" repeated '
+        'across clauses genuinely fits both Grammar\'s pronoun-use clause '
+        'and Natural Language\'s "unnatural combination of otherwise-'
+        'acceptable words," and without an explicit tiebreak the category '
+        'flip-flopped between runs. The boundary rule exists specifically '
+        'so this converges to Natural Language, not Grammar — that '
+        'convergence is what\'s under test. corrected_phrase is expected '
+        'empty (a pure deletion), and verdict must stay error throughout.',
+  ),
 
   // ── Occurrence gating case ───────────────────────────────────────────────
   _Case(
@@ -1028,9 +1052,9 @@ void main() {
   test('stage2 categorization harness case fixtures are well-formed', () {
     expect(
       _cases.length,
-      13,
+      14,
       reason:
-          '4 core + 1 occurrence + 2 dialectal + 3 ordinary-vocab + 2 '
+          '5 core + 1 occurrence + 2 dialectal + 3 ordinary-vocab + 2 '
           'omission + 1 cross-language.',
     );
 
@@ -1076,7 +1100,7 @@ void main() {
       for (final group in _CaseGroup.values)
         group: _cases.where((c) => c.group == group).map((c) => c.id).toList(),
     };
-    expect(idsByGroup[_CaseGroup.core], ['ES-1', 'ES-3', 'ES-4', 'ES-5']);
+    expect(idsByGroup[_CaseGroup.core], ['ES-1', 'ES-3', 'ES-4', 'ES-5', 'ES-6']);
     expect(idsByGroup[_CaseGroup.occurrence], ['ES-1-occurrence']);
     expect(idsByGroup[_CaseGroup.dialectal], ['ES-2', 'coger']);
     expect(idsByGroup[_CaseGroup.ordinaryVocab], ['ordenador', 'coche', 'carro']);
@@ -1107,6 +1131,10 @@ void main() {
       expect(
         stage2CategorizationSpanish,
         contains('preposition-plus-article contraction'),
+      );
+      expect(
+        stage2CategorizationSpanish,
+        contains('stylistic redundancy of an otherwise correctly used pronoun'),
       );
     },
   );

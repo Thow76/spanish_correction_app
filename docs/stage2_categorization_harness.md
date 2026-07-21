@@ -1,8 +1,8 @@
 # Stage 2 Categorization Harness
 
 Model: `gpt-5.5`  
-Commit: `e370e9fa8f22c96f32927b55cd22eb1987416c32`  
-Generated: 2026-07-18T21:56:15.265271  
+Commit: `fb1276283fe9e437ca62aaa384f069ee627fc8a1`  
+Generated: 2026-07-21T11:03:10.943214  
 Runs per case: 10
 
 ## Core (swap-type, from the validated Stage 1 targets)
@@ -16,24 +16,24 @@ Runs per case: 10
 #### Summary (10 runs, 0 error(s))
 
 - Target 1 ("volví para casa"):
-  - Verdict distribution: dialectal: 3, not_an_error: 7 (accepted: error) -> 0.0% (0/10)
-  - Category distribution: : 1, (none): 6, Other: 3 (expected Grammar) -> 0.0% (0/10)
-  - Corrected-phrase distribution: volví a casa: 3, volví para casa: 7 (expected "volví a casa") -> 30.0% (3/10)
+  - Verdict distribution: dialectal: 3, error: 3, not_an_error: 4 (accepted: error) -> 30.0% (3/10)
+  - Category distribution: : 1, (none): 3, Grammar: 3, Other: 3 (expected Grammar) -> 30.0% (3/10)
+  - Corrected-phrase distribution: volví a casa: 6, volví para casa: 4 (expected "volví a casa") -> 60.0% (6/10)
   - Occurrence distribution: 1: 10 (expected 1) -> 100.0% (10/10)
-- Fully caught (every scored dimension in one run): 0.0% (0/10)
+- Fully caught (every scored dimension in one run): 30.0% (3/10)
 
 #### Run detail
 
 - Run 1: "volví para casa" -> verdict=dialectal, category=Other, occurrence=1, corrected="volví a casa"
-- Run 2: "volví para casa" -> verdict=not_an_error, category=, occurrence=1, corrected="volví para casa"
-- Run 3: "volví para casa" -> verdict=not_an_error, category=(none), occurrence=1, corrected="volví para casa"
-- Run 4: "volví para casa" -> verdict=not_an_error, category=(none), occurrence=1, corrected="volví para casa"
+- Run 2: "volví para casa" -> verdict=not_an_error, category=(none), occurrence=1, corrected="volví para casa"
+- Run 3: "volví para casa" -> verdict=error, category=Grammar, occurrence=1, corrected="volví a casa"
+- Run 4: "volví para casa" -> verdict=error, category=Grammar, occurrence=1, corrected="volví a casa"
 - Run 5: "volví para casa" -> verdict=dialectal, category=Other, occurrence=1, corrected="volví a casa"
 - Run 6: "volví para casa" -> verdict=not_an_error, category=(none), occurrence=1, corrected="volví para casa"
-- Run 7: "volví para casa" -> verdict=dialectal, category=Other, occurrence=1, corrected="volví a casa"
-- Run 8: "volví para casa" -> verdict=not_an_error, category=(none), occurrence=1, corrected="volví para casa"
+- Run 7: "volví para casa" -> verdict=error, category=Grammar, occurrence=1, corrected="volví a casa"
+- Run 8: "volví para casa" -> verdict=not_an_error, category=, occurrence=1, corrected="volví para casa"
 - Run 9: "volví para casa" -> verdict=not_an_error, category=(none), occurrence=1, corrected="volví para casa"
-- Run 10: "volví para casa" -> verdict=not_an_error, category=(none), occurrence=1, corrected="volví para casa"
+- Run 10: "volví para casa" -> verdict=dialectal, category=Other, occurrence=1, corrected="volví a casa"
 
 ### ES-3
 
@@ -49,22 +49,22 @@ Runs per case: 10
   - Corrected-phrase distribution: tráfico: 10 (not scored)
   - Occurrence distribution: 1: 10 (not scored)
 - Target 2 ("llamaron para atrás"):
-  - Verdict distribution: dialectal: 1, error: 9 (accepted: error) -> 90.0% (9/10)
-  - Category distribution: Natural Language: 9, Other: 1 (expected Natural Language) -> 90.0% (9/10)
-  - Corrected-phrase distribution: devolvieron la llamada: 6, volvieron a llamar: 4 (not scored)
+  - Verdict distribution: error: 10 (accepted: error) -> 100.0% (10/10)
+  - Category distribution: Natural Language: 10 (expected Natural Language) -> 100.0% (10/10)
+  - Corrected-phrase distribution: devolvieron la llamada: 5, volvieron a llamar: 5 (not scored)
   - Occurrence distribution: 1: 10 (not scored)
-- Fully caught (every scored dimension in one run): 90.0% (9/10)
+- Fully caught (every scored dimension in one run): 100.0% (10/10)
 
 #### Run detail
 
 - Run 1: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="volvieron a llamar"
 - Run 2: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="volvieron a llamar"
-- Run 3: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="volvieron a llamar"
+- Run 3: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="devolvieron la llamada"
 - Run 4: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="devolvieron la llamada"
-- Run 5: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=dialectal, category=Other, occurrence=1, corrected="devolvieron la llamada"
-- Run 6: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="devolvieron la llamada"
+- Run 5: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="devolvieron la llamada"
+- Run 6: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="volvieron a llamar"
 - Run 7: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="volvieron a llamar"
-- Run 8: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="devolvieron la llamada"
+- Run 8: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="volvieron a llamar"
 - Run 9: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="devolvieron la llamada"
 - Run 10: "trafico" -> verdict=error, category=Spelling, occurrence=1, corrected="tráfico" | "llamaron para atrás" -> verdict=error, category=Natural Language, occurrence=1, corrected="devolvieron la llamada"
 
@@ -79,19 +79,19 @@ Runs per case: 10
 - Target 1 ("pasar un buen tiempo"):
   - Verdict distribution: error: 10 (accepted: error) -> 100.0% (10/10)
   - Category distribution: Natural Language: 10 (expected Natural Language) -> 100.0% (10/10)
-  - Corrected-phrase distribution: pasar un buen rato: 4, pasarlo bien: 6 (not scored)
+  - Corrected-phrase distribution: pasar un buen rato: 6, pasarlo bien: 4 (not scored)
   - Occurrence distribution: 1: 10 (not scored)
 - Fully caught (every scored dimension in one run): 100.0% (10/10)
 
 #### Run detail
 
-- Run 1: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasarlo bien"
+- Run 1: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasar un buen rato"
 - Run 2: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasarlo bien"
 - Run 3: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasar un buen rato"
-- Run 4: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasar un buen rato"
+- Run 4: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasarlo bien"
 - Run 5: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasarlo bien"
-- Run 6: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasarlo bien"
-- Run 7: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasarlo bien"
+- Run 6: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasar un buen rato"
+- Run 7: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasar un buen rato"
 - Run 8: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasar un buen rato"
 - Run 9: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasar un buen rato"
 - Run 10: "pasar un buen tiempo" -> verdict=error, category=Natural Language, occurrence=1, corrected="pasarlo bien"
@@ -139,6 +139,34 @@ Runs per case: 10
 - Run 9: "Espana" -> verdict=error, category=Spelling, occurrence=1, corrected="España" | "anos" -> verdict=error, category=Spelling, occurrence=1, corrected="años" | "cumpleanos" -> verdict=error, category=Spelling, occurrence=1, corrected="años" | "otono" -> verdict=error, category=Spelling, occurrence=1, corrected="otoño"
 - Run 10: "Espana" -> verdict=error, category=Spelling, occurrence=1, corrected="España" | "anos" -> verdict=error, category=Spelling, occurrence=1, corrected="años" | "cumpleanos" -> verdict=error, category=Spelling, occurrence=1, corrected="años" | "otono" -> verdict=error, category=Spelling, occurrence=1, corrected="otoño"
 
+### ES-6
+
+- Text: `Yo fui a casa, yo estudié, y yo hice la cena.`
+- Flagged phrases: ["yo"]
+- Note: Category-stability check for the redundant-pronoun boundary rule — the live bug this case guards against: a redundant "yo" repeated across clauses genuinely fits both Grammar's pronoun-use clause and Natural Language's "unnatural combination of otherwise-acceptable words," and without an explicit tiebreak the category flip-flopped between runs. The boundary rule exists specifically so this converges to Natural Language, not Grammar — that convergence is what's under test. corrected_phrase is expected empty (a pure deletion), and verdict must stay error throughout.
+
+#### Summary (10 runs, 1 error(s))
+
+- Target 1 ("yo"):
+  - Verdict distribution: error: 9 (accepted: error) -> 100.0% (9/9)
+  - Category distribution: Natural Language: 9 (expected Natural Language) -> 100.0% (9/9)
+  - Corrected-phrase distribution: : 9 (expected "") -> 100.0% (9/9)
+  - Occurrence distribution: 1: 9 (not scored)
+- Fully caught (every scored dimension in one run): 100.0% (9/9)
+
+#### Run detail
+
+- Run 1: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+- Run 2: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+- Run 3: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+- Run 4: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+- Run 5: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+- Run 6: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+- Run 7: ERROR — TimeoutException after 0:00:30.000000: Future not completed
+- Run 8: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+- Run 9: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+- Run 10: "yo" -> verdict=error, category=Natural Language, occurrence=1, corrected=""
+
 ## Occurrence gating case
 
 ### ES-1-occurrence
@@ -147,27 +175,27 @@ Runs per case: 10
 - Flagged phrases: ["para"]
 - Note: Same text as ES-1, but the flagged phrase is the bare, ambiguous "para" (appears 3 times: before "comprar", before "casa", before "preparar") to force disambiguation. The intended instance is the 2nd ("para casa" -> "a casa") — the other two are correctly used. THE KEY RESULT is whether occurrence comes back as 2; category and corrected_phrase are recorded but not scored here.
 
-#### Summary (10 runs, 0 error(s))
+#### Summary (10 runs, 3 error(s))
 
 - Target 1 ("para"):
-  - Verdict distribution: dialectal: 1, error: 4, not_an_error: 5 (accepted: error) -> 40.0% (4/10)
-  - Category distribution: (none): 5, Grammar: 4, Other: 1 (not scored)
-  - Corrected-phrase distribution: a: 5, para: 5 (not scored)
-  - Occurrence distribution: 2: 10 (expected 2) -> 100.0% (10/10)
-- Fully caught (every scored dimension in one run): 40.0% (4/10)
+  - Verdict distribution: dialectal: 1, error: 4, not_an_error: 2 (accepted: error) -> 57.1% (4/7)
+  - Category distribution: : 1, (none): 1, Grammar: 4, Other: 1 (not scored)
+  - Corrected-phrase distribution: a: 5, para: 2 (not scored)
+  - Occurrence distribution: 2: 7 (expected 2) -> 100.0% (7/7)
+- Fully caught (every scored dimension in one run): 57.1% (4/7)
 
 #### Run detail
 
-- Run 1: "para" -> verdict=not_an_error, category=(none), occurrence=2, corrected="para"
-- Run 2: "para" -> verdict=not_an_error, category=(none), occurrence=2, corrected="para"
+- Run 1: "para" -> verdict=dialectal, category=Other, occurrence=2, corrected="a"
+- Run 2: ERROR — TimeoutException after 0:00:30.000000: Future not completed
 - Run 3: "para" -> verdict=error, category=Grammar, occurrence=2, corrected="a"
 - Run 4: "para" -> verdict=not_an_error, category=(none), occurrence=2, corrected="para"
-- Run 5: "para" -> verdict=not_an_error, category=(none), occurrence=2, corrected="para"
-- Run 6: "para" -> verdict=error, category=Grammar, occurrence=2, corrected="a"
+- Run 5: "para" -> verdict=error, category=Grammar, occurrence=2, corrected="a"
+- Run 6: ERROR — TimeoutException after 0:00:30.000000: Future not completed
 - Run 7: "para" -> verdict=error, category=Grammar, occurrence=2, corrected="a"
-- Run 8: "para" -> verdict=not_an_error, category=(none), occurrence=2, corrected="para"
-- Run 9: "para" -> verdict=dialectal, category=Other, occurrence=2, corrected="a"
-- Run 10: "para" -> verdict=error, category=Grammar, occurrence=2, corrected="a"
+- Run 8: "para" -> verdict=error, category=Grammar, occurrence=2, corrected="a"
+- Run 9: "para" -> verdict=not_an_error, category=, occurrence=2, corrected="para"
+- Run 10: ERROR — TimeoutException after 0:00:30.000000: Future not completed
 
 ## Dialectal
 
@@ -321,27 +349,99 @@ Runs per case: 10
 - Flagged phrases: ["Creo está bien"]
 - Note: Missing subordinating "que". The point is whether corrected_phrase comes back diff-usable ("Creo que está bien") — that's what code would diff against the original to find the insertion.
 
-#### Summary (10 runs, 0 error(s))
+#### Summary (10 runs, 9 error(s))
 
 - Target 1 ("Creo está bien"):
-  - Verdict distribution: error: 10 (accepted: error) -> 100.0% (10/10)
-  - Category distribution: Grammar: 10 (not scored)
-  - Corrected-phrase distribution: Creo que está bien: 10 (expected "Creo que está bien") -> 100.0% (10/10)
-  - Occurrence distribution: 1: 10 (not scored)
-- Fully caught (every scored dimension in one run): 100.0% (10/10)
+  - Verdict distribution: error: 1 (accepted: error) -> 100.0% (1/1)
+  - Category distribution: Grammar: 1 (not scored)
+  - Corrected-phrase distribution: Creo que está bien: 1 (expected "Creo que está bien") -> 100.0% (1/1)
+  - Occurrence distribution: 1: 1 (not scored)
+- Fully caught (every scored dimension in one run): 100.0% (1/1)
 
 #### Run detail
 
 - Run 1: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 2: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 3: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 4: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 5: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 6: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 7: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 8: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 9: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
-- Run 10: "Creo está bien" -> verdict=error, category=Grammar, occurrence=1, corrected="Creo que está bien"
+- Run 2: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 3: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 4: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 5: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 6: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 7: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 8: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 9: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 10: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
 
 ### ST-O3
 
@@ -349,27 +449,107 @@ Runs per case: 10
 - Flagged phrases: ["Voy la playa"]
 - Note: Missing preposition "a" — same diff-usability check as ST-O2.
 
-#### Summary (10 runs, 0 error(s))
+#### Summary (10 runs, 10 error(s))
 
 - Target 1 ("Voy la playa"):
-  - Verdict distribution: error: 10 (accepted: error) -> 100.0% (10/10)
-  - Category distribution: Grammar: 10 (not scored)
-  - Corrected-phrase distribution: Voy a la playa: 10 (expected "Voy a la playa") -> 100.0% (10/10)
-  - Occurrence distribution: 1: 10 (not scored)
-- Fully caught (every scored dimension in one run): 100.0% (10/10)
+  - Verdict distribution: (none) (accepted: error) -> 0.0% (0/0)
+  - Category distribution: (none) (not scored)
+  - Corrected-phrase distribution: (none) (expected "Voy a la playa") -> 0.0% (0/0)
+  - Occurrence distribution: (none) (not scored)
+- Fully caught (every scored dimension in one run): 0.0% (0/0)
 
 #### Run detail
 
-- Run 1: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 2: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 3: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 4: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 5: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 6: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 7: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 8: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 9: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
-- Run 10: "Voy la playa" -> verdict=error, category=Grammar, occurrence=1, corrected="Voy a la playa"
+- Run 1: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 2: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 3: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 4: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 5: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 6: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 7: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 8: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 9: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 10: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
 
 ## Cross-language category-stability check (PT-2)
 
@@ -379,27 +559,107 @@ Runs per case: 10
 - Flagged phrases: ["a praia"]
 - Note: Portuguese text run through the Spanish-only stage2CategorizationSpanish prompt deliberately — this is the tiebreak case from docs/correction_consistency_harness.md's PT-2 (60% catch rate, split Grammar/Spelling under the app's current single-call prompt). The preposition-plus-article-contraction boundary rule exists specifically so this converges to Grammar, not Spelling — that convergence is what's under test, not general PT support.
 
-#### Summary (10 runs, 0 error(s))
+#### Summary (10 runs, 10 error(s))
 
 - Target 1 ("a praia"):
-  - Verdict distribution: error: 10 (accepted: error) -> 100.0% (10/10)
-  - Category distribution: Grammar: 10 (expected Grammar) -> 100.0% (10/10)
-  - Corrected-phrase distribution: a la playa: 1, à praia: 9 (expected "à praia") -> 90.0% (9/10)
-  - Occurrence distribution: 1: 10 (not scored)
-- Fully caught (every scored dimension in one run): 90.0% (9/10)
+  - Verdict distribution: (none) (accepted: error) -> 0.0% (0/0)
+  - Category distribution: (none) (expected Grammar) -> 0.0% (0/0)
+  - Corrected-phrase distribution: (none) (expected "à praia") -> 0.0% (0/0)
+  - Occurrence distribution: (none) (not scored)
+- Fully caught (every scored dimension in one run): 0.0% (0/0)
 
 #### Run detail
 
-- Run 1: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
-- Run 2: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="a la playa"
-- Run 3: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
-- Run 4: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
-- Run 5: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
-- Run 6: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
-- Run 7: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
-- Run 8: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
-- Run 9: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
-- Run 10: "a praia" -> verdict=error, category=Grammar, occurrence=1, corrected="à praia"
+- Run 1: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 2: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 3: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 4: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 5: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 6: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 7: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 8: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 9: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
+- Run 10: ERROR — Exception: Chat completions call failed with HTTP 429: {
+    "error": {
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "insufficient_quota"
+    }
+}
+
 
 ---
 
@@ -407,16 +667,17 @@ Runs per case: 10
 
 | Case | Runs | Errors | Headline rate | Per-target verdict rates |
 | --- | --- | --- | --- | --- |
-| ES-1 | 10 | 0 | 0.0% (0/10) (fully caught) | 0.0% (0/10) |
-| ES-3 | 10 | 0 | 90.0% (9/10) (fully caught) | 100.0% (10/10), 90.0% (9/10) |
+| ES-1 | 10 | 0 | 30.0% (3/10) (fully caught) | 30.0% (3/10) |
+| ES-3 | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10), 100.0% (10/10) |
 | ES-4 | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
 | ES-5 | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10), 100.0% (10/10), 100.0% (10/10), 100.0% (10/10) |
-| ES-1-occurrence | 10 | 0 | 40.0% (4/10) (fully caught) | 40.0% (4/10) |
+| ES-6 | 10 | 1 | 100.0% (9/9) (fully caught) | 100.0% (9/9) |
+| ES-1-occurrence | 10 | 3 | 57.1% (4/7) (fully caught) | 57.1% (4/7) |
 | ES-2 | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
 | coger | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
 | ordenador | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
 | coche | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
 | carro | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
-| ST-O2 | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
-| ST-O3 | 10 | 0 | 100.0% (10/10) (fully caught) | 100.0% (10/10) |
-| PT-2 | 10 | 0 | 90.0% (9/10) (fully caught) | 100.0% (10/10) |
+| ST-O2 | 10 | 9 | 100.0% (1/1) (fully caught) | 100.0% (1/1) |
+| ST-O3 | 10 | 10 | 0.0% (0/0) (fully caught) | 0.0% (0/0) |
+| PT-2 | 10 | 10 | 0.0% (0/0) (fully caught) | 0.0% (0/0) |
