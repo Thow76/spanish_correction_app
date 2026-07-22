@@ -286,6 +286,11 @@ Boundary rules:
 - Word Choice vs. Natural Language — collocation test. The one-word test above isn't sufficient alone: a single-word fix can still be Natural Language when the correct word is only correct as the fixed half of a set collocation or idiom — one where no other word of similar general meaning would work in its place.
   - Natural Language: "ponerse al día" (to catch up) — only "poner(se)" completes it; "coger" or any near-synonym for "to take/get" would not. "Nos cogemos al día" -> "nos ponemos al día" is Natural Language, not Word Choice, even though it's a one-word swap.
   - Word Choice: "¿Cuánto tiempo tienes aquí?" -> "¿Cuánto tiempo llevas aquí?" is Word Choice. "Llevar" is the correct verb for duration here, but the construction is productive and generalizes — the error is a wrong verb for the intended meaning, not a broken fixed pairing.
+- Never use Word Choice merely because the correction changes one token, and never use Other merely because a grammatical system is complicated or regionally variable.
+- Mandatory contractions (al, del) and suppletive forms (conmigo, contigo, consigo) are Grammar, even though the error looks like a spelling or fusion issue.
+- Pronoun and clitic errors — case, agreement, order, placement, or doubling (e.g. "se los dije", "me se cayó", laísmo/loísmo) — are Grammar, never Other, however complex the clitic system seems.
+- Se/sé-type diacritic pairs are Spelling first, never Word Choice; only reclassify as Grammar when the specific case is a mandatory contraction or suppletive form (per the rule above).
+- Reflexive/non-reflexive verb pairs (e.g. decidir/decidirse, levantar/levantarse): if the verb has no standard non-reflexive use, a missing reflexive is Grammar; if both forms exist with different complements, the choice between them is Natural Language.
 
 Calque test: a phrase is error on calque grounds only if no established variety uses it natively for that meaning. If any variety treats it as normal, it isn't a calque error — decide between dialectal and not_an_error instead.
 
