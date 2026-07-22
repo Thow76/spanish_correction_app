@@ -129,6 +129,7 @@ class _PhraseCheck {
     required this.phrase,
     required this.expectedVerdict,
     this.expectedCategory,
+    this.captureCorrectedPhrase = false,
   });
 
   final String id;
@@ -137,6 +138,12 @@ class _PhraseCheck {
   final String phrase;
   final String expectedVerdict;
   final String? expectedCategory;
+
+  /// When true, the report's run detail includes the model's proposed
+  /// `corrected_phrase` alongside verdict/category. Off by default — most
+  /// checks here only care about verdict/category agreement, not the
+  /// specific wording of the fix.
+  final bool captureCorrectedPhrase;
 }
 
 class _Case {
@@ -337,17 +344,32 @@ const List<_Case> _cases = [
         'Reflexive/non-reflexive verb pairs: obligatory-reflexive branch is '
         'Grammar',
     note:
-        '"Levantarse" has no standard non-reflexive use for "to get up"; '
-        'the missing "se" is a Grammar error, not a Word Choice or Natural '
-        'Language issue.',
+        'Live run against the original "no standard non-reflexive use" '
+        'wording (docs/category_tiebreak_battery.md, commit 15dac00) showed '
+        'the model proposing the correct fix ("Se levantó") in 10/10 runs, '
+        'but categorizing it Grammar only 1/10 times and Natural Language '
+        '9/10 — that wording let the model justify Natural Language by '
+        'pointing to "levantar"\'s other uses (levantar pesas, levantar la '
+        'mano) even in a sentence where the reflexive is the only complete '
+        'reading. The rule was sharpened to judge the specific sentence as '
+        'written rather than the verb\'s uses elsewhere in Spanish — this '
+        'sentence has no valid non-reflexive object, so under the sharpened '
+        'rule the missing "se" stays Grammar. Sentence deliberately avoids '
+        '"coger" — a word with its own dialectal/taboo history elsewhere in '
+        'this project\'s testing — so nothing else in the sentence competes '
+        'for the model\'s attention on the one error under test. '
+        'captureCorrectedPhrase is on for this check so the report shows '
+        'what fix the model actually proposes, not just its verdict and '
+        'category.',
     checks: [
       _PhraseCheck(
         id: 'CHAIN-REFL-1',
         label: 'Levantó -> Grammar (missing obligatory reflexive)',
-        text: 'Levantó temprano para coger el tren.',
+        text: 'Levantó temprano y desayunó con calma.',
         phrase: 'Levantó',
         expectedVerdict: 'error',
         expectedCategory: 'Grammar',
+        captureCorrectedPhrase: true,
       ),
     ],
   ),
@@ -701,7 +723,7 @@ String _describeDistribution(Map<String, int> counts) {
 
 String _describeError(Object error) => error.toString();
 
-String _describeRun(_RunRecord record) {
+String _describeRun(_RunRecord record, {bool includeCorrectedPhrase = false}) {
   final prefix = 'Run ${record.runIndex}';
   if (record.isError) {
     return '- $prefix: ERROR — ${_describeError(record.error!)}';
@@ -710,8 +732,10 @@ String _describeRun(_RunRecord record) {
   if (result == null) {
     return '- $prefix: (no matching result returned)';
   }
+  final correctedSuffix =
+      includeCorrectedPhrase ? ', corrected_phrase="${result.correctedPhrase}"' : '';
   return '- $prefix: verdict=${result.verdict}, category=${_distKey(result.category)}, '
-      'occurrence=${result.occurrence}';
+      'occurrence=${result.occurrence}$correctedSuffix';
 }
 
 /// Builds the full markdown report: one section per case (its rule and
@@ -778,7 +802,9 @@ String _buildReport({
         ..writeln();
 
       for (final record in records) {
-        report.writeln(_describeRun(record));
+        report.writeln(
+          _describeRun(record, includeCorrectedPhrase: check.captureCorrectedPhrase),
+        );
       }
       report.writeln();
     }
@@ -939,6 +965,23 @@ void main() {
     expect(checkFor('CHAIN-REFL-1').expectedCategory, 'Grammar');
     expect(checkFor('CHAIN-REFL-2-directObject').expectedVerdict, 'not_an_error');
     expect(checkFor('CHAIN-REFL-2-porPhrase').expectedVerdict, 'not_an_error');
+
+    // CHAIN-REFL-1's sentence must not contain "coger" — it has its own
+    // dialectal/taboo history elsewhere in this project's testing, and its
+    // presence would confound reasoning about the unrelated missing-
+    // reflexive error under test here.
+    expect(checkFor('CHAIN-REFL-1').text.contains('coger'), isFalse);
+
+    // Only CHAIN-REFL-1 captures corrected_phrase in the report; every
+    // other check is scored on verdict/category alone.
+    expect(checkFor('CHAIN-REFL-1').captureCorrectedPhrase, isTrue);
+    for (final check in allChecks.where((c) => c.id != 'CHAIN-REFL-1')) {
+      expect(
+        check.captureCorrectedPhrase,
+        isFalse,
+        reason: '${check.id}: captureCorrectedPhrase should stay off unless requested.',
+      );
+    }
   });
 
   group('_groupChecksByText', () {
@@ -1131,6 +1174,72 @@ void main() {
     expect(report, contains('Run 1: verdict=error, category=Grammar, occurrence=1'));
   });
 
+  test('_describeRun includes corrected_phrase only when requested', () {
+    const record = _RunRecord(
+      checkId: 'x',
+      runIndex: 1,
+      result: _CategorizationResult(
+        originalPhrase: 'Levantó',
+        correctedPhrase: 'Se levantó',
+        occurrence: 1,
+        category: 'Grammar',
+        verdict: 'error',
+      ),
+    );
+
+    expect(
+      _describeRun(record),
+      '- Run 1: verdict=error, category=Grammar, occurrence=1',
+    );
+    expect(
+      _describeRun(record, includeCorrectedPhrase: true),
+      '- Run 1: verdict=error, category=Grammar, occurrence=1, '
+      'corrected_phrase="Se levantó"',
+    );
+  });
+
+  test(
+    '_buildReport surfaces corrected_phrase for CHAIN-REFL-1 '
+    '(captureCorrectedPhrase is on for this check only)',
+    () {
+      final testCase = _cases.firstWhere((c) => c.id == 'CHAIN-REFL-1');
+      final check = testCase.checks.single;
+      final recordsByCheckId = {
+        check.id: [
+          _buildRunRecord(
+            check: check,
+            runIndex: 1,
+            results: const [
+              _CategorizationResult(
+                originalPhrase: 'Levantó',
+                correctedPhrase: 'Se levantó',
+                occurrence: 1,
+                category: 'Grammar',
+                verdict: 'error',
+              ),
+            ],
+          ),
+        ],
+      };
+
+      final report = _buildReport(
+        model: 'test-model',
+        runsPerCase: 1,
+        generatedAt: DateTime.utc(2026, 1, 1, 12),
+        cases: [testCase],
+        recordsByCheckId: recordsByCheckId,
+      );
+
+      expect(
+        report,
+        contains(
+          'Run 1: verdict=error, category=Grammar, occurrence=1, '
+          'corrected_phrase="Se levantó"',
+        ),
+      );
+    },
+  );
+
   test(
     'category tiebreak battery (live)',
     () async {
@@ -1179,7 +1288,7 @@ void main() {
                     : _buildRunRecord(check: check, runIndex: run, results: results!);
                 recordsByCheckId.putIfAbsent(check.id, () => []).add(record);
                 // ignore: avoid_print
-                print(_describeRun(record));
+                print(_describeRun(record, includeCorrectedPhrase: check.captureCorrectedPhrase));
               }
 
               await Future<void>.delayed(const Duration(milliseconds: callDelayMs));

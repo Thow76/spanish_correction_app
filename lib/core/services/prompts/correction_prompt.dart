@@ -290,7 +290,7 @@ Boundary rules:
 - Mandatory contractions (al, del) and suppletive forms (conmigo, contigo, consigo) are Grammar, even though the error looks like a spelling or fusion issue.
 - Pronoun and clitic errors — case, agreement, order, placement, or doubling (e.g. "se los dije", "me se cayó", laísmo/loísmo) — are Grammar, never Other, however complex the clitic system seems.
 - Se/sé-type diacritic pairs are Spelling first, never Word Choice; only reclassify as Grammar when the specific case is a mandatory contraction or suppletive form (per the rule above).
-- Reflexive/non-reflexive verb pairs (e.g. decidir/decidirse, levantar/levantarse): if the verb has no standard non-reflexive use, a missing reflexive is Grammar; if both forms exist with different complements, the choice between them is Natural Language.
+- Reflexive/non-reflexive verb pairs (e.g. decidir/decidirse, levantar/levantarse): judge by this specific sentence, not by whether the verb has other uses elsewhere in Spanish. If the sentence as written is incomplete or ungrammatical without the reflexive — the non-reflexive reading has no valid object or leaves the clause hanging — the missing reflexive is Grammar, even if that same verb has a valid non-reflexive use in a different sentence. Only use Natural Language when the sentence as written is already a complete, correct sentence on its own, and a different, equally complete sentence exists with the reflexive form carrying a different meaning.
 
 Calque test: a phrase is error on calque grounds only if no established variety uses it natively for that meaning. If any variety treats it as normal, it isn't a calque error — decide between dialectal and not_an_error instead.
 
