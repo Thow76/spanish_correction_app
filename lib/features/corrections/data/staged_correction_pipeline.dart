@@ -6,6 +6,7 @@ import '../domain/correction_response.dart';
 import '../domain/staged_correction_insertion_resolver.dart';
 import '../domain/staged_correction_overlap_resolver.dart';
 import '../domain/staged_correction_position_resolver.dart';
+import '../domain/staged_correction_span_scope_trim_resolver.dart';
 import '../domain/staged_correction_verdict_splitter.dart';
 import 'openai_chat_completions_client.dart';
 import 'stage1_detection_client.dart';
@@ -14,8 +15,8 @@ import 'stage3_feedback_client.dart';
 
 /// Runs the full staged correction pipeline against Spanish text — Stage 1 +
 /// Stage 1B + Stage 1C detection, Stage 2 categorization, positioning,
-/// insertion narrowing, dedup, verdict splitting, and Stage 3 feedback — and
-/// returns a finished [CorrectionResponse].
+/// insertion narrowing, span-scope trimming, dedup, verdict splitting, and
+/// Stage 3 feedback — and returns a finished [CorrectionResponse].
 ///
 /// This is the first place all of those pieces run together; every one of
 /// them was already built and tested independently against hand-built
@@ -59,7 +60,8 @@ Future<CorrectionResponse> runStagedCorrectionPipeline({
     candidates: categorized,
   );
   final withSpans = resolveInsertionOffsets(positioned);
-  final deduped = resolveOverlappingCandidates(withSpans);
+  final trimmed = resolveSpanScopeTrim(withSpans);
+  final deduped = resolveOverlappingCandidates(trimmed);
   final split = splitStagedCorrections(deduped);
 
   if (split.errorItems.isEmpty && split.dialectalCandidates.isEmpty) {

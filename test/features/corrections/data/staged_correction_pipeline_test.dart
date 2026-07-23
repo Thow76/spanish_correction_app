@@ -219,6 +219,54 @@ void main() {
     },
   );
 
+  test(
+    'trims a Natural Language + span_scope exact correction down to its '
+    'shared-affix core before it reaches dedup/verdict-split/Stage 3, '
+    'through the real pipeline function with only the network layer faked',
+    () async {
+      const text =
+          '¿Puedo tener una cerveza? Quiero pasar un buen tiempo con mis '
+          'amigos esta noche.';
+      final flaggedIndex = text.indexOf('Puedo tener una cerveza');
+
+      final client = _RoutingHttpClient({
+        stage1DetectionDialectSpanish: _arrayEnvelope([
+          '"Puedo tener una cerveza"',
+        ]),
+        stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+        stage2CategorizationSpanish: _arrayEnvelope([
+          '{"original_phrase": "Puedo tener una cerveza", "corrected_phrase": '
+              '"Me da una cerveza", "occurrence": 1, "category": "Natural '
+              'Language", "verdict": "error", "span_scope": "exact"}',
+        ]),
+        stage3FeedbackSpanish: _arrayEnvelope([
+          '{"start_index": $flaggedIndex, "short_explanation": '
+              '"More natural as a request than a question about ability."}',
+        ]),
+      });
+
+      final response = await runStagedCorrectionPipeline(
+        client: OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+        ),
+        model: 'gpt-5.5',
+        submittedText: text,
+      );
+
+      expect(response.corrections, hasLength(1));
+      final correction = response.corrections.single;
+      // Trimmed from "Puedo tener una cerveza" -> "Me da una cerveza": no
+      // shared prefix, a 12-grapheme shared suffix (" una cerveza"), so the
+      // anchor narrows to just the predicate that actually changed.
+      expect(correction.originalPhrase, 'Puedo tener');
+      expect(correction.correctedPhrase, 'Me da');
+      expect(correction.startIndex, flaggedIndex);
+      expect(correction.endIndex, flaggedIndex + 'Puedo tener'.length);
+    },
+  );
+
   group(
     'pure-deletion corrections (empty corrected_phrase) do not leave a '
     'double space behind',
