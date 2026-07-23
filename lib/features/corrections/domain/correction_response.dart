@@ -33,21 +33,93 @@ class CorrectionResponse {
   }) {
     final rawCorrections = json['corrections'];
 
+    final parsedCorrections = rawCorrections is List
+        ? rawCorrections
+              .whereType<Map<String, Object?>>()
+              .map(
+                (json) => CorrectionItem.fromJson(
+                  json,
+                  allowLegacyCategories: allowLegacyCategories,
+                ),
+              )
+              .toList()
+        : const <CorrectionItem>[];
+
     return CorrectionResponse(
       originalText: json['original_text'] as String? ?? '',
       correctedText: json['corrected_text'] as String? ?? '',
-      corrections: rawCorrections is List
-          ? rawCorrections
-                .whereType<Map<String, Object?>>()
-                .map(
-                  (json) => CorrectionItem.fromJson(
-                    json,
-                    allowLegacyCategories: allowLegacyCategories,
-                  ),
-                )
-                .toList()
-          : const [],
+      corrections: _recomputeMissingCorrectedRanges(parsedCorrections),
     );
+  }
+
+  /// `CorrectionItem.toJson()` has never serialized `corrected_start_index`/
+  /// `corrected_end_index` (see its definition), so every correction reloaded
+  /// from persisted history parses those back as null via
+  /// `CorrectionItem.fromJson`. This recomputes them from the original-side
+  /// data that *is* persisted (`startIndex`, `originalPhrase`,
+  /// `correctedPhrase`) — the same way `fromAnchoredJson` computes them for a
+  /// fresh response — but only for the specific items missing them, mirroring
+  /// `SavedCorrection`'s fallback-for-legacy-nulls approach rather than
+  /// touching every item unconditionally.
+  ///
+  /// Gated two ways:
+  /// - Only items with a null corrected range *and* a non-null original range
+  ///   are recomputed. Items with no original-side range at all (data saved
+  ///   before anchored parsing existed) are left untouched instead of being
+  ///   handed to [computeCorrectedRanges], which throws on any item missing
+  ///   `startIndex`/`endIndex`.
+  /// - The "needs recompute" subset is deduped via
+  ///   [resolveOverlappingCorrections] before ranges are computed, since
+  ///   dedup was added well after the app started persisting history —
+  ///   already-saved corrections cannot be assumed non-overlapping, and
+  ///   [computeCorrectedRanges] requires non-overlapping input.
+  static List<CorrectionItem> _recomputeMissingCorrectedRanges(
+    List<CorrectionItem> corrections,
+  ) {
+    final needsRecompute = <CorrectionItem>[];
+    for (final item in corrections) {
+      final hasCorrectedRange =
+          item.correctedStartIndex != null && item.correctedEndIndex != null;
+      final hasOriginalRange = item.startIndex != null && item.endIndex != null;
+      if (!hasCorrectedRange && hasOriginalRange) {
+        needsRecompute.add(item);
+      }
+    }
+
+    if (needsRecompute.isEmpty) {
+      return corrections;
+    }
+
+    // Two duplicate corrections can carry identical startIndex/endIndex
+    // values, so the surviving-vs-dropped distinction has to be tracked by
+    // object identity, not by range value. resolveOverlappingCorrections
+    // only filters/reorders its input (same instances survive), so identity
+    // still lines up here; computeCorrectedRanges then rebuilds fresh
+    // instances in that same order (it neither drops nor adds items), which
+    // is why the two lists can be zipped positionally below.
+    final deduped = resolveOverlappingCorrections(needsRecompute);
+    final recomputed = computeCorrectedRanges(deduped);
+    final recomputedByOriginal = <CorrectionItem, CorrectionItem>{
+      for (var i = 0; i < deduped.length; i++) deduped[i]: recomputed[i],
+    };
+    final needsRecomputeSet = needsRecompute.toSet();
+
+    final merged = <CorrectionItem>[];
+    for (final item in corrections) {
+      if (!needsRecomputeSet.contains(item)) {
+        merged.add(item);
+        continue;
+      }
+      final replacement = recomputedByOriginal[item];
+      if (replacement != null) {
+        merged.add(replacement);
+      }
+      // Otherwise this item was an overlapping duplicate that
+      // resolveOverlappingCorrections dropped in favor of another item
+      // covering the same span.
+    }
+
+    return merged;
   }
 
   factory CorrectionResponse.fromAnchoredJson(
@@ -139,7 +211,11 @@ class CorrectionResponse {
               correction.endIndex!,
             )
           : (correction.startIndex!, correction.endIndex!);
-      characters.replaceRange(start, end, correction.correctedPhrase.characters);
+      characters.replaceRange(
+        start,
+        end,
+        correction.correctedPhrase.characters,
+      );
     }
 
     return characters.join();

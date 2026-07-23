@@ -87,6 +87,161 @@ void main() {
     expect(response.corrections.single.category, ErrorCategory.grammar);
   });
 
+  test('default parsing recomputes corrected ranges for history data that has '
+      'original-side indices but no persisted corrected-side indices', () {
+    // Shaped like real stored history data: CorrectionItem.toJson() has
+    // never serialized corrected_start_index/corrected_end_index, so a
+    // real saved-then-reloaded correction always looks like this — present
+    // start_index/end_index, absent corrected_start_index/
+    // corrected_end_index.
+    final response = CorrectionResponse.fromJson({
+      'original_text': 'Ayer yo fue al mercado.',
+      'corrected_text': 'Ayer fui al mercado.',
+      'corrections': [
+        {
+          'start_index': 8,
+          'end_index': 11,
+          'original_phrase': 'fue',
+          'corrected_phrase': 'fui',
+          'category': 'Grammar',
+          'short_explanation': 'Use fui with yo in the preterite.',
+        },
+      ],
+    });
+
+    final correction = response.corrections.single;
+    expect(correction.correctedStartIndex, 8);
+    expect(correction.correctedEndIndex, 11);
+  });
+
+  test('default parsing leaves corrections with no original-side range at all '
+      'untouched, rather than crashing on computeCorrectedRanges', () {
+    // Legacy shape: data saved before anchored parsing existed carries no
+    // start_index/end_index whatsoever. computeCorrectedRanges throws on
+    // any item missing those, so this item must never be handed to it.
+    final response = CorrectionResponse.fromJson({
+      'original_text': 'Estoy a casa.',
+      'corrected_text': 'Estoy en casa.',
+      'corrections': [
+        {
+          'original_phrase': 'a',
+          'corrected_phrase': 'en',
+          'category': 'Preposition',
+          'short_explanation': 'Use en with location.',
+        },
+      ],
+    });
+
+    final correction = response.corrections.single;
+    expect(correction.startIndex, isNull);
+    expect(correction.endIndex, isNull);
+    expect(correction.correctedStartIndex, isNull);
+    expect(correction.correctedEndIndex, isNull);
+  });
+
+  test('default parsing dedups overlapping corrections before computing '
+      'corrected ranges, for history saved before dedup existed', () {
+    // resolveOverlappingCorrections landed well after persistence started,
+    // so history saved in between may contain the same edit reported
+    // twice with overlapping ranges. Both here cover the same span.
+    final response = CorrectionResponse.fromJson({
+      'original_text': 'Ayer yo fue al mercado.',
+      'corrected_text': 'Ayer fui al mercado.',
+      'corrections': [
+        {
+          'start_index': 8,
+          'end_index': 11,
+          'original_phrase': 'fue',
+          'corrected_phrase': 'fui',
+          'category': 'Grammar',
+          'short_explanation': 'Use fui with yo in the preterite.',
+        },
+        {
+          'start_index': 8,
+          'end_index': 11,
+          'original_phrase': 'fue',
+          'corrected_phrase': 'fui',
+          'category': 'Grammar',
+          'short_explanation': 'Duplicate report of the same edit.',
+        },
+      ],
+    });
+
+    expect(response.corrections, hasLength(1));
+    final correction = response.corrections.single;
+    expect(correction.correctedStartIndex, 8);
+    expect(correction.correctedEndIndex, 11);
+  });
+
+  test('CorrectionItem.toJson() serializes non-null corrected ranges, and '
+      'fromJson() reads them back unchanged (write-side round trip)', () {
+    const item = CorrectionItem(
+      originalPhrase: 'fue',
+      correctedPhrase: 'fui',
+      category: ErrorCategory.grammar,
+      shortExplanation: 'Use fui with yo in the preterite.',
+      startIndex: 8,
+      endIndex: 11,
+      correctedStartIndex: 8,
+      correctedEndIndex: 11,
+    );
+
+    final json = item.toJson();
+    expect(json['corrected_start_index'], 8);
+    expect(json['corrected_end_index'], 11);
+
+    final roundTripped = CorrectionItem.fromJson(json);
+    expect(roundTripped.correctedStartIndex, 8);
+    expect(roundTripped.correctedEndIndex, 11);
+  });
+
+  test(
+    'CorrectionItem.toJson() omits corrected_start_index/corrected_end_index '
+    'entirely when they are null, rather than writing them as null',
+    () {
+      const item = CorrectionItem(
+        originalPhrase: 'a',
+        correctedPhrase: 'en',
+        category: ErrorCategory.grammar,
+        shortExplanation: 'Use en with location.',
+      );
+
+      final json = item.toJson();
+      expect(json.containsKey('corrected_start_index'), isFalse);
+      expect(json.containsKey('corrected_end_index'), isFalse);
+    },
+  );
+
+  test('default parsing does not recompute (and does not alter) corrected '
+      'ranges for a correction that already round-tripped through the new '
+      'write path with non-null corrected ranges', () {
+    // Shaped like a freshly saved entry under the write-side fix: the
+    // source JSON already carries corrected_start_index/
+    // corrected_end_index, so the recompute gate in
+    // CorrectionResponse.fromJson (which only fires when those are null)
+    // must leave this item untouched.
+    final response = CorrectionResponse.fromJson({
+      'original_text': 'Ayer yo fue al mercado.',
+      'corrected_text': 'Ayer fui al mercado.',
+      'corrections': [
+        {
+          'start_index': 8,
+          'end_index': 11,
+          'original_phrase': 'fue',
+          'corrected_phrase': 'fui',
+          'corrected_start_index': 8,
+          'corrected_end_index': 11,
+          'category': 'Grammar',
+          'short_explanation': 'Use fui with yo in the preterite.',
+        },
+      ],
+    });
+
+    final correction = response.corrections.single;
+    expect(correction.correctedStartIndex, 8);
+    expect(correction.correctedEndIndex, 11);
+  });
+
   test('anchored parsing derives original phrases from submitted text', () {
     final response = CorrectionResponse.fromAnchoredJson(
       {
@@ -119,67 +274,61 @@ void main() {
     expect(response.corrections.single.endIndex, 11);
   });
 
-  test(
-    'anchored parsing derives endIndex from start_index + phrase length '
-    'when end_index is absent from the model JSON',
-    () {
-      // end_index is no longer part of the schema the model is sent — this
-      // confirms anchoring still works correctly using only start_index.
-      final response = CorrectionResponse.fromAnchoredJson(
-        {
-          'original_text': 'Cómo estás? Qué tal?',
-          'corrected_text': '¿Cómo estás? Qué tal?',
-          'corrections': [
-            {
-              'start_index': 0,
-              'original_phrase': 'Cómo estás?',
-              'corrected_phrase': '¿Cómo estás?',
-              'category': 'Grammar',
-              'short_explanation': 'Spanish questions need an opening mark.',
-            },
-          ],
-        },
-        submittedText: 'Cómo estás? Qué tal?',
-        allowLegacyCategories: false,
-      );
+  test('anchored parsing derives endIndex from start_index + phrase length '
+      'when end_index is absent from the model JSON', () {
+    // end_index is no longer part of the schema the model is sent — this
+    // confirms anchoring still works correctly using only start_index.
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Cómo estás? Qué tal?',
+        'corrected_text': '¿Cómo estás? Qué tal?',
+        'corrections': [
+          {
+            'start_index': 0,
+            'original_phrase': 'Cómo estás?',
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+        ],
+      },
+      submittedText: 'Cómo estás? Qué tal?',
+      allowLegacyCategories: false,
+    );
 
-      expect(response.corrections.single.originalPhrase, 'Cómo estás?');
-      expect(response.corrections.single.startIndex, 0);
-      expect(response.corrections.single.endIndex, 11);
-    },
-  );
+    expect(response.corrections.single.originalPhrase, 'Cómo estás?');
+    expect(response.corrections.single.startIndex, 0);
+    expect(response.corrections.single.endIndex, 11);
+  });
 
-  test(
-    'anchored parsing ignores a stray end_index value in the model JSON, '
-    'since it is no longer read',
-    () {
-      // Even if a client/model sent a wrong or stale end_index, it must have
-      // zero effect: endIndex is always derived from start_index + phrase
-      // length, never from the model's end_index value.
-      final response = CorrectionResponse.fromAnchoredJson(
-        {
-          'original_text': 'Cómo estás? Qué tal?',
-          'corrected_text': '¿Cómo estás? Qué tal?',
-          'corrections': [
-            {
-              'start_index': 0,
-              'end_index': 999,
-              'original_phrase': 'Cómo estás?',
-              'corrected_phrase': '¿Cómo estás?',
-              'category': 'Grammar',
-              'short_explanation': 'Spanish questions need an opening mark.',
-            },
-          ],
-        },
-        submittedText: 'Cómo estás? Qué tal?',
-        allowLegacyCategories: false,
-      );
+  test('anchored parsing ignores a stray end_index value in the model JSON, '
+      'since it is no longer read', () {
+    // Even if a client/model sent a wrong or stale end_index, it must have
+    // zero effect: endIndex is always derived from start_index + phrase
+    // length, never from the model's end_index value.
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Cómo estás? Qué tal?',
+        'corrected_text': '¿Cómo estás? Qué tal?',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 999,
+            'original_phrase': 'Cómo estás?',
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+        ],
+      },
+      submittedText: 'Cómo estás? Qué tal?',
+      allowLegacyCategories: false,
+    );
 
-      expect(response.corrections.single.originalPhrase, 'Cómo estás?');
-      expect(response.corrections.single.startIndex, 0);
-      expect(response.corrections.single.endIndex, 11);
-    },
-  );
+    expect(response.corrections.single.originalPhrase, 'Cómo estás?');
+    expect(response.corrections.single.startIndex, 0);
+    expect(response.corrections.single.endIndex, 11);
+  });
 
   test('anchored parsing reconstructs corrected text from anchored edits', () {
     final response = CorrectionResponse.fromAnchoredJson(
@@ -246,50 +395,47 @@ void main() {
     expect(response.corrections.first.endIndex, 0);
   });
 
-  test(
-    'anchored parsing reconstructs literally from itemised insertions, '
-    'even when the model corrected_text disagrees',
-    () {
-      // corrected_text is no longer a trusted fallback: the model's own
-      // corrected_text here is the coherent, intended fix ("bienvenido" ->
-      // "bienvenidos"), but it is not itemised as a correction, so it is
-      // ignored. Only the two itemised (if odd) insertions are applied.
-      final response = CorrectionResponse.fromAnchoredJson(
-        {
-          'original_text':
-              'Hola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
-          'corrected_text':
-              'Hola a todos y bienvenidos a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
-          'corrections': [
-            {
-              'start_index': 0,
-              'end_index': 0,
-              'original_phrase': '',
-              'corrected_phrase': 'i',
-              'category': 'Spelling',
-              'short_explanation': 'Itemised insertion at the start.',
-            },
-            {
-              'start_index': 81,
-              'end_index': 81,
-              'original_phrase': '',
-              'corrected_phrase': '!',
-              'category': 'Grammar',
-              'short_explanation': 'Itemised insertion mid-sentence.',
-            },
-          ],
-        },
-        submittedText:
+  test('anchored parsing reconstructs literally from itemised insertions, '
+      'even when the model corrected_text disagrees', () {
+    // corrected_text is no longer a trusted fallback: the model's own
+    // corrected_text here is the coherent, intended fix ("bienvenido" ->
+    // "bienvenidos"), but it is not itemised as a correction, so it is
+    // ignored. Only the two itemised (if odd) insertions are applied.
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text':
             'Hola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
-        allowLegacyCategories: false,
-      );
+        'corrected_text':
+            'Hola a todos y bienvenidos a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
+        'corrections': [
+          {
+            'start_index': 0,
+            'end_index': 0,
+            'original_phrase': '',
+            'corrected_phrase': 'i',
+            'category': 'Spelling',
+            'short_explanation': 'Itemised insertion at the start.',
+          },
+          {
+            'start_index': 81,
+            'end_index': 81,
+            'original_phrase': '',
+            'corrected_phrase': '!',
+            'category': 'Grammar',
+            'short_explanation': 'Itemised insertion mid-sentence.',
+          },
+        ],
+      },
+      submittedText:
+          'Hola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y famosa por todo el mundo.',
+      allowLegacyCategories: false,
+    );
 
-      expect(
-        response.correctedText,
-        'iHola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y !famosa por todo el mundo.',
-      );
-    },
-  );
+    expect(
+      response.correctedText,
+      'iHola a todos y bienvenido a Escocia, un gran país con una cultura muy profunda y !famosa por todo el mundo.',
+    );
+  });
 
   test('anchored parsing rejects unrelated model corrected text', () {
     final response = CorrectionResponse.fromAnchoredJson(
@@ -456,57 +602,62 @@ void main() {
     expect(response.corrections, isEmpty);
   });
 
-  test('anchored parsing re-anchors when the model indexes drift off the echoed phrase', () {
-    final response = CorrectionResponse.fromAnchoredJson(
-      {
-        'original_text':
-            'Hola, me llamo Andrew y soy de Escocia. Estoy 50 años.',
-        'corrected_text':
-            'Hola, me llamo Andrew y soy de Escocia. Tengo 50 años.',
-        'corrections': [
-          {
-            'start_index': 5,
-            'end_index': 10,
-            'original_phrase': 'Estoy',
-            'corrected_phrase': 'Tengo',
-            'category': 'Word Choice',
-            'short_explanation': 'Use tener to express age in Spanish.',
-          },
-        ],
-      },
-      submittedText:
-          'Hola, me llamo Andrew y soy de Escocia. Estoy 50 años.',
-      allowLegacyCategories: false,
-    );
+  test(
+    'anchored parsing re-anchors when the model indexes drift off the echoed phrase',
+    () {
+      final response = CorrectionResponse.fromAnchoredJson(
+        {
+          'original_text':
+              'Hola, me llamo Andrew y soy de Escocia. Estoy 50 años.',
+          'corrected_text':
+              'Hola, me llamo Andrew y soy de Escocia. Tengo 50 años.',
+          'corrections': [
+            {
+              'start_index': 5,
+              'end_index': 10,
+              'original_phrase': 'Estoy',
+              'corrected_phrase': 'Tengo',
+              'category': 'Word Choice',
+              'short_explanation': 'Use tener to express age in Spanish.',
+            },
+          ],
+        },
+        submittedText: 'Hola, me llamo Andrew y soy de Escocia. Estoy 50 años.',
+        allowLegacyCategories: false,
+      );
 
-    final correction = response.corrections.single;
-    expect(correction.originalPhrase, 'Estoy');
-    expect(correction.correctedPhrase, 'Tengo');
-    expect(correction.startIndex, 40);
-    expect(correction.endIndex, 45);
-  });
+      final correction = response.corrections.single;
+      expect(correction.originalPhrase, 'Estoy');
+      expect(correction.correctedPhrase, 'Tengo');
+      expect(correction.startIndex, 40);
+      expect(correction.endIndex, 45);
+    },
+  );
 
-  test('anchored parsing drops corrections without an echoed original_phrase', () {
-    final response = CorrectionResponse.fromAnchoredJson(
-      {
-        'original_text': 'Cómo estás?',
-        'corrected_text': '¿Cómo estás?',
-        'corrections': [
-          {
-            'start_index': 0,
-            'end_index': 11,
-            'corrected_phrase': '¿Cómo estás?',
-            'category': 'Grammar',
-            'short_explanation': 'Missing opening question mark.',
-          },
-        ],
-      },
-      submittedText: 'Cómo estás?',
-      allowLegacyCategories: false,
-    );
+  test(
+    'anchored parsing drops corrections without an echoed original_phrase',
+    () {
+      final response = CorrectionResponse.fromAnchoredJson(
+        {
+          'original_text': 'Cómo estás?',
+          'corrected_text': '¿Cómo estás?',
+          'corrections': [
+            {
+              'start_index': 0,
+              'end_index': 11,
+              'corrected_phrase': '¿Cómo estás?',
+              'category': 'Grammar',
+              'short_explanation': 'Missing opening question mark.',
+            },
+          ],
+        },
+        submittedText: 'Cómo estás?',
+        allowLegacyCategories: false,
+      );
 
-    expect(response.corrections, isEmpty);
-  });
+      expect(response.corrections, isEmpty);
+    },
+  );
 
   test('anchored parsing drops stale echoed original phrases', () {
     final response = CorrectionResponse.fromAnchoredJson(
@@ -531,70 +682,64 @@ void main() {
     expect(response.corrections, isEmpty);
   });
 
-  test(
-    'anchored parsing does not crash on a response shaped like the reduced '
-    'schema — no corrected_text, corrected_start_index, or '
-    'corrected_end_index anywhere in the JSON',
-    () {
-      // Shaped exactly like what correctionResponseJsonSchema now produces:
-      // no top-level corrected_text, and no per-item corrected_start_index/
-      // corrected_end_index. fromAnchoredJson must not throw, must still
-      // build a correct, code-reconstructed correctedText, and must compute
-      // (not read from JSON) the corrected-side range via
-      // computeCorrectedRanges.
-      final response = CorrectionResponse.fromAnchoredJson(
-        {
-          'original_text': 'Como estas? Que tal?',
-          'corrections': [
-            {
-              'start_index': 0,
-              'original_phrase': 'Como estas?',
-              'corrected_phrase': '¿Cómo estás?',
-              'category': 'Grammar',
-              'short_explanation': 'Spanish questions need an opening mark.',
-            },
-          ],
-        },
-        submittedText: 'Como estas? Que tal?',
-        allowLegacyCategories: false,
-      );
+  test('anchored parsing does not crash on a response shaped like the reduced '
+      'schema — no corrected_text, corrected_start_index, or '
+      'corrected_end_index anywhere in the JSON', () {
+    // Shaped exactly like what correctionResponseJsonSchema now produces:
+    // no top-level corrected_text, and no per-item corrected_start_index/
+    // corrected_end_index. fromAnchoredJson must not throw, must still
+    // build a correct, code-reconstructed correctedText, and must compute
+    // (not read from JSON) the corrected-side range via
+    // computeCorrectedRanges.
+    final response = CorrectionResponse.fromAnchoredJson(
+      {
+        'original_text': 'Como estas? Que tal?',
+        'corrections': [
+          {
+            'start_index': 0,
+            'original_phrase': 'Como estas?',
+            'corrected_phrase': '¿Cómo estás?',
+            'category': 'Grammar',
+            'short_explanation': 'Spanish questions need an opening mark.',
+          },
+        ],
+      },
+      submittedText: 'Como estas? Que tal?',
+      allowLegacyCategories: false,
+    );
 
-      expect(response.originalText, 'Como estas? Que tal?');
-      expect(response.correctedText, '¿Cómo estás? Que tal?');
-      expect(response.corrections.single.originalPhrase, 'Como estas?');
-      expect(response.corrections.single.correctedPhrase, '¿Cómo estás?');
-      // Computed by computeCorrectedRanges: nothing to its left, so
-      // correctedStartIndex == its own startIndex (0), and correctedEndIndex
-      // is 0 + "¿Cómo estás?".length (12 graphemes).
-      expect(response.corrections.single.correctedStartIndex, 0);
-      expect(response.corrections.single.correctedEndIndex, 12);
-    },
-  );
+    expect(response.originalText, 'Como estas? Que tal?');
+    expect(response.correctedText, '¿Cómo estás? Que tal?');
+    expect(response.corrections.single.originalPhrase, 'Como estas?');
+    expect(response.corrections.single.correctedPhrase, '¿Cómo estás?');
+    // Computed by computeCorrectedRanges: nothing to its left, so
+    // correctedStartIndex == its own startIndex (0), and correctedEndIndex
+    // is 0 + "¿Cómo estás?".length (12 graphemes).
+    expect(response.corrections.single.correctedStartIndex, 0);
+    expect(response.corrections.single.correctedEndIndex, 12);
+  });
 
-  test(
-    'anchored parsing does not crash on a completely empty JSON object '
-    '(no keys at all)',
-    () {
-      expect(
-        () => CorrectionResponse.fromAnchoredJson(
-          const {},
-          submittedText: 'Cómo estás?',
-          allowLegacyCategories: false,
-        ),
-        returnsNormally,
-      );
-
-      final response = CorrectionResponse.fromAnchoredJson(
+  test('anchored parsing does not crash on a completely empty JSON object '
+      '(no keys at all)', () {
+    expect(
+      () => CorrectionResponse.fromAnchoredJson(
         const {},
         submittedText: 'Cómo estás?',
         allowLegacyCategories: false,
-      );
+      ),
+      returnsNormally,
+    );
 
-      expect(response.originalText, 'Cómo estás?');
-      expect(response.correctedText, 'Cómo estás?');
-      expect(response.corrections, isEmpty);
-    },
-  );
+    final response = CorrectionResponse.fromAnchoredJson(
+      const {},
+      submittedText: 'Cómo estás?',
+      allowLegacyCategories: false,
+    );
+
+    expect(response.originalText, 'Cómo estás?');
+    expect(response.correctedText, 'Cómo estás?');
+    expect(response.corrections, isEmpty);
+  });
 
   test('notes defaults to empty when not provided', () {
     const response = CorrectionResponse(

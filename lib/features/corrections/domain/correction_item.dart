@@ -148,9 +148,7 @@ class CorrectionItem {
     // from start_index + the length of the (already-validated) phrase.
     final modelEndIndex = modelStartIndex + phraseGraphemes.length;
     if (modelStartIndex >= 0 && modelEndIndex <= graphemes.length) {
-      final slice = graphemes
-          .sublist(modelStartIndex, modelEndIndex)
-          .join();
+      final slice = graphemes.sublist(modelStartIndex, modelEndIndex).join();
       if (slice == echoedOriginalPhrase) {
         return _Range(modelStartIndex, modelEndIndex);
       }
@@ -167,9 +165,8 @@ class CorrectionItem {
     }
 
     final best = matches.reduce(
-      (a, b) => (a - modelStartIndex).abs() <= (b - modelStartIndex).abs()
-          ? a
-          : b,
+      (a, b) =>
+          (a - modelStartIndex).abs() <= (b - modelStartIndex).abs() ? a : b,
     );
     return _Range(best, best + phraseGraphemes.length);
   }
@@ -204,6 +201,9 @@ class CorrectionItem {
       if (startIndex != null) 'start_index': startIndex,
       if (endIndex != null) 'end_index': endIndex,
       'corrected_phrase': correctedPhrase,
+      if (correctedStartIndex != null)
+        'corrected_start_index': correctedStartIndex,
+      if (correctedEndIndex != null) 'corrected_end_index': correctedEndIndex,
       'category': category.label,
       'short_explanation': shortExplanation,
     };

@@ -78,7 +78,9 @@ SharedAffixTrim calculateSharedAffixTrim({
   final originalLength = originalGraphemes.length;
   final correctedLength = correctedGraphemes.length;
 
-  final maxPrefixLength = originalLength < correctedLength ? originalLength : correctedLength;
+  final maxPrefixLength = originalLength < correctedLength
+      ? originalLength
+      : correctedLength;
   var prefixLength = 0;
   while (prefixLength < maxPrefixLength &&
       originalGraphemes[prefixLength] == correctedGraphemes[prefixLength]) {
@@ -93,6 +95,17 @@ SharedAffixTrim calculateSharedAffixTrim({
     suffixLength++;
   }
 
+  prefixLength = _wordSafePrefixLength(
+    prefixLength: prefixLength,
+    originalGraphemes: originalGraphemes,
+    correctedGraphemes: correctedGraphemes,
+  );
+  suffixLength = _wordSafeSuffixLength(
+    suffixLength: suffixLength,
+    originalGraphemes: originalGraphemes,
+    correctedGraphemes: correctedGraphemes,
+  );
+
   return SharedAffixTrim(
     prefixLength: prefixLength,
     suffixLength: suffixLength,
@@ -103,4 +116,81 @@ SharedAffixTrim calculateSharedAffixTrim({
         .sublist(prefixLength, correctedLength - suffixLength)
         .join(),
   );
+}
+
+bool _isWordGrapheme(String grapheme) {
+  return RegExp(r'^[\p{L}\p{N}]$', unicode: true).hasMatch(grapheme);
+}
+
+/// Shrinks a greedily-matched prefix length down to the nearest length that
+/// does not split a word in either phrase.
+///
+/// The greedy character-by-character walk in [calculateSharedAffixTrim]
+/// matches on raw grapheme equality alone, with no notion of word
+/// boundaries — it happily stops mid-word if that's where the phrases
+/// happen to diverge. E.g. "el finde siguiente" vs "el finde que viene"
+/// share nothing meaningful at the tail, but both happen to end in "e" —
+/// an untrimmed-for-boundary walk would cut both down to "siguient"/"que
+/// vien", slicing "siguiente"/"viene" mid-word. Trimming a shared prefix
+/// is only safe when the cut point falls where a real word already
+/// ended: either the boundary sits at the very start/end of a phrase, or
+/// the last trimmed grapheme and the first kept grapheme (in *either*
+/// phrase) are not both word characters. This walks the candidate length
+/// back one grapheme at a time until it finds such a boundary, or reaches
+/// 0 (always safe — a no-op trim).
+int _wordSafePrefixLength({
+  required int prefixLength,
+  required List<String> originalGraphemes,
+  required List<String> correctedGraphemes,
+}) {
+  var length = prefixLength;
+  while (length > 0) {
+    // Shared through `length` (that's the definition of a common prefix),
+    // so either phrase's grapheme at `length - 1` is equivalent here.
+    if (!_isWordGrapheme(originalGraphemes[length - 1])) {
+      break;
+    }
+    final splitsOriginal =
+        length < originalGraphemes.length &&
+        _isWordGrapheme(originalGraphemes[length]);
+    final splitsCorrected =
+        length < correctedGraphemes.length &&
+        _isWordGrapheme(correctedGraphemes[length]);
+    if (!splitsOriginal && !splitsCorrected) {
+      break;
+    }
+    length--;
+  }
+  return length;
+}
+
+/// Suffix-side counterpart to [_wordSafePrefixLength] — see its doc for why
+/// this shrink exists. Walks the candidate suffix length back until the cut
+/// point falls at a real word boundary in both phrases, or reaches 0.
+int _wordSafeSuffixLength({
+  required int suffixLength,
+  required List<String> originalGraphemes,
+  required List<String> correctedGraphemes,
+}) {
+  final originalLength = originalGraphemes.length;
+  final correctedLength = correctedGraphemes.length;
+  var length = suffixLength;
+  while (length > 0) {
+    // Shared through the trailing `length` graphemes, so either phrase's
+    // grapheme at this position is equivalent here.
+    if (!_isWordGrapheme(originalGraphemes[originalLength - length])) {
+      break;
+    }
+    final splitsOriginal =
+        originalLength - length - 1 >= 0 &&
+        _isWordGrapheme(originalGraphemes[originalLength - length - 1]);
+    final splitsCorrected =
+        correctedLength - length - 1 >= 0 &&
+        _isWordGrapheme(correctedGraphemes[correctedLength - length - 1]);
+    if (!splitsOriginal && !splitsCorrected) {
+      break;
+    }
+    length--;
+  }
+  return length;
 }
