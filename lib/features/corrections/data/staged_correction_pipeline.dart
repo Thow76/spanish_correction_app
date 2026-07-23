@@ -13,9 +13,9 @@ import 'stage2_categorization_client.dart';
 import 'stage3_feedback_client.dart';
 
 /// Runs the full staged correction pipeline against Spanish text — Stage 1 +
-/// Stage 1B detection, Stage 2 categorization, positioning, insertion
-/// narrowing, dedup, verdict splitting, and Stage 3 feedback — and returns
-/// a finished [CorrectionResponse].
+/// Stage 1B + Stage 1C detection, Stage 2 categorization, positioning,
+/// insertion narrowing, dedup, verdict splitting, and Stage 3 feedback — and
+/// returns a finished [CorrectionResponse].
 ///
 /// This is the first place all of those pieces run together; every one of
 /// them was already built and tested independently against hand-built

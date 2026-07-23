@@ -239,6 +239,48 @@ If there is nothing to flag, return none.
 Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["yo", "a mí"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
 ''';
 
+// ── Stage 1C dedicated reflexive-insertion pass ─────────────────────────
+//
+// A separate, narrow detection pass whose only job is a missing
+// obligatory reflexive pronoun (se, me, te, nos, os) on a verb that
+// requires it in the specific sentence it appears in — e.g. "Quejó" ->
+// "Se quejó", "Atrevió" -> "Se atrevió". Built on the same fix pattern as
+// `stage1RedundancyDetectionSpanish` above (a dedicated single-purpose
+// pass, not a change to the shared general detection prompt): an earlier
+// attempt to fold general clean-span guidance directly into the main
+// detection prompt (`stage1DetectionCleanSpanSpanish`, retired — see git
+// history) caused a regression on ES-4-calque, so this narrower pattern
+// gets its own dedicated pass instead of touching shared detection.
+//
+// Live as of this writing: run alongside Stage 1 and Stage 1B by
+// `callStage1AndMergeFlaggedPhrases` (stage1_detection_client.dart), whose
+// merged output feeds Stage 2/Stage 3 and position resolution the same as
+// the other two passes — reached via `runStagedCorrectionPipeline` /
+// `OpenAiCorrectionService.correctText` for Spanish. (`stage1DetectionSpanish`
+// above it in this file is the one Stage 1 variant that is genuinely
+// unused — see its own header comment.)
+//
+// Same JSON-array-of-quoted-phrases output shape as
+// `stage1RedundancyDetectionSpanish`, same naming reasoning as the other
+// stage1/2/3 constants: no `_es`/`_pt` prefix, so
+// `correction_prompt_symmetry_test.dart`'s scrape doesn't pick it up.
+//
+// Exercised in isolation, against fixed inputs, by
+// `test/stage1_reflexive_detection_harness.dart`. End-to-end span-width
+// behavior through the live pipeline is covered separately by
+// `test/stage1_reflexive_span_width_harness.dart`.
+const String stage1ReflexiveDetectionSpanish = '''
+You are a Spanish tutor reviewing a learner's work for one specific pattern: a missing obligatory reflexive pronoun (se, me, te, nos, os) on a verb that requires it in this specific sentence.
+
+Judge only the sentence as written. If the verb without a reflexive pronoun is incomplete or ungrammatical in this sentence — for example, "Levantó temprano" needs "Se levantó" to be a complete sentence — flag it. Do not flag a verb that is already correct without a reflexive pronoun in this specific sentence, even if that same verb can take a reflexive pronoun with a different meaning in a different sentence (for example, do not flag "Decidí el color del coche" — it is already complete and correct as written).
+
+For each missing reflexive, quote only the verb itself, exactly as it appears — never the surrounding clause or sentence.
+
+If there is nothing to flag, return none.
+
+Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["Levantó", "Quejó"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
+''';
+
 // ── Stage 2 categorization prompt (experimental, not wired into any live
 // path) ──────────────────────────────────────────────────────────────────
 //
@@ -294,7 +336,7 @@ Boundary rules:
 
 Calque test: a phrase is error on calque grounds only if no established variety uses it natively for that meaning. If any variety treats it as normal, it isn't a calque error — decide between dialectal and not_an_error instead.
 
-Restraint: don't use dialectal for ordinary regional vocabulary (coche/carro/auto, ordenador/computadora). Reserve it for splits with real risk of confusion or offense — not just a different, equally correct word. Do not use `dialectal` for ordinary regional preferences that carry no risk of confusion or offense (for example: tense preferences, preposition choice, pronoun systems like voseo or ustedes/vosotros). These are `not_an_error`. Reserve `dialectal` only for cases where both are true: the form is standard in at least one established variety, AND using it elsewhere risks real confusion or offense.
+Restraint: don't use dialectal for ordinary regional vocabulary (coche/carro/auto, ordenador/computadora). Reserve it for splits with real risk of confusion or offense — not just a different, equally correct word. Do not use `dialectal` for ordinary regional preferences that carry no risk of confusion or offense (for example: tense preferences, preposition choice, pronoun systems like voseo or ustedes/vosotros, and motion verb + para + destination such as "voy para casa" or "volví para casa"). These are `not_an_error`. Reserve `dialectal` only for cases where both are true: the form is standard in at least one established variety, AND using it elsewhere risks real confusion or offense.
 ''';
 
 // ── Stage 3 feedback prompt (experimental, not wired into any live path)

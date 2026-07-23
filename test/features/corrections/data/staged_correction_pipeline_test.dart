@@ -22,6 +22,7 @@ void main() {
       final client = _RoutingHttpClient({
         stage1DetectionDialectSpanish: _arrayEnvelope(['"trafico"']),
         stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
         stage2CategorizationSpanish: _arrayEnvelope([
           '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
               '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
@@ -70,6 +71,7 @@ void main() {
       final client = _RoutingHttpClient({
         stage1DetectionDialectSpanish: _arrayEnvelope(const []),
         stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
       });
 
       final response = await runStagedCorrectionPipeline(
@@ -97,6 +99,7 @@ void main() {
       final client = _RoutingHttpClient({
         stage1DetectionDialectSpanish: _arrayEnvelope(['"coche"']),
         stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
         stage2CategorizationSpanish: _arrayEnvelope([
           '{"original_phrase": "coche", "corrected_phrase": "coche", '
               '"occurrence": 1, "category": null, "verdict": "not_an_error"}',
@@ -139,6 +142,7 @@ void main() {
           '"coche"',
         ]),
         stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
         stage2CategorizationSpanish: _arrayEnvelope([
           '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
               '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
@@ -401,6 +405,7 @@ Map<String, String> _redundantPronounDeletionReplies({
     stage1RedundancyDetectionSpanish: _arrayEnvelope([
       for (final phrase in deletedPhrases) '"$phrase"',
     ]),
+    stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
     stage2CategorizationSpanish: _arrayEnvelope(stage2Entries),
     stage3FeedbackSpanish: _arrayEnvelope(stage3Entries),
   };
@@ -423,8 +428,9 @@ String _arrayEnvelope(List<String> elements) => jsonEncode({
 // ── Minimal dart:io HttpClient fake that routes a reply by the outgoing
 // request's system prompt ──
 //
-// The pipeline makes up to four calls (Stage 1 and Stage 1B concurrently,
-// then Stage 2, then Stage 3), each with a different, known system prompt.
+// The pipeline makes up to five calls (Stage 1, Stage 1B, and Stage 1C
+// concurrently, then Stage 2, then Stage 3), each with a different, known
+// system prompt.
 // Routing by system-prompt content (read back from the request body at
 // close() time) rather than by call order or call count keeps this fake
 // correct regardless of which order calls actually complete in.

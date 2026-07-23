@@ -46,29 +46,32 @@ void main() {
   });
 
   group('mergeStage1FlaggedPhrases', () {
-    test('concatenates Stage 1 before Stage 1B, order preserved', () {
+    test('concatenates Stage 1, then Stage 1B, then Stage 1C, order preserved', () {
       final merged = mergeStage1FlaggedPhrases(
         stage1DetectionFlagged: ['trafico', 'volví para casa'],
         stage1RedundancyFlagged: ['yo', 'a mí'],
+        stage1ReflexiveFlagged: ['Quejó'],
       );
 
-      expect(merged, ['trafico', 'volví para casa', 'yo', 'a mí']);
+      expect(merged, ['trafico', 'volví para casa', 'yo', 'a mí', 'Quejó']);
     });
 
-    test('leaves duplicates between the two lists untouched', () {
+    test('leaves duplicates between the lists untouched', () {
       final merged = mergeStage1FlaggedPhrases(
         stage1DetectionFlagged: ['yo'],
         stage1RedundancyFlagged: ['yo'],
+        stage1ReflexiveFlagged: ['yo'],
       );
 
-      expect(merged, ['yo', 'yo']);
+      expect(merged, ['yo', 'yo', 'yo']);
     });
 
-    test('handles either list being empty', () {
+    test('handles any subset of the three lists being empty', () {
       expect(
         mergeStage1FlaggedPhrases(
           stage1DetectionFlagged: const [],
           stage1RedundancyFlagged: ['yo'],
+          stage1ReflexiveFlagged: const [],
         ),
         ['yo'],
       );
@@ -76,8 +79,17 @@ void main() {
         mergeStage1FlaggedPhrases(
           stage1DetectionFlagged: ['trafico'],
           stage1RedundancyFlagged: const [],
+          stage1ReflexiveFlagged: const [],
         ),
         ['trafico'],
+      );
+      expect(
+        mergeStage1FlaggedPhrases(
+          stage1DetectionFlagged: const [],
+          stage1RedundancyFlagged: const [],
+          stage1ReflexiveFlagged: ['Atrevió'],
+        ),
+        ['Atrevió'],
       );
     });
   });
@@ -114,10 +126,11 @@ void main() {
   });
 
   group('callStage1AndMergeFlaggedPhrases', () {
-    test('calls Stage 1 and Stage 1B and merges their flagged phrases', () async {
+    test('calls Stage 1, Stage 1B, and Stage 1C and merges their flagged phrases', () async {
       final client = _RoutingHttpClient({
         stage1DetectionDialectSpanish: _detectionEnvelope(['trafico']),
         stage1RedundancyDetectionSpanish: _detectionEnvelope(['yo', 'a mí']),
+        stage1ReflexiveDetectionSpanish: _detectionEnvelope(const []),
       });
 
       final result = await callStage1AndMergeFlaggedPhrases(
@@ -132,10 +145,30 @@ void main() {
       expect(result, ['trafico', 'yo', 'a mí']);
     });
 
+    test('handles Stage 1 and Stage 1B flagging nothing but Stage 1C flagging something', () async {
+      final client = _RoutingHttpClient({
+        stage1DetectionDialectSpanish: _detectionEnvelope(const []),
+        stage1RedundancyDetectionSpanish: _detectionEnvelope(const []),
+        stage1ReflexiveDetectionSpanish: _detectionEnvelope(['Quejó']),
+      });
+
+      final result = await callStage1AndMergeFlaggedPhrases(
+        client: OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+        ),
+        model: 'gpt-5.5',
+        submittedText: 'Quejó del ruido toda la noche.',
+      );
+
+      expect(result, ['Quejó']);
+    });
+
     test('handles Stage 1 flagging nothing but Stage 1B flagging something', () async {
       final client = _RoutingHttpClient({
         stage1DetectionDialectSpanish: _detectionEnvelope(const []),
         stage1RedundancyDetectionSpanish: _detectionEnvelope(['yo']),
+        stage1ReflexiveDetectionSpanish: _detectionEnvelope(const []),
       });
 
       final result = await callStage1AndMergeFlaggedPhrases(
@@ -165,10 +198,10 @@ String _detectionEnvelope(List<String> phrases) => jsonEncode({
 // ── Minimal dart:io HttpClient fake that routes a reply by the outgoing
 // request's system prompt ──
 //
-// Stage 1 and Stage 1B are called concurrently with different system
-// prompts but the same transport; routing by system-prompt content (read
-// back from the request body at close() time, once all bytes have been
-// written) rather than by call order keeps this test independent of
+// Stage 1, Stage 1B, and Stage 1C are called concurrently with different
+// system prompts but the same transport; routing by system-prompt content
+// (read back from the request body at close() time, once all bytes have
+// been written) rather than by call order keeps this test independent of
 // whichever call happens to reach the fake first.
 
 class _RoutingHttpClient implements HttpClient {

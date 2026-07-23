@@ -187,6 +187,7 @@ void main() {
         final client = _RoutingHttpClient({
           stage1DetectionDialectSpanish: _arrayEnvelope(['"trafico"']),
           stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+          stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
           stage2CategorizationSpanish: _arrayEnvelope([
             '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
                 '"occurrence": 1, "category": "Spelling", "verdict": "error"}',

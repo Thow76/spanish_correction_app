@@ -3,13 +3,14 @@ import 'dart:convert';
 import '../../../core/services/prompts/correction_prompt.dart';
 import 'openai_chat_completions_client.dart';
 
-/// Calls one Stage 1 detection-shaped prompt — either
-/// `stage1DetectionDialectSpanish` (general detection) or
-/// `stage1RedundancyDetectionSpanish` (Stage 1B, the dedicated redundant-
-/// pronoun pass) — and parses its reply into the flagged-phrase list. Both
-/// prompts instruct the model to return a bare JSON array of quoted phrases
-/// and differ only in what they look for, so one function serves both
-/// rather than two near-duplicates.
+/// Calls one Stage 1 detection-shaped prompt — `stage1DetectionDialectSpanish`
+/// (general detection), `stage1RedundancyDetectionSpanish` (Stage 1B, the
+/// dedicated redundant-pronoun pass), or `stage1ReflexiveDetectionSpanish`
+/// (Stage 1C, the dedicated missing-reflexive pass) — and parses its reply
+/// into the flagged-phrase list. All three prompts instruct the model to
+/// return a bare JSON array of quoted phrases and differ only in what they
+/// look for, so one function serves all of them rather than several
+/// near-duplicates.
 Future<List<String>> callStage1Detection({
   required OpenAiChatCompletionsClient client,
   required String model,
@@ -24,14 +25,14 @@ Future<List<String>> callStage1Detection({
   return parseStage1DetectionArray(replyText);
 }
 
-/// Runs Stage 1 and Stage 1B against [submittedText] concurrently and
-/// merges their flagged-phrase lists.
+/// Runs Stage 1, Stage 1B, and Stage 1C against [submittedText] concurrently
+/// and merges their flagged-phrase lists.
 ///
 /// Merging is simple concatenation — Stage 2 examines each flagged phrase
 /// independently against the full text, so neither the merge order nor any
-/// overlap between the two lists needs to be resolved here. Overlap between
-/// what the two stages flag is resolved later, after both stages' output has
-/// been through Stage 2 and positioned (see the dedup step of the staged
+/// overlap between the lists needs to be resolved here. Overlap between what
+/// the three passes flag is resolved later, after all three passes' output
+/// has been through Stage 2 and positioned (see the dedup step of the staged
 /// pipeline), not at merge time.
 Future<List<String>> callStage1AndMergeFlaggedPhrases({
   required OpenAiChatCompletionsClient client,
@@ -51,23 +52,35 @@ Future<List<String>> callStage1AndMergeFlaggedPhrases({
       systemPrompt: stage1RedundancyDetectionSpanish,
       submittedText: submittedText,
     ),
+    callStage1Detection(
+      client: client,
+      model: model,
+      systemPrompt: stage1ReflexiveDetectionSpanish,
+      submittedText: submittedText,
+    ),
   ]);
 
   return mergeStage1FlaggedPhrases(
     stage1DetectionFlagged: results[0],
     stage1RedundancyFlagged: results[1],
+    stage1ReflexiveFlagged: results[2],
   );
 }
 
-/// Concatenates Stage 1's and Stage 1B's flagged-phrase lists, Stage 1's
-/// phrases first. Pure and order-preserving; duplicates (a phrase both
-/// stages happen to flag) are left as-is — deduping is a later pipeline
+/// Concatenates Stage 1's, Stage 1B's, and Stage 1C's flagged-phrase lists,
+/// in that order. Pure and order-preserving; duplicates (a phrase more than
+/// one pass happens to flag) are left as-is — deduping is a later pipeline
 /// concern, not this function's.
 List<String> mergeStage1FlaggedPhrases({
   required List<String> stage1DetectionFlagged,
   required List<String> stage1RedundancyFlagged,
+  required List<String> stage1ReflexiveFlagged,
 }) {
-  return [...stage1DetectionFlagged, ...stage1RedundancyFlagged];
+  return [
+    ...stage1DetectionFlagged,
+    ...stage1RedundancyFlagged,
+    ...stage1ReflexiveFlagged,
+  ];
 }
 
 /// Parses a Stage 1-shaped reply — a JSON array of quoted flagged phrases —
