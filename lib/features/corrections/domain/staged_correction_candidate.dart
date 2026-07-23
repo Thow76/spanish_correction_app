@@ -1,3 +1,4 @@
+import 'staged_correction_span_scope.dart';
 import 'staged_correction_verdict.dart';
 
 /// One flagged phrase as categorized by Stage 2
@@ -18,6 +19,7 @@ class StagedCorrectionCandidate {
     required this.occurrence,
     required this.category,
     required this.verdict,
+    this.spanScope,
     this.startIndex,
     this.endIndex,
   });
@@ -40,6 +42,12 @@ class StagedCorrectionCandidate {
 
   final StagedCorrectionVerdict verdict;
 
+  /// Stage 2's judgment of how much of [originalPhrase] must stay
+  /// highlighted, or null — only ever populated when [category] is
+  /// `Natural Language`; every other category leaves this null. Parsed and
+  /// stored only — nothing yet reads this to adjust [startIndex]/[endIndex].
+  final StagedCorrectionSpanScope? spanScope;
+
   /// Resolved grapheme-cluster start position within the original text, or
   /// null before resolution.
   final int? startIndex;
@@ -50,9 +58,9 @@ class StagedCorrectionCandidate {
   final int? endIndex;
 
   /// A copy of this candidate with the given fields replaced. [occurrence],
-  /// [category], and [verdict] are never overridden — they're fixed once
-  /// Stage 2 assigns them and every later pipeline step only ever adjusts
-  /// phrases and position, never identity.
+  /// [category], [verdict], and [spanScope] are never overridden — they're
+  /// fixed once Stage 2 assigns them and every later pipeline step only
+  /// ever adjusts phrases and position, never identity.
   StagedCorrectionCandidate copyWith({
     String? originalPhrase,
     String? correctedPhrase,
@@ -65,6 +73,7 @@ class StagedCorrectionCandidate {
       occurrence: occurrence,
       category: category,
       verdict: verdict,
+      spanScope: spanScope,
       startIndex: startIndex ?? this.startIndex,
       endIndex: endIndex ?? this.endIndex,
     );

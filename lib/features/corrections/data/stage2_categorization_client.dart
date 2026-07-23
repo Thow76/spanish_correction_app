@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../../core/services/prompts/correction_prompt.dart';
 import '../domain/staged_correction_candidate.dart';
+import '../domain/staged_correction_span_scope.dart';
 import '../domain/staged_correction_verdict.dart';
 import 'openai_chat_completions_client.dart';
 
@@ -53,7 +54,11 @@ const Set<String> _validVerdicts = {'error', 'dialectal', 'not_an_error'};
 /// and the last `]` before decoding, same defensive approach as
 /// `parseStage1DetectionArray`. Throws a [FormatException] on anything that
 /// doesn't match the expected object shape once extracted — including an
-/// unrecognized `verdict` value.
+/// unrecognized `verdict` value or an unrecognized (non-null) `span_scope`
+/// value. `span_scope` itself is otherwise optional in the reply — a
+/// missing key parses to a null [StagedCorrectionCandidate.spanScope],
+/// same as a missing `category`; this parser does not enforce the prompt's
+/// own "only for Natural Language" instruction to the model.
 ///
 /// Ported from `test/stage2_categorization_harness.dart`'s
 /// `_parseCategorizationArray`, which already validated this shape
@@ -87,6 +92,7 @@ List<StagedCorrectionCandidate> parseStage2CategorizationArray(
     final occurrence = element['occurrence'];
     final category = element['category'];
     final verdictValue = element['verdict'];
+    final spanScopeValue = element['span_scope'];
 
     if (originalPhrase is! String || originalPhrase.isEmpty) {
       throw FormatException(
@@ -113,6 +119,20 @@ List<StagedCorrectionCandidate> parseStage2CategorizationArray(
         'Stage 2 result has an invalid verdict: $element',
       );
     }
+    StagedCorrectionSpanScope? spanScope;
+    if (spanScopeValue != null) {
+      if (spanScopeValue is! String) {
+        throw FormatException(
+          'Stage 2 result has a non-string span_scope: $element',
+        );
+      }
+      spanScope = StagedCorrectionSpanScope.fromApiValue(spanScopeValue);
+      if (spanScope == null) {
+        throw FormatException(
+          'Stage 2 result has an invalid span_scope: $element',
+        );
+      }
+    }
 
     return StagedCorrectionCandidate(
       originalPhrase: originalPhrase,
@@ -120,6 +140,7 @@ List<StagedCorrectionCandidate> parseStage2CategorizationArray(
       occurrence: occurrence.round(),
       category: category as String?,
       verdict: StagedCorrectionVerdict.fromApiValue(verdictValue)!,
+      spanScope: spanScope,
     );
   }).toList();
 }

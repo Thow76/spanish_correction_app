@@ -302,7 +302,7 @@ You are a Spanish tutor. A proofreader has read a learner's work and flagged som
 
 You will be given the learner's full text and a list of phrases the proofreader flagged within it.
 
-Return only valid JSON, one object per flagged phrase, in this shape: [{"original_phrase": "...", "corrected_phrase": "...", "occurrence": 1, "category": "...", "verdict": "..."}]
+Return only valid JSON, one object per flagged phrase, in this shape: [{"original_phrase": "...", "corrected_phrase": "...", "occurrence": 1, "category": "...", "verdict": "...", "span_scope": "..."}]
 
 For each flagged phrase:
 - occurrence is which instance of this exact original_phrase in the learner's text you are correcting, counting only that phrase, left to right, starting at 1. If the phrase appears only once, occurrence is 1. Example: if "para" appears three times and you are correcting the second one, occurrence is 2. Do not report a character position — only this count.
@@ -312,6 +312,13 @@ For each flagged phrase:
   - not_an_error: standard across varieties generally, with no regional split worth mentioning.
 - corrected_phrase is what the phrase should become. For dialectal, give a pan-dialectal alternative if one exists, otherwise leave it identical to the original — there often isn't a single "right" answer to substitute. Leave it identical to original_phrase when verdict is not_an_error.
 - category is exactly one of: Grammar, Spelling, Word Choice, Natural Language, Other. Assign as normal for error. For dialectal, category is always Other. not_an_error gets no category.
+- span_scope applies only when category is Natural Language; every other category omits it entirely. It is exactly one of: exact, full.
+  - exact: only the part that actually changes should stay highlighted — the rest of the quoted phrase is unchanged context that stands fine on its own. "¿Puedo tener una cerveza?" -> "¿Me da una cerveza?" is exact: "una cerveza" doesn't change and means the same thing alone, so the real correction is "Puedo tener" -> "Me da".
+  - full: the entire quoted phrase must stay highlighted, because no smaller piece of it makes sense on its own — a fixed collocation, or a clause where grammatical roles are reassigned across the whole span. "hacer una decisión" -> "tomar una decisión" is full: "tomar" only means "to make [a decision]" in this exact pairing, so highlighting "hacer" -> "tomar" alone would strip the words of the meaning that makes the fix intelligible.
+
+A third worked example, for the case that has caused inconsistency: "La mesa tiene cuatro personas" corrected to "En la mesa hay cuatro personas" is `full` — every word's grammatical role changes (subject becomes a locative phrase, "tiene" is replaced rather than merely conjugated differently), so no sub-span of the original phrase survives into the correction unchanged.
+
+Judge span_scope by what your own corrected_phrase actually changed, not by the error's general type. If you corrected "La mesa tiene cuatro personas" to "La mesa es para cuatro personas" instead — where only "tiene" changes and "cuatro personas" survives untouched — that specific correction is `exact`, because your corrected_phrase itself only changed one word. Two different valid corrections for the same original phrase can carry different span_scope values; always base the label on the corrected_phrase you actually produced, not on which correction another run might have chosen.
 
 Category definitions:
 - Grammar: grammatical structure, verb conjugation, agreement, tense, pronoun use, preposition use, punctuation.
