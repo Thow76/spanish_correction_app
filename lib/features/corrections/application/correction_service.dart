@@ -3,6 +3,7 @@ import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
 import '../domain/error_category.dart';
 import '../../saved/domain/saved_explanation.dart';
+import 'prompt_phrase_translation.dart';
 import 'retranslation_grade_response.dart';
 
 abstract interface class CorrectionService {
@@ -18,8 +19,9 @@ abstract interface class CorrectionService {
     Language language,
   );
 
-  Future<String> generatePromptPhrase({
+  Future<PromptPhraseTranslation> generatePromptPhrase({
     required String correctedSentence,
+    required String correctedPhrase,
     required Language language,
   });
 

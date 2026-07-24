@@ -5,6 +5,7 @@ import 'package:spanish_correction_app/core/models/walkthrough_question.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository_controller.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
+import 'package:spanish_correction_app/features/corrections/application/prompt_phrase_translation.dart';
 import 'package:spanish_correction_app/features/corrections/application/retranslation_grade_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
@@ -54,6 +55,8 @@ SavedCorrection buildSavedCorrection({
   ErrorCategory category = ErrorCategory.grammar,
   String promptPhrase = 'Yesterday there was a lot of traffic',
   String correctedSentence = 'Ayer había mucho tráfico',
+  int? promptHighlightStartIndex,
+  int? promptHighlightEndIndex,
 }) {
   return SavedCorrection(
     id: id,
@@ -67,6 +70,8 @@ SavedCorrection buildSavedCorrection({
     correctedSentence: correctedSentence,
     promptPhrase: promptPhrase,
     language: Language.spanish,
+    promptHighlightStartIndex: promptHighlightStartIndex,
+    promptHighlightEndIndex: promptHighlightEndIndex,
   );
 }
 
@@ -103,8 +108,9 @@ class _FakeCorrectionService implements CorrectionService {
   ) async => throw UnimplementedError();
 
   @override
-  Future<String> generatePromptPhrase({
+  Future<PromptPhraseTranslation> generatePromptPhrase({
     required String correctedSentence,
+    required String correctedPhrase,
     required Language language,
   }) async => throw UnimplementedError();
 
@@ -164,8 +170,9 @@ class _ThrowingCorrectionService implements CorrectionService {
   ) async => throw UnimplementedError();
 
   @override
-  Future<String> generatePromptPhrase({
+  Future<PromptPhraseTranslation> generatePromptPhrase({
     required String correctedSentence,
+    required String correctedPhrase,
     required Language language,
   }) async => throw UnimplementedError();
 
@@ -358,6 +365,51 @@ void main() {
       // ...and the corrected phrase is NOT — showing it would give away the
       // answer to this recall exercise.
       expect(find.textContaining('había', findRichText: true), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'prompt phase highlights the flagged phrase\'s English span in the '
+    'category color',
+    (tester) async {
+      await pumpGame(
+        tester,
+        savedCorrections: [
+          buildSavedCorrection(
+            category: ErrorCategory.grammar,
+            promptPhrase: 'I went to the market.',
+            promptHighlightStartIndex: 2,
+            promptHighlightEndIndex: 6,
+          ),
+        ],
+      );
+
+      expect(_styledPhrases(tester, color: AppColors.grammar), contains('went'));
+      // The surrounding text still renders — only the flagged span is split
+      // off into its own styled run.
+      expect(
+        find.textContaining('I went to the market.', findRichText: true),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'prompt phase shows plain unhighlighted text when highlight indices are '
+    'absent (e.g. an older saved correction)',
+    (tester) async {
+      await pumpGame(
+        tester,
+        savedCorrections: [
+          buildSavedCorrection(promptPhrase: 'I went to the market.'),
+        ],
+      );
+
+      // _SavedErrorLabel always underlines the original Spanish phrase
+      // ("hubo") in the category color — this test is about the prompt card
+      // specifically NOT adding a highlight of its own on top of that.
+      expect(_styledPhrases(tester, color: AppColors.grammar), ['hubo']);
+      expect(find.text('I went to the market.'), findsOneWidget);
     },
   );
 
@@ -867,6 +919,30 @@ void main() {
       expect(_underlinedDiffPhrases(tester), isEmpty);
     });
   });
+}
+
+/// The text of every span rendered underlined in [color] — used to find the
+/// prompt card's highlighted phrase without reaching into its private widget
+/// internals (mirrors [_underlinedDiffPhrases]'s technique, parameterized by
+/// color since the prompt highlight uses the correction's own category color
+/// rather than the fixed reveal-diff yellow).
+List<String> _styledPhrases(WidgetTester tester, {required Color color}) {
+  final phrases = <String>[];
+  for (final rich in tester.widgetList<RichText>(find.byType(RichText))) {
+    void visit(InlineSpan span) {
+      if (span is TextSpan) {
+        if (span.text != null &&
+            span.style?.decoration == TextDecoration.underline &&
+            span.style?.color == color) {
+          phrases.add(span.text!);
+        }
+        span.children?.forEach(visit);
+      }
+    }
+
+    visit(rich.text);
+  }
+  return phrases;
 }
 
 /// The text of every span rendered with the reveal diff treatment — an

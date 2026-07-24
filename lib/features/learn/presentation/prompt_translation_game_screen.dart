@@ -739,7 +739,12 @@ class _PromptPhase extends StatelessWidget {
           originalPhrase: question.source.originalPhrase,
         ),
         const SizedBox(height: AppSpacing.md),
-        _PromptCard(text: question.promptPhrase),
+        _PromptCard(
+          text: question.promptPhrase,
+          category: question.source.category,
+          highlightStart: question.source.promptHighlightStartIndex,
+          highlightEnd: question.source.promptHighlightEndIndex,
+        ),
         const SizedBox(height: AppSpacing.xl),
         SizedBox(
           height: 168,
@@ -1577,9 +1582,24 @@ class _SavedErrorLabel extends StatelessWidget {
 }
 
 class _PromptCard extends StatelessWidget {
-  const _PromptCard({required this.text});
+  const _PromptCard({
+    required this.text,
+    this.category,
+    this.highlightStart,
+    this.highlightEnd,
+  });
 
   final String text;
+
+  /// The three below are all-or-nothing: a highlight only renders when
+  /// [category] and both indices are present and describe a valid grapheme
+  /// range in [text]. Any other combination (nulls from an older saved
+  /// correction, generation failure, or the model finding no clean span)
+  /// falls back to the plain, unhighlighted text — same as before this
+  /// feature existed.
+  final ErrorCategory? category;
+  final int? highlightStart;
+  final int? highlightEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -1594,15 +1614,48 @@ class _PromptCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cyan.withValues(alpha: 0.22)),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.textSecondary,
-          fontSize: 15,
-          height: 24 / 15,
+      child: Text.rich(
+        TextSpan(
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 15,
+            height: 24 / 15,
+          ),
+          children: _buildSpans(),
         ),
       ),
     );
+  }
+
+  List<TextSpan> _buildSpans() {
+    final start = highlightStart;
+    final end = highlightEnd;
+    final highlightColor = category?.color;
+    if (start == null || end == null || highlightColor == null) {
+      return [TextSpan(text: text)];
+    }
+
+    final graphemes = text.characters.toList();
+    if (start < 0 || end <= start || end > graphemes.length) {
+      return [TextSpan(text: text)];
+    }
+
+    final prefix = graphemes.sublist(0, start).join();
+    final highlighted = graphemes.sublist(start, end).join();
+    final suffix = graphemes.sublist(end).join();
+
+    return [
+      if (prefix.isNotEmpty) TextSpan(text: prefix),
+      TextSpan(
+        text: highlighted,
+        style: TextStyle(
+          color: highlightColor,
+          decoration: TextDecoration.underline,
+          decorationColor: highlightColor,
+        ),
+      ),
+      if (suffix.isNotEmpty) TextSpan(text: suffix),
+    ];
   }
 }
 

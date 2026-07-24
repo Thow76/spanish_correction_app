@@ -5,6 +5,7 @@ import 'package:spanish_correction_app/features/corrections/application/correcti
 import 'package:spanish_correction_app/features/corrections/application/correction_repository_controller.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service_exception.dart';
+import 'package:spanish_correction_app/features/corrections/application/prompt_phrase_translation.dart';
 import 'package:spanish_correction_app/features/corrections/application/retranslation_grade_response.dart';
 import 'package:spanish_correction_app/features/corrections/application/submit_correction_use_case.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
@@ -152,10 +153,11 @@ class _FakeCorrectionService implements CorrectionService {
   );
 
   @override
-  Future<String> generatePromptPhrase({
+  Future<PromptPhraseTranslation> generatePromptPhrase({
     required String correctedSentence,
+    required String correctedPhrase,
     required Language language,
-  }) async => '';
+  }) async => const PromptPhraseTranslation(text: '');
 
   @override
   Future<RetranslationGradeResponse> gradeRetranslation({

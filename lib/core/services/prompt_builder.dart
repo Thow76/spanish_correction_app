@@ -88,12 +88,31 @@ class PromptBuilder {
     };
 
     return '''
-You translate $sourceLanguage sentences into English.
+You translate $sourceLanguage sentences into English for a language-learning app.
 
-Translate the given $sourceLanguage sentence into one natural English sentence.
-Return plain text only. Do not return JSON, quotes, Markdown, or commentary.
+You are given:
+- sentence: the $sourceLanguage sentence to translate.
+- correctedPhrase: the specific phrase within sentence that the app is asking about — the part the learner needs to focus on when they see the English translation.
+
+Translate sentence into one natural English sentence.
+
+Then identify highlighted_phrase: the shortest contiguous span of your own translation that captures correctedPhrase's meaning, so the app can highlight it for the learner. highlighted_phrase must be an exact, verbatim substring of translation — copied character-for-character, matching case, with no added or removed punctuation.
+
+If no clean, contiguous English span corresponds to correctedPhrase — its meaning is spread across the sentence, or fully absorbed into a paraphrase with nothing specific to point to — return highlighted_phrase as an empty string. Do not force a highlight and do not guess.
+
+Return only valid JSON with this exact shape, no Markdown, code fences, or commentary:
+
+{
+  "translation": "string",
+  "highlighted_phrase": "string"
+}
 ''';
   }
+
+  static String promptPhraseUserContent({
+    required String correctedSentence,
+    required String correctedPhrase,
+  }) => 'sentence: "$correctedSentence"\ncorrectedPhrase: "$correctedPhrase"';
 
   static String correctionUserContent(Language language, String text) =>
       switch (language) {
@@ -157,8 +176,14 @@ If is_related is false, leave corrected_text identical to the original attempt a
 If is_related is true, analyze the attempt exactly as in a normal correction:
 - Identify errors of type Grammar, Spelling, Word Choice, Natural Language, or Other.
 - Produce corrected_text with the corrected version of the student's attempt.
-- Produce corrections as a list of objects {original_phrase, corrected_phrase, category, short_explanation}, with explanations in an informal but technically accurate tone.
+- Produce corrections as a list of objects {start_index, original_phrase, corrected_phrase, category, short_explanation}, with explanations in an informal but technically accurate tone.
 - Do not compare the attempt word-for-word against expectedAnswer to penalize differences in wording — the attempt does not need to match expectedAnswer exactly to be correct. Only evaluate whether the student's attempt, as written, is grammatically correct and natural.
+
+Indexing rules:
+- start_index is zero-based and inclusive, marking where original_phrase begins in attempt — never in expectedAnswer or corrected_text.
+- original_phrase must be the exact substring of attempt starting at start_index, copied character-for-character including accents and diacritics.
+- Before returning each correction, verify original_phrase matches attempt starting at start_index; if it does not, fix start_index so it does.
+- Indexes are measured in user-perceived characters, not bytes.
 
 Respond ONLY with a valid JSON object in this exact shape, with no additional text:
 
@@ -167,6 +192,7 @@ Respond ONLY with a valid JSON object in this exact shape, with no additional te
   "corrected_text": "string",
   "corrections": [
     {
+      "start_index": 0,
       "original_phrase": "string",
       "corrected_phrase": "string",
       "category": "Grammar" | "Spelling" | "Word Choice" | "Natural Language" | "Other",
@@ -323,8 +349,14 @@ If is_related is false, leave corrected_text identical to the original attempt a
 If is_related is true, analyze the attempt exactly as in a normal correction:
 - Identify errors of type Grammar, Spelling, Word Choice, Natural Language, or Other.
 - Produce corrected_text with the corrected version of the student's attempt.
-- Produce corrections as a list of objects {original_phrase, corrected_phrase, category, short_explanation}, with explanations in an informal but technically accurate tone.
+- Produce corrections as a list of objects {start_index, original_phrase, corrected_phrase, category, short_explanation}, with explanations in an informal but technically accurate tone.
 - Do not compare the attempt word-for-word against expectedAnswer to penalize differences in wording — the attempt does not need to match expectedAnswer exactly to be correct. Only evaluate whether the student's attempt, as written, is grammatically correct and natural.
+
+Indexing rules:
+- start_index is zero-based and inclusive, marking where original_phrase begins in attempt — never in expectedAnswer or corrected_text.
+- original_phrase must be the exact substring of attempt starting at start_index, copied character-for-character including accents and diacritics.
+- Before returning each correction, verify original_phrase matches attempt starting at start_index; if it does not, fix start_index so it does.
+- Indexes are measured in user-perceived characters, not bytes.
 
 Respond ONLY with a valid JSON object in this exact shape, with no additional text:
 
@@ -333,6 +365,7 @@ Respond ONLY with a valid JSON object in this exact shape, with no additional te
   "corrected_text": "string",
   "corrections": [
     {
+      "start_index": 0,
       "original_phrase": "string",
       "corrected_phrase": "string",
       "category": "Grammar" | "Spelling" | "Word Choice" | "Natural Language" | "Other",

@@ -2,12 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:characters/characters.dart';
+
 import '../../../app/app_config.dart';
 import '../../../core/enums/language.dart';
 import '../../../core/services/prompt_builder.dart';
 import '../application/correction_response_schema.dart';
 import '../application/correction_service.dart';
 import '../application/correction_service_exception.dart';
+import '../application/prompt_phrase_translation.dart';
 import '../application/retranslation_grade_response.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
@@ -170,17 +173,44 @@ Short explanation: ${correction.shortExplanation}
   }
 
   @override
-  Future<String> generatePromptPhrase({
+  Future<PromptPhraseTranslation> generatePromptPhrase({
     required String correctedSentence,
+    required String correctedPhrase,
     required Language language,
   }) async {
     _ensureConfigured();
 
     final responseText = await _createResponse(
       systemInstruction: PromptBuilder.promptPhraseSystemPrompt(language),
-      userText: correctedSentence,
+      userText: PromptBuilder.promptPhraseUserContent(
+        correctedSentence: correctedSentence,
+        correctedPhrase: correctedPhrase,
+      ),
+      textFormat: _promptPhraseResponseFormat,
     );
-    return responseText.trim();
+
+    try {
+      final jsonObject = jsonDecode(_extractJsonObject(responseText));
+      if (jsonObject is! Map<String, Object?>) {
+        throw const FormatException('Root value is not an object.');
+      }
+
+      final translation = (jsonObject['translation'] as String? ?? '').trim();
+      final highlightedPhrase =
+          (jsonObject['highlighted_phrase'] as String? ?? '').trim();
+      final range = _graphemeIndexOf(translation, highlightedPhrase);
+
+      return PromptPhraseTranslation(
+        text: translation,
+        highlightStartIndex: range?.$1,
+        highlightEndIndex: range?.$2,
+      );
+    } on FormatException catch (error) {
+      throw CorrectionServiceException(
+        CorrectionFailureReason.invalidResponse,
+        'OpenAI returned an invalid prompt phrase response: $error',
+      );
+    }
   }
 
   @override
@@ -208,7 +238,7 @@ Short explanation: ${correction.shortExplanation}
         throw const FormatException('Root value is not an object.');
       }
 
-      return RetranslationGradeResponse.fromJson(jsonObject);
+      return RetranslationGradeResponse.fromJson(jsonObject, attempt: attempt);
     } on FormatException catch (error) {
       throw CorrectionServiceException(
         CorrectionFailureReason.invalidResponse,
@@ -355,6 +385,40 @@ Short explanation: ${correction.shortExplanation}
       throw const FormatException('Missing original_text or corrected_text.');
     }
   }
+
+  /// First grapheme-offset occurrence of [needle] in [haystack], as
+  /// `(start, end)`, or null when [needle] is empty or not found — the
+  /// model's `highlighted_phrase` is only trusted once it's verified to
+  /// actually be a substring of its own `translation`. Grapheme-based (not
+  /// code-unit-based) to match the indices `SavedCorrection` already stores
+  /// elsewhere (`startIndex`/`correctedStartIndex`).
+  static (int, int)? _graphemeIndexOf(String haystack, String needle) {
+    if (needle.isEmpty) {
+      return null;
+    }
+    final haystackGraphemes = haystack.characters.toList();
+    final needleGraphemes = needle.characters.toList();
+    if (needleGraphemes.length > haystackGraphemes.length) {
+      return null;
+    }
+    for (
+      var start = 0;
+      start <= haystackGraphemes.length - needleGraphemes.length;
+      start++
+    ) {
+      var matched = true;
+      for (var offset = 0; offset < needleGraphemes.length; offset++) {
+        if (haystackGraphemes[start + offset] != needleGraphemes[offset]) {
+          matched = false;
+          break;
+        }
+      }
+      if (matched) {
+        return (start, start + needleGraphemes.length);
+      }
+    }
+    return null;
+  }
 }
 
 const _correctionResponseFormat = {
@@ -362,6 +426,30 @@ const _correctionResponseFormat = {
   'name': 'spanish_correction_response',
   'strict': true,
   'schema': correctionResponseJsonSchema,
+};
+
+const _promptPhraseResponseFormat = {
+  'type': 'json_schema',
+  'name': 'prompt_phrase_translation',
+  'strict': true,
+  'schema': _promptPhraseResponseJsonSchema,
+};
+
+const _promptPhraseResponseJsonSchema = <String, Object?>{
+  'type': 'object',
+  'additionalProperties': false,
+  'required': ['translation', 'highlighted_phrase'],
+  'properties': {
+    'translation': {
+      'type': 'string',
+      'description': 'One natural English translation of sentence.',
+    },
+    'highlighted_phrase': {
+      'type': 'string',
+      'description':
+          'Exact verbatim substring of translation corresponding to correctedPhrase, or an empty string when no clean contiguous span exists.',
+    },
+  },
 };
 
 const _structuredExplanationResponseFormat = {
@@ -400,12 +488,18 @@ const _gradingResponseJsonSchema = <String, Object?>{
         'type': 'object',
         'additionalProperties': false,
         'required': [
+          'start_index',
           'original_phrase',
           'corrected_phrase',
           'category',
           'short_explanation',
         ],
         'properties': {
+          'start_index': {
+            'type': 'integer',
+            'description':
+                'Zero-based inclusive start index in user-perceived characters, marking where original_phrase begins in the attempt text.',
+          },
           'original_phrase': {'type': 'string'},
           'corrected_phrase': {'type': 'string'},
           'category': {

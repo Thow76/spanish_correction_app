@@ -140,6 +140,129 @@ void main() {
     });
   });
 
+  group('generatePromptPhrase', () {
+    test('sends both correctedSentence and correctedPhrase', () async {
+      final client = _CapturingHttpClient(
+        _responsesEnvelope(
+          jsonEncode({'translation': 'I went to the market.', 'highlighted_phrase': ''}),
+        ),
+      );
+
+      await serviceWith(client).generatePromptPhrase(
+        correctedSentence: 'Fui al mercado.',
+        correctedPhrase: 'Fui',
+        language: Language.spanish,
+      );
+
+      final sent = jsonDecode(client.lastRequest!.bodyAsString) as Map;
+      final input = sent['input'] as List;
+      final userMessage = input[1] as Map;
+
+      expect(userMessage['content'], contains('sentence: "Fui al mercado."'));
+      expect(userMessage['content'], contains('correctedPhrase: "Fui"'));
+    });
+
+    test(
+      'a highlighted_phrase that is a genuine substring of translation resolves to its range',
+      () async {
+        final client = _CapturingHttpClient(
+          _responsesEnvelope(
+            jsonEncode({
+              'translation': 'I went to the market.',
+              'highlighted_phrase': 'went',
+            }),
+          ),
+        );
+
+        final result = await serviceWith(client).generatePromptPhrase(
+          correctedSentence: 'Fui al mercado.',
+          correctedPhrase: 'Fui',
+          language: Language.spanish,
+        );
+
+        expect(result.text, 'I went to the market.');
+        expect(result.highlightStartIndex, 2);
+        expect(result.highlightEndIndex, 6);
+        expect(
+          result.text.substring(
+            result.highlightStartIndex!,
+            result.highlightEndIndex!,
+          ),
+          'went',
+        );
+      },
+    );
+
+    test('an empty highlighted_phrase resolves to null indices', () async {
+      final client = _CapturingHttpClient(
+        _responsesEnvelope(
+          jsonEncode({
+            'translation': 'I went to the market.',
+            'highlighted_phrase': '',
+          }),
+        ),
+      );
+
+      final result = await serviceWith(client).generatePromptPhrase(
+        correctedSentence: 'Fui al mercado.',
+        correctedPhrase: 'Fui',
+        language: Language.spanish,
+      );
+
+      expect(result.text, 'I went to the market.');
+      expect(result.highlightStartIndex, isNull);
+      expect(result.highlightEndIndex, isNull);
+    });
+
+    test(
+      'a highlighted_phrase that is not an actual substring of translation '
+      'resolves to null indices rather than a wrong guess',
+      () async {
+        final client = _CapturingHttpClient(
+          _responsesEnvelope(
+            jsonEncode({
+              'translation': 'I went to the market.',
+              // Not a verbatim substring of translation.
+              'highlighted_phrase': 'go to',
+            }),
+          ),
+        );
+
+        final result = await serviceWith(client).generatePromptPhrase(
+          correctedSentence: 'Fui al mercado.',
+          correctedPhrase: 'Fui',
+          language: Language.spanish,
+        );
+
+        expect(result.text, 'I went to the market.');
+        expect(result.highlightStartIndex, isNull);
+        expect(result.highlightEndIndex, isNull);
+      },
+    );
+
+    test(
+      'a malformed JSON response -> CorrectionServiceException(invalidResponse)',
+      () async {
+        final client = _CapturingHttpClient(_responsesEnvelope('not json'));
+
+        await expectLater(
+          serviceWith(client).generatePromptPhrase(
+            correctedSentence: 'Fui al mercado.',
+            correctedPhrase: 'Fui',
+            language: Language.spanish,
+          ),
+          throwsA(
+            isA<CorrectionServiceException>().having(
+              (exception) => exception.reason,
+              'reason',
+              CorrectionFailureReason.invalidResponse,
+            ),
+          ),
+        );
+      },
+    );
+  });
+
   group('correctText regression (unaffected by grading feature)', () {
     test(
       'still parses a well-formed anchored correction response '

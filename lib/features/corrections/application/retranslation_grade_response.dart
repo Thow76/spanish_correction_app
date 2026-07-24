@@ -12,7 +12,14 @@ class RetranslationGradeResponse {
   final String correctedText;
   final List<CorrectionItem> corrections;
 
-  factory RetranslationGradeResponse.fromJson(Map<String, Object?> json) {
+  /// [attempt] is the text the grading call graded — the corrections' own
+  /// `start_index` anchors against it (see [CorrectionItem.fromGradingJson]),
+  /// since `original_phrase` is always a substring of the attempt, never of
+  /// [correctedText].
+  factory RetranslationGradeResponse.fromJson(
+    Map<String, Object?> json, {
+    required String attempt,
+  }) {
     final rawIsRelated = json['is_related'];
     if (rawIsRelated is! bool) {
       throw const CorrectionServiceException(
@@ -29,7 +36,7 @@ class RetranslationGradeResponse {
       corrections: rawCorrections is List
           ? rawCorrections
                 .whereType<Map<String, Object?>>()
-                .map(CorrectionItem.fromJson)
+                .map((item) => CorrectionItem.fromGradingJson(item, attempt: attempt))
                 .toList()
           : const [],
     );

@@ -20,6 +20,8 @@ class SavedCorrection {
     this.endIndex,
     this.correctedStartIndex,
     this.correctedEndIndex,
+    this.promptHighlightStartIndex,
+    this.promptHighlightEndIndex,
   });
 
   final String id;
@@ -44,6 +46,16 @@ class SavedCorrection {
   final int? correctedStartIndex;
   final int? correctedEndIndex;
 
+  /// Grapheme offsets of the flagged phrase's span within [promptPhrase] (the
+  /// AI English translation), verified by [OpenAiCorrectionService] against
+  /// its own translation at generation time. Null when the model found no
+  /// clean corresponding span, when generation failed, or for records saved
+  /// before this field existed — in every case the prompt renders unhighlighted
+  /// rather than falling back to a search, since there's no same-language
+  /// substring relationship to search for across languages.
+  final int? promptHighlightStartIndex;
+  final int? promptHighlightEndIndex;
+
   SavedCorrection copyWith({
     String? id,
     ErrorCategory? category,
@@ -60,6 +72,8 @@ class SavedCorrection {
     int? endIndex,
     int? correctedStartIndex,
     int? correctedEndIndex,
+    int? promptHighlightStartIndex,
+    int? promptHighlightEndIndex,
   }) {
     return SavedCorrection(
       id: id ?? this.id,
@@ -77,6 +91,10 @@ class SavedCorrection {
       endIndex: endIndex ?? this.endIndex,
       correctedStartIndex: correctedStartIndex ?? this.correctedStartIndex,
       correctedEndIndex: correctedEndIndex ?? this.correctedEndIndex,
+      promptHighlightStartIndex:
+          promptHighlightStartIndex ?? this.promptHighlightStartIndex,
+      promptHighlightEndIndex:
+          promptHighlightEndIndex ?? this.promptHighlightEndIndex,
     );
   }
 
@@ -121,6 +139,8 @@ class SavedCorrection {
       endIndex: json['end_index'] as int?,
       correctedStartIndex: json['corrected_start_index'] as int?,
       correctedEndIndex: json['corrected_end_index'] as int?,
+      promptHighlightStartIndex: json['prompt_highlight_start_index'] as int?,
+      promptHighlightEndIndex: json['prompt_highlight_end_index'] as int?,
     );
   }
 
@@ -142,6 +162,10 @@ class SavedCorrection {
       if (correctedStartIndex != null)
         'corrected_start_index': correctedStartIndex,
       if (correctedEndIndex != null) 'corrected_end_index': correctedEndIndex,
+      if (promptHighlightStartIndex != null)
+        'prompt_highlight_start_index': promptHighlightStartIndex,
+      if (promptHighlightEndIndex != null)
+        'prompt_highlight_end_index': promptHighlightEndIndex,
     };
   }
 }

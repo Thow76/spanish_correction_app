@@ -1,6 +1,7 @@
 import '../../../core/enums/language.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
+import '../../corrections/application/prompt_phrase_translation.dart';
 import '../../corrections/domain/correction_item.dart';
 import '../domain/saved_correction.dart';
 
@@ -24,14 +25,15 @@ class SaveCorrectionUseCase {
       correction,
       language,
     );
-    var promptPhrase = '';
+    var promptPhraseTranslation = const PromptPhraseTranslation(text: '');
     try {
-      promptPhrase = await _correctionService.generatePromptPhrase(
+      promptPhraseTranslation = await _correctionService.generatePromptPhrase(
         correctedSentence: correctedSentence,
+        correctedPhrase: correction.correctedPhrase,
         language: language,
       );
     } catch (_) {
-      promptPhrase = '';
+      promptPhraseTranslation = const PromptPhraseTranslation(text: '');
     }
 
     final savedCorrection = SavedCorrection(
@@ -44,12 +46,14 @@ class SaveCorrectionUseCase {
       correctedPhrase: correction.correctedPhrase,
       originalPhrase: correction.originalPhrase,
       correctedSentence: correctedSentence,
-      promptPhrase: promptPhrase,
+      promptPhrase: promptPhraseTranslation.text,
       language: language,
       startIndex: correction.startIndex,
       endIndex: correction.endIndex,
       correctedStartIndex: correction.correctedStartIndex,
       correctedEndIndex: correction.correctedEndIndex,
+      promptHighlightStartIndex: promptPhraseTranslation.highlightStartIndex,
+      promptHighlightEndIndex: promptPhraseTranslation.highlightEndIndex,
     );
 
     await _repositoryController.addSavedCorrection(savedCorrection);

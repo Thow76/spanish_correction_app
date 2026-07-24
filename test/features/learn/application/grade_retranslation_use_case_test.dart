@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
+import 'package:spanish_correction_app/features/corrections/application/prompt_phrase_translation.dart';
 import 'package:spanish_correction_app/features/corrections/application/retranslation_grade_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
@@ -449,8 +450,9 @@ class _FakeCorrectionService implements CorrectionService {
   ) async => throw UnimplementedError();
 
   @override
-  Future<String> generatePromptPhrase({
+  Future<PromptPhraseTranslation> generatePromptPhrase({
     required String correctedSentence,
+    required String correctedPhrase,
     required Language language,
   }) async => throw UnimplementedError();
 

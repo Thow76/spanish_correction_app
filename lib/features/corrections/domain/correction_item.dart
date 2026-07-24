@@ -41,6 +41,45 @@ class CorrectionItem {
     );
   }
 
+  /// Parses one correction from the retranslation-grading response, anchoring
+  /// on `start_index` against [attempt] (the text the grading call graded) the
+  /// same way [tryFromAnchoredJson] does for the main correction flow: trust
+  /// the model's index only if the slice at that position matches the echoed
+  /// `original_phrase` exactly, otherwise fall back to the nearest substring
+  /// match. `end_index` is not requested from the model — it is always
+  /// `start_index` + the phrase length, exactly as [_anchorRange] already
+  /// derives it elsewhere.
+  ///
+  /// Leaves startIndex/endIndex null (the shared highlight resolver's own
+  /// substring-search fallback, [buildHighlightedSpans]) when `start_index` is
+  /// absent or no match is found at all — never throws, since a grading
+  /// response with an unanchorable phrase should still render, just without
+  /// exact-position anchoring.
+  factory CorrectionItem.fromGradingJson(
+    Map<String, Object?> json, {
+    required String attempt,
+  }) {
+    final originalPhrase = json['original_phrase'] as String? ?? '';
+    final modelStartIndex = json['start_index'];
+
+    final anchored = modelStartIndex is int
+        ? _anchorRange(
+            submittedText: attempt,
+            modelStartIndex: modelStartIndex,
+            echoedOriginalPhrase: originalPhrase,
+          )
+        : null;
+
+    return CorrectionItem(
+      originalPhrase: originalPhrase,
+      correctedPhrase: json['corrected_phrase'] as String? ?? '',
+      category: ErrorCategory.fromLabel(json['category'] as String? ?? ''),
+      shortExplanation: json['short_explanation'] as String? ?? '',
+      startIndex: anchored?.start,
+      endIndex: anchored?.end,
+    );
+  }
+
   factory CorrectionItem.fromAnchoredJson(
     Map<String, Object?> json, {
     required String submittedText,
