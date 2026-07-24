@@ -7,7 +7,7 @@ import '../../../shared/widgets/app_header.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
 import '../../write/application/transcription_service.dart';
-import 'prompt_translation_game_screen.dart';
+import 'game_session_builder_screen.dart';
 import 'widgets/game_tile.dart';
 
 class LearnScreen extends StatelessWidget {
@@ -90,7 +90,7 @@ class LearnScreen extends StatelessWidget {
   void _openPromptedProductionGame(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => PromptTranslationGameScreen(
+        builder: (context) => GameSessionBuilderScreen(
           repositoryController: repositoryController,
           transcriptionService: transcriptionService,
           correctionService: correctionService,

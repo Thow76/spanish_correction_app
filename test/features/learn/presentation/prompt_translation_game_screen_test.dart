@@ -11,6 +11,7 @@ import 'package:spanish_correction_app/features/corrections/domain/correction_it
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 import 'package:spanish_correction_app/features/history/domain/correction_submission.dart';
+import 'package:spanish_correction_app/features/learn/domain/game_question.dart';
 import 'package:spanish_correction_app/features/learn/presentation/prompt_translation_game_screen.dart';
 import 'package:spanish_correction_app/features/learn/presentation/widgets/answer_view.dart';
 import 'package:spanish_correction_app/features/learn/presentation/widgets/walkthrough_question_view.dart';
@@ -239,9 +240,20 @@ Future<void> pumpGame(
   List<WalkthroughQuestion>? walkthroughQuestions,
   CorrectionService? correctionService,
 }) async {
+  final resolvedSavedCorrections = savedCorrections ?? [buildSavedCorrection()];
   final controller = CorrectionRepositoryController(
-    _FakeCorrectionRepository(savedCorrections ?? [buildSavedCorrection()]),
+    _FakeCorrectionRepository(resolvedSavedCorrections),
   );
+  final questions = resolvedSavedCorrections
+      .where((correction) => correction.promptPhrase.trim().isNotEmpty)
+      .map(
+        (correction) => GameQuestion(
+          source: correction,
+          promptPhrase: correction.promptPhrase.trim(),
+          expectedAnswer: correction.correctedSentence,
+        ),
+      )
+      .toList();
   await tester.pumpWidget(
     MaterialApp(
       home: PromptTranslationGameScreen(
@@ -253,6 +265,7 @@ Future<void> pumpGame(
           questions: walkthroughQuestions,
         ),
         language: Language.spanish,
+        initialQuestions: questions,
       ),
     ),
   );

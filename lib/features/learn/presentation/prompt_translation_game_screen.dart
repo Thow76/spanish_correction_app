@@ -40,6 +40,7 @@ class PromptTranslationGameScreen extends StatefulWidget {
     required this.correctionService,
     required this.walkthroughService,
     required this.language,
+    required this.initialQuestions,
     super.key,
   });
 
@@ -48,6 +49,12 @@ class PromptTranslationGameScreen extends StatefulWidget {
   final CorrectionService correctionService;
   final WalkthroughService walkthroughService;
   final Language language;
+
+  /// The learner's chosen set of questions, built by
+  /// `GameSessionBuilderScreen` (category filter + per-sentence checkboxes).
+  /// `_startSession` shuffles this for play order rather than re-picking a
+  /// random set of saved corrections itself.
+  final List<GameQuestion> initialQuestions;
 
   @override
   State<PromptTranslationGameScreen> createState() =>
@@ -262,22 +269,7 @@ class _PromptTranslationGameScreenState
       return;
     }
 
-    final eligibleCorrections =
-        widget.repositoryController.savedCorrections
-            .where((correction) => correction.promptPhrase.trim().isNotEmpty)
-            .toList()
-          ..shuffle(_random);
-
-    final questions = eligibleCorrections
-        .take(10)
-        .map((correction) {
-          return GameQuestion(
-            source: correction,
-            promptPhrase: correction.promptPhrase.trim(),
-            expectedAnswer: correction.correctedSentence,
-          );
-        })
-        .toList(growable: false);
+    final questions = [...widget.initialQuestions]..shuffle(_random);
 
     setState(() {
       _session = questions.isEmpty ? null : GameSession(questions: questions);

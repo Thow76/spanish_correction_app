@@ -4,7 +4,10 @@ import '../../../core/enums/language.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/category_square_chip.dart';
+import '../../../shared/widgets/collapsible_category_section.dart';
 import '../../../shared/widgets/empty_state_panel.dart';
+import '../../../shared/widgets/saved_correction_summary_card.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/domain/error_category.dart';
 import '../domain/saved_correction.dart';
@@ -239,104 +242,19 @@ class _FilterBar extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
         itemBuilder: (context, index) {
           if (index == 0) {
-            return _ClearFilterChip(
+            return ClearFilterChip(
               isSelected: selectedCategory == null,
               onTap: onClear,
             );
           }
 
           final category = categories[index - 1];
-          return _CategoryFilterChip(
+          return CategorySquareChip(
             category: category,
             isSelected: selectedCategory == category,
             onTap: () => onSelected(category),
           );
         },
-      ),
-    );
-  }
-}
-
-class _ClearFilterChip extends StatelessWidget {
-  const _ClearFilterChip({required this.isSelected, required this.onTap});
-
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.cyan.withValues(alpha: 0.16)
-              : AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.cyan
-                : AppColors.textDisabled.withValues(alpha: 0.6),
-            width: 2,
-          ),
-        ),
-        child: const Text(
-          'Clear',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryFilterChip extends StatelessWidget {
-  const _CategoryFilterChip({
-    required this.category,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final ErrorCategory category;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: category.label,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          width: 44,
-          height: 40,
-          decoration: BoxDecoration(
-            color: category.color,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSelected ? AppColors.textPrimary : category.color,
-              width: isSelected ? 3 : 2,
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: category.color.withValues(alpha: 0.35),
-                      blurRadius: 14,
-                    ),
-                  ]
-                : null,
-          ),
-        ),
       ),
     );
   }
@@ -363,86 +281,38 @@ class _CategorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+    return CollapsibleCategorySection(
+      category: category,
+      itemCount: corrections.length,
+      isCollapsed: isCollapsed,
+      onToggle: onToggle,
       child: Column(
-        children: [
-          InkWell(
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 44,
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: category.color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      category.label,
+        children: corrections
+            .map(
+              (correction) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: Dismissible(
+                  key: ValueKey(correction.id),
+                  direction: DismissDirection.endToStart,
+                  background: const _SavedDismissBackground(),
+                  confirmDismiss: (_) => onConfirmDelete(),
+                  onDismissed: (_) => onDeleteCorrection(correction),
+                  child: SavedCorrectionSummaryCard(
+                    correction: correction,
+                    onTap: () => onOpenCorrection(correction),
+                    trailing: Text(
+                      _formatSavedDate(correction.savedAt),
                       style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontFamily: 'Sora',
-                        fontSize: 18,
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  Text(
-                    corrections.length.toString(),
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  AnimatedRotation(
-                    turns: isCollapsed ? 0 : 0.5,
-                    duration: const Duration(milliseconds: 160),
-                    child: const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: Column(
-              children: corrections
-                  .map(
-                    (correction) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: Dismissible(
-                        key: ValueKey(correction.id),
-                        direction: DismissDirection.endToStart,
-                        background: const _SavedDismissBackground(),
-                        confirmDismiss: (_) => onConfirmDelete(),
-                        onDismissed: (_) => onDeleteCorrection(correction),
-                        child: _SavedCorrectionCard(
-                          correction: correction,
-                          onTap: () => onOpenCorrection(correction),
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            crossFadeState: isCollapsed
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            duration: const Duration(milliseconds: 160),
-          ),
-        ],
+            )
+            .toList(),
       ),
     );
   }
@@ -480,89 +350,8 @@ class _SavedDismissBackground extends StatelessWidget {
   }
 }
 
-class _SavedCorrectionCard extends StatelessWidget {
-  const _SavedCorrectionCard({required this.correction, required this.onTap});
-
-  final SavedCorrection correction;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.cyan.withValues(alpha: 0.14)),
-          ),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(color: correction.category.color),
-                  child: const SizedBox(width: 2),
-                ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              correction.correctedPhrase,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: correction.category.color,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            _formatDate(correction.savedAt),
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        correction.shortExplanation,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                          height: 21 / 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    return '$day/$month/${value.year}';
-  }
+String _formatSavedDate(DateTime value) {
+  final day = value.day.toString().padLeft(2, '0');
+  final month = value.month.toString().padLeft(2, '0');
+  return '$day/$month/${value.year}';
 }
