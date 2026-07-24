@@ -62,6 +62,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/app/app_config.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/core/services/prompt_builder.dart';
+import 'package:spanish_correction_app/core/text/phrase_chunker.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 
@@ -161,14 +162,12 @@ class WalkthroughQuestion {
 class ParsedResponse {
   ParsedResponse({
     required this.rawResponse,
-    this.targetSentenceEcho,
     this.questions = const [],
     this.findings = const [],
     this.parseError,
   });
 
   final String rawResponse;
-  final String? targetSentenceEcho;
   final List<WalkthroughQuestion> questions;
   final List<String> findings;
   final String? parseError;
@@ -643,7 +642,8 @@ Future<Map<String, ParsedResponse>> _runBattery({
       // ignore: avoid_print
       print('Running ${tc.id} (${tc.track.name}, ${tc.language.name})...');
 
-      final prompt = _buildPrompt(tc);
+      final chunks = chunkSentence(tc.targetSentence, tc.language);
+      final prompt = _buildPrompt(tc, chunks);
       ParsedResponse parsed;
       try {
         final raw = await _callWalkthroughPrompt(
@@ -652,7 +652,7 @@ Future<Map<String, ParsedResponse>> _runBattery({
           model: model,
           prompt: prompt,
         );
-        parsed = _parseResponse(raw);
+        parsed = _parseResponse(raw, chunks);
       } catch (error) {
         parsed = ParsedResponse(
           rawResponse: '',
@@ -662,7 +662,7 @@ Future<Map<String, ParsedResponse>> _runBattery({
       results[tc.id] = parsed;
 
       writeTestCaseHeader(body, tc);
-      writeInputs(body, tc);
+      writeInputs(body, tc, chunks);
       writeGeneratedQuestions(body, parsed);
       writeGroundingTable(body, tc, parsed.questions);
       writeNotesPlaceholder(body);
@@ -686,10 +686,14 @@ Future<Map<String, ParsedResponse>> _runBattery({
 
 // ── Prompt assembly ─────────────────────────────────────────────────────────
 
-/// Substitutes the four inputs into the language's walkthrough prompt template.
-String _buildPrompt(TestCase tc) {
+/// Substitutes the prompt inputs into the language's walkthrough prompt
+/// template. [chunks] is the mechanical chunker's output for
+/// [TestCase.targetSentence] — computed once by the caller so it can also be
+/// reused to zip the response and print alongside the inputs.
+String _buildPrompt(TestCase tc, List<String> chunks) {
   return PromptBuilder.walkthroughQuestionPromptTemplate(tc.language)
       .replaceAll('{{targetSentence}}', tc.targetSentence)
+      .replaceAll('{{chunks}}', jsonEncode(chunks))
       .replaceAll('{{userAttempt}}', tc.userAttempt)
       .replaceAll('{{englishSource}}', tc.englishSource)
       .replaceAll('{{corrections}}', _serialiseCorrections(tc.corrections));
@@ -802,10 +806,13 @@ String _extractJsonObject(String text) {
   return trimmed.substring(start, end + 1);
 }
 
-/// Decodes the four fields per question and collects any shape violations as
-/// findings rather than throwing. A hard JSON failure is recorded in
-/// [ParsedResponse.parseError] with the raw text preserved for review.
-ParsedResponse _parseResponse(String raw) {
+/// Decodes `{english_stem, distractors}` per entry and collects any shape
+/// violations as findings rather than throwing. A hard JSON failure is
+/// recorded in [ParsedResponse.parseError] with the raw text preserved for
+/// review. [chunks] — the mechanical chunker's output for this test case's
+/// target sentence — supplies `correctTranslation`/`chunkPosition`, which the
+/// model no longer echoes; entries are zipped with [chunks] by index.
+ParsedResponse _parseResponse(String raw, List<String> chunks) {
   final Object? decoded;
   try {
     decoded = jsonDecode(_extractJsonObject(raw));
@@ -822,18 +829,18 @@ ParsedResponse _parseResponse(String raw) {
 
   final findings = <String>[];
 
-  final echo = decoded['target_sentence'];
-  final targetSentenceEcho = echo is String ? echo : null;
-  if (echo is! String) {
-    findings.add('target_sentence missing or not a string.');
-  }
-
   final rawQuestions = decoded['questions'];
   if (rawQuestions is! List) {
     return ParsedResponse(
       rawResponse: raw,
-      targetSentenceEcho: targetSentenceEcho,
       parseError: 'questions missing or not a list.',
+    );
+  }
+
+  if (rawQuestions.length != chunks.length) {
+    findings.add(
+      'Expected ${chunks.length} questions (one per chunk), got '
+      '${rawQuestions.length}.',
     );
   }
 
@@ -846,17 +853,11 @@ ParsedResponse _parseResponse(String raw) {
     }
 
     final stem = entry['english_stem'];
-    final correct = entry['correct_translation'];
     final rawDistractors = entry['distractors'];
-    final chunkPosition = entry['chunk_position'];
+    final correct = i < chunks.length ? chunks[i] : '';
 
     if (stem is! String) {
       findings.add('Question at index $i: english_stem missing or not a string.');
-    }
-    if (correct is! String) {
-      findings.add(
-        'Question at index $i: correct_translation missing or not a string.',
-      );
     }
 
     final distractors = <String>[];
@@ -881,49 +882,24 @@ ParsedResponse _parseResponse(String raw) {
     if (distractors.length == 2 && distractors[0] == distractors[1]) {
       findings.add('Question at index $i: the two distractors are identical.');
     }
-    if (correct is String && distractors.contains(correct)) {
+    if (distractors.contains(correct)) {
       findings.add(
-        'Question at index $i: a distractor equals correct_translation.',
-      );
-    }
-
-    final position = chunkPosition is int
-        ? chunkPosition
-        : (chunkPosition is num ? chunkPosition.toInt() : i);
-    if (chunkPosition is! int) {
-      findings.add(
-        'Question at index $i: chunk_position missing or not an integer.',
+        'Question at index $i: a distractor equals the chunk text.',
       );
     }
 
     questions.add(
       WalkthroughQuestion(
         englishStem: stem is String ? stem : '',
-        correctTranslation: correct is String ? correct : '',
+        correctTranslation: correct,
         distractors: distractors,
-        chunkPosition: position,
+        chunkPosition: i,
       ),
     );
   }
 
-  final positions = questions.map((q) => q.chunkPosition).toList();
-  if (questions.length < 2 || questions.length > 5) {
-    findings.add(
-      'Expected 2-5 questions, got ${questions.length}.',
-    );
-  }
-  for (var i = 0; i < positions.length; i++) {
-    if (positions[i] != i) {
-      findings.add(
-        'chunk_position values are not contiguous starting at 0: $positions.',
-      );
-      break;
-    }
-  }
-
   return ParsedResponse(
     rawResponse: raw,
-    targetSentenceEcho: targetSentenceEcho,
     questions: questions,
     findings: findings,
   );
@@ -975,9 +951,10 @@ void writeTestCaseHeader(StringBuffer out, TestCase tc) {
     ..writeln();
 }
 
-/// Writes the H3 "Inputs" section: target, attempt, English source, and the
-/// corrections array, in a fenced block.
-void writeInputs(StringBuffer out, TestCase tc) {
+/// Writes the H3 "Inputs" section: target, the mechanical chunks derived from
+/// it (what the model is actually annotating), attempt, English source, and
+/// the corrections array, in a fenced block.
+void writeInputs(StringBuffer out, TestCase tc, List<String> chunks) {
   final correctionsPretty = const JsonEncoder.withIndent('  ').convert([
     for (final c in tc.corrections)
       {
@@ -993,6 +970,7 @@ void writeInputs(StringBuffer out, TestCase tc) {
     ..writeln()
     ..writeln('```text')
     ..writeln('target:        ${tc.targetSentence}')
+    ..writeln('chunks:        $chunks')
     ..writeln('attempt:       ${tc.userAttempt.isEmpty ? '(empty)' : tc.userAttempt}')
     ..writeln('englishSource: ${tc.englishSource}')
     ..writeln('corrections:')
@@ -1023,7 +1001,6 @@ void writeGeneratedQuestions(StringBuffer out, ParsedResponse parsed) {
   }
 
   final pretty = const JsonEncoder.withIndent('  ').convert({
-    'target_sentence': parsed.targetSentenceEcho,
     'questions': parsed.questions.map((q) => q.toJson()).toList(),
   });
 
@@ -1143,12 +1120,16 @@ String _readEnvironment(String key, {String defaultValue = ''}) {
 Map<String, ParsedResponse> _parseRunFile(String path) {
   final content = File(path).readAsStringSync();
   return {
-    for (final tc in testBattery)
-      tc.id: _extractCaseFromReport(content, tc.id, path),
+    for (final tc in testBattery) tc.id: _extractCaseFromReport(content, tc, path),
   };
 }
 
-ParsedResponse _extractCaseFromReport(String content, String id, String path) {
+/// [tc]'s chunks are recomputed here rather than read back from the report:
+/// chunking is mechanical and deterministic, so it's identical for any run of
+/// the same test case and there is nothing to gain from round-tripping it
+/// through the written markdown.
+ParsedResponse _extractCaseFromReport(String content, TestCase tc, String path) {
+  final id = tc.id;
   final headerIdx = content.indexOf('## $id — ');
   if (headerIdx == -1) {
     return ParsedResponse(
@@ -1191,7 +1172,8 @@ ParsedResponse _extractCaseFromReport(String content, String id, String path) {
   }
   final jsonStart = gq.indexOf('\n', fenceStart) + 1;
   final fenceEnd = gq.indexOf('```', jsonStart);
-  return _parseResponse(gq.substring(jsonStart, fenceEnd));
+  final chunks = chunkSentence(tc.targetSentence, tc.language);
+  return _parseResponse(gq.substring(jsonStart, fenceEnd), chunks);
 }
 
 /// Sorted chunk strings (correct_translation by ascending chunk_position).

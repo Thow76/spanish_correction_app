@@ -60,6 +60,11 @@ class WalkthroughQuestionView extends StatefulWidget {
 }
 
 class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
+  /// A question allows up to this many wrong picks before it locks and
+  /// reveals the correct option — a wrong pick within the limit lets the
+  /// learner try a different option instead of ending the question outright.
+  static const _maxAttempts = 2;
+
   int _currentIndex = 0;
 
   /// Set once the last question is advanced past, at which point [onCompleted]
@@ -76,10 +81,20 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   /// truth for judging, so the shuffle carries no "which is correct" signal.
   late final List<List<String>> _shuffledOptions;
 
-  /// The committed option for the current question, or null while unanswered.
-  /// Tapping an option commits it; the question then locks (later taps are
-  /// ignored). Reset per question by the advance step.
+  /// The option that resolved the current question, or null while it's still
+  /// open. Set on a correct pick (locks immediately) or on the pick that
+  /// exhausts [_maxAttempts] wrong tries (locks and reveals). A wrong pick
+  /// that still has attempts remaining does NOT set this — the question stays
+  /// open for another try. Reset per question by the advance step.
   String? _selectedOption;
+
+  /// Wrong attempts used on the current question so far. Reset per question.
+  int _attemptCount = 0;
+
+  /// Options already tried and found wrong on the current question — styled
+  /// coral and inert to a re-tap, whether or not the question has locked yet.
+  /// Reset per question.
+  final Set<String> _triedWrongOptions = {};
 
   /// Pending auto-advance for a correct answer. Cancelled on dispose. The wrong
   /// path schedules nothing — it waits for the manual control.
@@ -118,18 +133,34 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   }
 
   void _commit(String option) {
-    // Tap == commit + lock: once an option is chosen the question is answered
-    // and further taps are no-ops. Selection and lock are one action.
-    if (_isLocked) {
+    // Once locked (correct pick, or the final wrong pick), further taps are
+    // no-ops. A previously-tried wrong option is also a no-op — it doesn't
+    // spend another attempt.
+    if (_isLocked || _triedWrongOptions.contains(option)) {
       return;
     }
-    setState(() => _selectedOption = option);
 
-    // Correct answers advance themselves after a brief pause; wrong answers wait
-    // for the user to tap the manual control.
-    if (_isCurrentCorrect) {
+    final isCorrectOption =
+        option == widget.questions[_currentIndex].correctTranslation;
+
+    if (isCorrectOption) {
+      setState(() => _selectedOption = option);
+      // Correct answers advance themselves after a brief pause; the wrong path
+      // never auto-advances — it waits for the manual control once locked.
       _advanceTimer = Timer(WalkthroughQuestionView.autoAdvanceDelay, _advance);
+      return;
     }
+
+    setState(() {
+      _triedWrongOptions.add(option);
+      _attemptCount++;
+      // Only lock (and thus reveal the correct option) once attempts are
+      // exhausted — a wrong pick within the limit leaves the question open so
+      // the learner can try a different option.
+      if (_attemptCount >= _maxAttempts) {
+        _selectedOption = option;
+      }
+    });
   }
 
   void _advance() {
@@ -162,6 +193,8 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
       _currentIndex++;
       // Fresh per-question state for the next question.
       _selectedOption = null;
+      _attemptCount = 0;
+      _triedWrongOptions.clear();
     });
   }
 
@@ -187,14 +220,16 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
   }
 
   /// Builds one styled option button. [index] gives the display badge letter
-  /// (a/b/c). Once locked: the correct option turns green (both when chosen and
-  /// when highlighted after a wrong answer), and a wrong chosen option turns
-  /// coral. Unanswered/other options keep the neutral default.
+  /// (a/b/c). The correct option turns green once the question locks (a
+  /// correct pick, or the pick that exhausts [_maxAttempts]) — never before,
+  /// so it isn't handed to the learner mid-retry. Any tried-wrong option turns
+  /// coral as soon as it's tried, locked or not. Untried options keep the
+  /// neutral default.
   Widget _buildOption(int index, String option) {
     final isCorrectOption =
         option == widget.questions[_currentIndex].correctTranslation;
     final isGreen = _isLocked && isCorrectOption;
-    final isCoral = _isLocked && !isCorrectOption && option == _selectedOption;
+    final isCoral = _triedWrongOptions.contains(option);
 
     final Color stateColor;
     final Color fillColor;
@@ -343,6 +378,22 @@ class _WalkthroughQuestionViewState extends State<WalkthroughQuestionView> {
                 fontSize: 12,
                 height: 18 / 12,
               ),
+            ),
+          ),
+        ],
+        // Retry affordance: shown after a wrong pick that still has attempts
+        // left — the question stays open (no reveal, no advance control) so
+        // the learner tries a different option.
+        if (!_isLocked && _attemptCount > 0) ...[
+          const SizedBox(height: 14),
+          Text(
+            widget.str('Inténtalo de nuevo…', 'Tente novamente…'),
+            key: const Key('walkthrough-result-retry'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.textDisabled,
+              fontSize: 12,
+              height: 18 / 12,
             ),
           ),
         ],

@@ -14,13 +14,18 @@ void main() {
     httpClient: client,
   );
 
-  // A fake scripted to return the same bad body on both attempts. Since 5d
-  // retries schema/validation failures once, a payload that must be rejected
-  // has to fail on both calls for the exception to surface (a single reply
-  // would let the retry exhaust the queue and throw StateError).
+  // A fake scripted to return the same bad body on both attempts. Since the
+  // service retries schema/validation failures once, a payload that must be
+  // rejected has to fail on both calls for the exception to surface (a single
+  // reply would let the retry exhaust the queue and throw StateError).
   _FakeHttpClient failsTwice(String body) =>
       _FakeHttpClient([_Reply.body(body), _Reply.body(body)]);
 
+  // 'Voy al banco el viernes.' mechanically chunks to exactly these 3 chunks
+  // (chunkSentence: 'Voy' | 'al banco' | 'el viernes' — verified in
+  // test/core/text/phrase_chunker_test.dart). Every helper/body below that
+  // targets this sentence must supply exactly 3 question entries, one per
+  // chunk, in order.
   Future<List<dynamic>> fetch(WalkthroughService service) => service.fetchQuestions(
     targetSentence: 'Voy al banco el viernes.',
     userAttempt: 'Voy a el banco en viernes.',
@@ -29,9 +34,11 @@ void main() {
     language: Language.spanish,
   );
 
-  // For reconstruction tests, the targetSentence input is what matters — the
-  // service compares chunks against this parameter, not the model's echoed
-  // target_sentence field.
+  // For single-chunk cases, [targetSentence] should be a bare word or a
+  // function-word + noun pair so chunkSentence collapses it to exactly one
+  // chunk — the service now derives correctTranslation/chunkPosition from the
+  // chunker, not from the response body, so the question array length must
+  // match the chunker's output length.
   Future<List<dynamic>> fetchTarget(
     WalkthroughService service,
     String targetSentence,
@@ -66,26 +73,40 @@ void main() {
       expect(questions[2].distractors.first, 'en viernes');
       expect(questions[2].chunkPosition, 2);
     });
+
+    test(
+      'correctTranslation/chunkPosition come from the mechanical chunker, '
+      'not from the response body — an extra correct_translation/chunk_position '
+      'field in the JSON is ignored',
+      () async {
+        final body = _envelope([
+          {
+            'english_stem': "I'm going",
+            'distractors': ['Va', 'Vamos'],
+            // Smuggled fields the parser no longer reads.
+            'correct_translation': 'IGNORE ME',
+            'chunk_position': 99,
+          },
+        ]);
+
+        final questions = await fetchTarget(
+          serviceWith(_FakeHttpClient.single(body)),
+          'Voy',
+        );
+
+        expect(questions, hasLength(1));
+        expect(questions[0].correctTranslation, 'Voy');
+        expect(questions[0].chunkPosition, 0);
+      },
+    );
   });
 
   // ── Fake-harness capability proofs ──────────────────────────────────────────
-  //
-  // These prove the HttpClient fake is fit to support the upcoming validation
-  // (5b) and retry (5c) passes. They assert only transport/parse behaviour that
-  // exists today — no semantic validation logic is added.
 
   group('fake harness — capability 1: arbitrary per-test body', () {
     test('an arbitrary body flows through to the parsed result verbatim', () async {
-      // Distinct, contiguous payload (so 5b validation passes) with marker
-      // distractors, proving the fake delivers an arbitrary body and the
-      // service surfaces its contents unchanged.
       final body = _envelope([
-        {
-          'english_stem': "I'm going",
-          'correct_translation': 'Voy',
-          'distractors': ['marker-one', 'marker-two'],
-          'chunk_position': 0,
-        },
+        _question(distractors: ['marker-one', 'marker-two']),
       ]);
 
       final questions = await fetchTarget(
@@ -102,8 +123,8 @@ void main() {
   group('fake harness — capability 2: different responses per call', () {
     test('successive calls see successive responses in order', () async {
       final client = _FakeHttpClient([
-        _Reply.body(_envelope(_oneQuestion('Voy'))),
-        _Reply.body(_envelope(_oneQuestion('Quiero'))),
+        _Reply.body(_envelope([_question(distractors: ['Va', 'Vamos'])])),
+        _Reply.body(_envelope([_question(distractors: ['Quiere', 'Quieren'])])),
       ]);
       final service = serviceWith(client);
 
@@ -152,88 +173,69 @@ void main() {
       );
     });
 
-    test('malformed walkthrough content -> WalkthroughSchemaException', () async {
-      // A valid OpenAI envelope wrapping a question with three distractors:
-      // the content schema boundary, surfaced by the model at parse time.
-      final body = _envelope([
-        {
-          'english_stem': "I'm going",
-          'correct_translation': 'Voy',
-          'distractors': ['Va', 'Vamos', 'Van'],
-          'chunk_position': 0,
-        },
-      ]);
-      final service = serviceWith(failsTwice(body));
+    test(
+      'a question with three distractors -> WalkthroughSchemaException',
+      () async {
+        // Single-chunk target so the entry count matches the chunker's
+        // output (1) and the only violation is the distractor count.
+        final body = _envelope([
+          _question(distractors: ['Va', 'Vamos', 'Van']),
+        ]);
+        final service = serviceWith(failsTwice(body));
 
-      await expectLater(
-        fetch(service),
-        throwsA(isA<WalkthroughSchemaException>()),
-      );
-    });
+        await expectLater(
+          fetchTarget(service, 'Voy'),
+          throwsA(isA<WalkthroughSchemaException>()),
+        );
+      },
+    );
+
+    test(
+      'a question array shorter than the chunk count -> WalkthroughSchemaException',
+      () async {
+        // Target chunks to 3 ('Voy' | 'al banco' | 'el viernes') but only 1
+        // question is supplied.
+        final body = _envelope([_question(distractors: ['Va', 'Vamos'])]);
+        final service = serviceWith(failsTwice(body));
+
+        await expectLater(
+          fetch(service),
+          throwsA(isA<WalkthroughSchemaException>()),
+        );
+      },
+    );
   });
 
-  // ── Pass 5b: distinctness + contiguity validation ───────────────────────────
+  // ── Semantic validation: distractor distinctness + cross-language disallowlist ──
 
   group('validation — distinctness', () {
-    test('distractor equals correct_translation -> rejected', () async {
-      final body = _envelope([
-        _question('Voy', distractors: ['Voy', 'Vamos']),
-      ]);
+    test('distractor equals the chunk text -> rejected', () async {
+      final body = _envelope([_question(distractors: ['Voy', 'Vamos'])]);
 
       await expectLater(
-        fetch(serviceWith(failsTwice(body))),
+        fetchTarget(serviceWith(failsTwice(body)), 'Voy'),
         throwsA(isA<WalkthroughValidationException>()),
       );
     });
 
     test('two identical distractors -> rejected', () async {
-      final body = _envelope([
-        _question('Voy', distractors: ['Va', 'Va']),
-      ]);
+      final body = _envelope([_question(distractors: ['Va', 'Va'])]);
 
       await expectLater(
-        fetch(serviceWith(failsTwice(body))),
+        fetchTarget(serviceWith(failsTwice(body)), 'Voy'),
         throwsA(isA<WalkthroughValidationException>()),
       );
     });
 
-    test('distractor differing only by whitespace from correct -> rejected', () async {
-      // " la  casa" normalises to "la casa" and so collides with the correct
-      // answer after whitespace normalisation.
+    test('distractor differing only by whitespace from the chunk -> rejected', () async {
+      // " la  casa" normalises to "la casa" and so collides with the chunk
+      // text ('la' binds forward to 'casa' -> one chunk 'la casa').
       final body = _envelope([
-        _question('la casa', distractors: [' la  casa', 'una casa']),
+        _question(distractors: [' la  casa', 'una casa']),
       ]);
 
       await expectLater(
-        fetch(serviceWith(failsTwice(body))),
-        throwsA(isA<WalkthroughValidationException>()),
-      );
-    });
-  });
-
-  group('validation — contiguity', () {
-    test('chunk positions with a gap (0, 1, 3) -> rejected', () async {
-      final body = _envelope([
-        _question('Voy', position: 0),
-        _question('al banco', position: 1),
-        _question('el viernes', position: 3),
-      ]);
-
-      await expectLater(
-        fetch(serviceWith(failsTwice(body))),
-        throwsA(isA<WalkthroughValidationException>()),
-      );
-    });
-
-    test('chunk positions with a duplicate (0, 1, 1) -> rejected', () async {
-      final body = _envelope([
-        _question('Voy', position: 0),
-        _question('al banco', position: 1),
-        _question('el viernes', position: 1),
-      ]);
-
-      await expectLater(
-        fetch(serviceWith(failsTwice(body))),
+        fetchTarget(serviceWith(failsTwice(body)), 'la casa'),
         throwsA(isA<WalkthroughValidationException>()),
       );
     });
@@ -241,23 +243,21 @@ void main() {
 
   group('validation — cross-language disallowlist', () {
     test('a distractor exactly "Domani" -> rejected', () async {
-      final body = _envelope([
-        _question('amanhã', distractors: ['Domani', 'amanhá']),
-      ]);
+      final body = _envelope([_question(distractors: ['Domani', 'amanhá'])]);
 
       await expectLater(
-        fetch(serviceWith(failsTwice(body))),
+        fetchTarget(serviceWith(failsTwice(body)), 'amanhã'),
         throwsA(isA<WalkthroughValidationException>()),
       );
     });
 
     test('case/whitespace variant " tomorrow " -> still rejected', () async {
       final body = _envelope([
-        _question('amanhã', distractors: [' tomorrow ', 'amanhá']),
+        _question(distractors: [' tomorrow ', 'amanhá']),
       ]);
 
       await expectLater(
-        fetch(serviceWith(failsTwice(body))),
+        fetchTarget(serviceWith(failsTwice(body)), 'amanhã'),
         throwsA(isA<WalkthroughValidationException>()),
       );
     });
@@ -266,12 +266,12 @@ void main() {
       // "hoy" appears inside a longer legitimate phrase; whole-value matching
       // must not reject it.
       final body = _envelope([
-        _question('hoje de manhã', distractors: ['hoy de manhã', 'ontem']),
+        _question(distractors: ['hoy de manhã', 'ontem']),
       ]);
 
       final questions = await fetchTarget(
         serviceWith(_FakeHttpClient.single(body)),
-        'hoje de manhã',
+        'manhã',
       );
 
       expect(questions, hasLength(1));
@@ -279,89 +279,8 @@ void main() {
     });
   });
 
-  group('validation — reconstruction', () {
-    test('chunks that concatenate exactly to the target -> passes', () async {
-      final body = _envelope([
-        _question('Voy', position: 0, distractors: ['Va', 'Vamos']),
-        _question('al banco', position: 1, distractors: ['a el banco', 'en el banco']),
-        _question('el viernes', position: 2, distractors: ['en viernes', 'el viernos']),
-      ]);
-
-      final questions = await fetchTarget(
-        serviceWith(_FakeHttpClient.single(body)),
-        'Voy al banco el viernes',
-      );
-
-      expect(questions, hasLength(3));
-    });
-
-    test('response dropped the trailing "." -> still passes', () async {
-      // The core ~22% case: chunks reconstruct "Voy al banco el viernes" while
-      // the target input carries the trailing period.
-      final body = _envelope([
-        _question('Voy', position: 0, distractors: ['Va', 'Vamos']),
-        _question('al banco', position: 1, distractors: ['a el banco', 'en el banco']),
-        _question('el viernes', position: 2, distractors: ['en viernes', 'el viernos']),
-      ]);
-
-      final questions = await fetchTarget(
-        serviceWith(_FakeHttpClient.single(body)),
-        'Voy al banco el viernes.',
-      );
-
-      expect(questions, hasLength(3));
-    });
-
-    test('chunks that do not cover the target -> rejected', () async {
-      // Last chunk is the wrong word ("el sábado" vs "el viernes").
-      final body = _envelope([
-        _question('Voy', position: 0, distractors: ['Va', 'Vamos']),
-        _question('al banco', position: 1, distractors: ['a el banco', 'en el banco']),
-        _question('el sábado', position: 2, distractors: ['en sábado', 'el sabado']),
-      ]);
-
-      await expectLater(
-        fetchTarget(
-          serviceWith(failsTwice(body)),
-          'Voy al banco el viernes.',
-        ),
-        throwsA(isA<WalkthroughValidationException>()),
-      );
-    });
-
-    test('Spanish leading ¿ and trailing ? omitted by chunks -> passes', () async {
-      final body = _envelope([
-        _question('Cómo', position: 0, distractors: ['Como', 'Cuándo']),
-        _question('estás', position: 1, distractors: ['está', 'estáis']),
-      ]);
-
-      final questions = await fetchTarget(
-        serviceWith(_FakeHttpClient.single(body)),
-        '¿Cómo estás?',
-      );
-
-      expect(questions, hasLength(2));
-    });
-
-    test('internal comma present in both chunks and target -> passes', () async {
-      // The comma is internal, not a trailing/leading sentence mark, so it must
-      // survive normalisation on both sides.
-      final body = _envelope([
-        _question('Sí,', position: 0, distractors: ['Si', 'No,']),
-        _question('claro', position: 1, distractors: ['claroo', 'clara']),
-      ]);
-
-      final questions = await fetchTarget(
-        serviceWith(_FakeHttpClient.single(body)),
-        'Sí, claro.',
-      );
-
-      expect(questions, hasLength(2));
-    });
-  });
-
   group('validation — clean response', () {
-    test('distinct distractors + contiguous positions -> passes', () async {
+    test('distinct distractors -> passes, chunk positions are contiguous', () async {
       final questions = await fetch(
         serviceWith(_FakeHttpClient.single(_envelope(_threeQuestions))),
       );
@@ -374,45 +293,37 @@ void main() {
     });
   });
 
-  // ── Pass 5d: single retry on schema / validation failure ────────────────────
+  // ── Single retry on schema / validation failure ─────────────────────────────
 
   group('retry', () {
     test('validation failure then clean -> succeeds, callCount == 2', () async {
       final client = _FakeHttpClient([
-        _Reply.body(_envelope([_question('Voy', distractors: ['Va', 'Va'])])),
-        _Reply.body(_envelope(_threeQuestions)),
+        _Reply.body(_envelope([_question(distractors: ['Va', 'Va'])])),
+        _Reply.body(_envelope([_question(distractors: ['Va', 'Vamos'])])),
       ]);
 
-      final questions = await fetchTarget(
-        serviceWith(client),
-        'Voy al banco el viernes.',
-      );
+      final questions = await fetchTarget(serviceWith(client), 'Voy');
 
-      expect(questions, hasLength(3));
+      expect(questions, hasLength(1));
       expect(client.callCount, 2);
     });
 
     test('schema failure then clean -> succeeds, callCount == 2', () async {
       final client = _FakeHttpClient([
-        _Reply.body(
-          _envelope([_question('Voy', distractors: ['Va', 'Vamos', 'Van'])]),
-        ),
-        _Reply.body(_envelope(_threeQuestions)),
+        _Reply.body(_envelope([_question(distractors: ['Va', 'Vamos', 'Van'])])),
+        _Reply.body(_envelope([_question(distractors: ['Va', 'Vamos'])])),
       ]);
 
-      final questions = await fetchTarget(
-        serviceWith(client),
-        'Voy al banco el viernes.',
-      );
+      final questions = await fetchTarget(serviceWith(client), 'Voy');
 
-      expect(questions, hasLength(3));
+      expect(questions, hasLength(1));
       expect(client.callCount, 2);
     });
 
     test('both calls fail validation -> throws, callCount == 2 (no loop)', () async {
       final client = _FakeHttpClient([
-        _Reply.body(_envelope([_question('Voy', distractors: ['Va', 'Va'])])),
-        _Reply.body(_envelope([_question('Voy', distractors: ['Va', 'Va'])])),
+        _Reply.body(_envelope([_question(distractors: ['Va', 'Va'])])),
+        _Reply.body(_envelope([_question(distractors: ['Va', 'Va'])])),
       ]);
       final service = serviceWith(client);
 
@@ -428,10 +339,7 @@ void main() {
     test('first call already clean -> succeeds, callCount == 1', () async {
       final client = _FakeHttpClient([_Reply.body(_envelope(_threeQuestions))]);
 
-      final questions = await fetchTarget(
-        serviceWith(client),
-        'Voy al banco el viernes.',
-      );
+      final questions = await fetch(serviceWith(client));
 
       expect(questions, hasLength(3));
       expect(client.callCount, 1);
@@ -445,9 +353,21 @@ void main() {
         fetch(service),
         throwsA(isA<WalkthroughApiException>()),
       );
-      // The new once-more retry only fires for schema/validation failures, so
-      // an API failure makes a single call (a retry would exhaust the queue).
+      // The once-more retry only fires for schema/validation failures, so an
+      // API failure makes a single call (a retry would exhaust the queue).
       expect(client.callCount, 1);
+    });
+  });
+
+  group('empty target sentence', () {
+    test('no chunks can be derived -> WalkthroughSchemaException, no API call', () async {
+      final client = _FakeHttpClient([]);
+
+      await expectLater(
+        fetchTarget(serviceWith(client), '   '),
+        throwsA(isA<WalkthroughSchemaException>()),
+      );
+      expect(client.callCount, 0);
     });
   });
 }
@@ -457,52 +377,32 @@ void main() {
 /// Wraps walkthrough [questions] in the OpenAI `/v1/responses` `output_text`
 /// envelope the service reads.
 String _envelope(List<Map<String, Object?>> questions) {
-  final walkthroughJson = jsonEncode({
-    'target_sentence': 'Voy al banco el viernes.',
-    'questions': questions,
-  });
+  final walkthroughJson = jsonEncode({'questions': questions});
   return jsonEncode({'output_text': walkthroughJson});
 }
 
-/// Builds a single question map with overridable distractors and position.
-Map<String, Object?> _question(
-  String correctTranslation, {
+/// Builds a single `{english_stem, distractors}` question map — the only
+/// fields the model supplies now that chunk text/position come from
+/// chunkSentence rather than the response.
+Map<String, Object?> _question({
+  String englishStem = "I'm going",
   List<String> distractors = const ['Va', 'Vamos'],
-  int position = 0,
-}) => {
-  'english_stem': "I'm going",
-  'correct_translation': correctTranslation,
-  'distractors': distractors,
-  'chunk_position': position,
-};
+}) => {'english_stem': englishStem, 'distractors': distractors};
 
-List<Map<String, Object?>> _oneQuestion(String correctTranslation) => [
-  {
-    'english_stem': "I'm going",
-    'correct_translation': correctTranslation,
-    'distractors': ['Va', 'Vamos'],
-    'chunk_position': 0,
-  },
-];
-
+/// Three questions matching the 3 chunks 'Voy al banco el viernes.'
+/// mechanically produces ('Voy' | 'al banco' | 'el viernes').
 const List<Map<String, Object?>> _threeQuestions = [
   {
     'english_stem': "I'm going",
-    'correct_translation': 'Voy',
     'distractors': ['Va', 'Vamos'],
-    'chunk_position': 0,
   },
   {
     'english_stem': 'to the bank',
-    'correct_translation': 'al banco',
     'distractors': ['a el banco', 'en el banco'],
-    'chunk_position': 1,
   },
   {
     'english_stem': 'on Friday',
-    'correct_translation': 'el viernes',
     'distractors': ['en viernes', 'el viernos'],
-    'chunk_position': 2,
   },
 ];
 

@@ -332,11 +332,13 @@ Future<void> answerAllWalkthroughCorrectly(WidgetTester tester) async {
   }
 }
 
-/// Answers every walkthrough question with a distractor (wrong), tapping the
-/// manual continue each time (wrong answers do not auto-advance).
+/// Answers every walkthrough question wrongly on both allowed attempts
+/// (WalkthroughQuestionView gives 2 attempts per question before locking),
+/// then taps the manual continue (wrong answers do not auto-advance).
 Future<void> answerAllWalkthroughWrongly(WidgetTester tester) async {
   for (final question in _defaultWalkthroughQuestions) {
     await _tap(tester, find.text(question.distractors.first));
+    await _tap(tester, find.text(question.distractors.second));
     await _tap(tester, find.byKey(const Key('walkthrough-advance')));
   }
 }

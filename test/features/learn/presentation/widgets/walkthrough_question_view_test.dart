@@ -178,32 +178,54 @@ void main() {
     );
   });
 
-  testWidgets('the correct option is green-highlighted in the wrong state', (
-    tester,
-  ) async {
-    await pump(tester, random: Random(1));
+  testWidgets(
+    'the correct option is NOT highlighted after only one wrong attempt',
+    (tester) async {
+      await pump(tester, random: Random(1));
 
-    await tester.tap(find.text('Va'));
-    await tester.pump();
+      await tester.tap(find.text('Va'));
+      await tester.pump();
 
-    // The correct option ('Voy') carries the highlight key and the green fill.
-    expect(
-      tester.widget<Text>(
+      // One attempt remains — the correct answer must not be handed to the
+      // learner yet.
+      expect(
         find.byKey(const Key('walkthrough-correct-highlight')),
-      ).data,
-      'Voy',
-    );
-    expect(
-      containerColorFor(
-        tester,
-        find.text('Voy'),
-        AppColors.success.withValues(alpha: 0.14),
-      ),
-      AppColors.success.withValues(alpha: 0.14),
-    );
-  });
+        findsNothing,
+      );
+    },
+  );
 
-  testWidgets('the wrong affordance is shown and advances on tap', (
+  testWidgets(
+    'the correct option is green-highlighted once attempts are exhausted',
+    (tester) async {
+      await pump(tester, random: Random(1));
+
+      // Both distractors wrong: 'Va' (attempt 1), then 'Vamos' (attempt 2,
+      // exhausts the 2-attempt limit and locks).
+      await tester.tap(find.text('Va'));
+      await tester.pump();
+      await tester.tap(find.text('Vamos'));
+      await tester.pump();
+
+      // The correct option ('Voy') carries the highlight key and the green fill.
+      expect(
+        tester.widget<Text>(
+          find.byKey(const Key('walkthrough-correct-highlight')),
+        ).data,
+        'Voy',
+      );
+      expect(
+        containerColorFor(
+          tester,
+          find.text('Voy'),
+          AppColors.success.withValues(alpha: 0.14),
+        ),
+        AppColors.success.withValues(alpha: 0.14),
+      );
+    },
+  );
+
+  testWidgets('a wrong attempt within the limit shows the retry affordance', (
     tester,
   ) async {
     await pump(tester, random: Random(1));
@@ -211,16 +233,71 @@ void main() {
     await tester.tap(find.text('Va'));
     await tester.pump();
 
-    expect(
-      find.text('La respuesta correcta está resaltada — siguiente paso…'),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const Key('walkthrough-advance')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('to get my hair cut'), findsOneWidget);
+    expect(find.byKey(const Key('walkthrough-result-retry')), findsOneWidget);
+    expect(find.byKey(const Key('walkthrough-advance')), findsNothing);
+    // Still on the same question — no reveal yet.
+    expect(find.text('I am going'), findsOneWidget);
   });
+
+  testWidgets('re-tapping the same tried-wrong option does not spend another attempt', (
+    tester,
+  ) async {
+    await pump(tester, random: Random(1));
+
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+    await tester.tap(find.text('Va'));
+    await tester.pump();
+
+    // Still open (a second attempt on the SAME option is a no-op): no reveal.
+    expect(
+      find.byKey(const Key('walkthrough-correct-highlight')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('walkthrough-result-retry')), findsOneWidget);
+  });
+
+  testWidgets(
+    'the wrong affordance is shown once attempts are exhausted, and advances on tap',
+    (tester) async {
+      await pump(tester, random: Random(1));
+
+      await tester.tap(find.text('Va'));
+      await tester.pump();
+      await tester.tap(find.text('Vamos'));
+      await tester.pump();
+
+      expect(
+        find.text('La respuesta correcta está resaltada — siguiente paso…'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('walkthrough-advance')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('to get my hair cut'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'getting the correct answer on the second attempt counts as correct',
+    (tester) async {
+      await pump(tester, random: Random(1));
+
+      // Attempt 1 wrong, attempt 2 correct — one attempt remained, so the
+      // pick still resolves the question as correct.
+      await tester.tap(find.text('Va'));
+      await tester.pump();
+      await tester.tap(find.text('Voy'));
+      await tester.pump();
+
+      expect(find.byKey(const Key('walkthrough-result-correct')), findsOneWidget);
+      expect(find.byKey(const Key('walkthrough-result-incorrect')), findsNothing);
+
+      // Drain the auto-advance timer.
+      await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+    },
+  );
 
   testWidgets('renders the first question\'s three options (set membership)', (
     tester,
@@ -280,21 +357,40 @@ void main() {
     await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
   });
 
-  testWidgets('a second tap on a different option is ignored (locked)', (
+  testWidgets(
+    'a wrong tap within the attempt limit does not commit (question stays open)',
+    (tester) async {
+      await pump(tester, random: Random(1));
+
+      await tester.tap(find.text('Va'));
+      await tester.pump();
+
+      // One attempt used, one remains: nothing has resolved the question yet.
+      expect(committedOption(tester), isNull);
+
+      // A different, untried option is still tappable — attempt 2.
+      await tester.tap(find.text('Vamos'));
+      await tester.pump();
+      expect(committedOption(tester), 'Vamos');
+    },
+  );
+
+  testWidgets('once attempts are exhausted, further taps are ignored (locked)', (
     tester,
   ) async {
     await pump(tester, random: Random(1));
 
-    // Commit a distractor (wrong) so the lock is proven without scheduling an
-    // auto-advance timer — correctness is orthogonal to locking.
+    // Exhaust both attempts: 'Va' (1), then 'Vamos' (2) locks on 'Vamos'.
     await tester.tap(find.text('Va'));
     await tester.pump();
-    expect(committedOption(tester), 'Va');
-
-    // Lock holds: tapping a different option does not change the committed one.
     await tester.tap(find.text('Vamos'));
     await tester.pump();
-    expect(committedOption(tester), 'Va');
+    expect(committedOption(tester), 'Vamos');
+
+    // Lock holds: tapping the (now-revealed) correct option changes nothing.
+    await tester.tap(find.text('Voy'));
+    await tester.pump();
+    expect(committedOption(tester), 'Vamos');
   });
 
   final correctIndicator = find.byKey(const Key('walkthrough-result-correct'));
@@ -324,10 +420,25 @@ void main() {
     await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
   });
 
-  testWidgets('committing a distractor marks it incorrect', (tester) async {
+  testWidgets(
+    'a single wrong attempt does not mark it incorrect yet (attempt remains)',
+    (tester) async {
+      await pump(tester, random: Random(1));
+
+      await tester.tap(find.text('Va'));
+      await tester.pump();
+
+      expect(incorrectIndicator, findsNothing);
+      expect(correctIndicator, findsNothing);
+    },
+  );
+
+  testWidgets('exhausting both attempts marks it incorrect', (tester) async {
     await pump(tester, random: Random(1));
 
     await tester.tap(find.text('Va'));
+    await tester.pump();
+    await tester.tap(find.text('Vamos'));
     await tester.pump();
 
     expect(incorrectIndicator, findsOneWidget);
@@ -366,18 +477,24 @@ void main() {
     const Key('walkthrough-correct-highlight'),
   );
 
-  testWidgets('a wrong answer highlights the correct option', (tester) async {
-    await pump(tester, random: Random(1));
+  testWidgets(
+    'exhausting both wrong attempts highlights the correct option',
+    (tester) async {
+      await pump(tester, random: Random(1));
 
-    // 'Va' is a distractor; 'Voy' is the stored correct answer.
-    await tester.tap(find.text('Va'));
-    await tester.pump();
+      // 'Va' then 'Vamos' are the two distractors; 'Voy' is the stored correct
+      // answer. Exhausting both attempts locks and reveals it.
+      await tester.tap(find.text('Va'));
+      await tester.pump();
+      await tester.tap(find.text('Vamos'));
+      await tester.pump();
 
-    expect(correctHighlight, findsOneWidget);
-    // The highlighted option is the stored correct translation, not the tapped
-    // distractor.
-    expect(tester.widget<Text>(correctHighlight).data, 'Voy');
-  });
+      expect(correctHighlight, findsOneWidget);
+      // The highlighted option is the stored correct translation, not either
+      // tapped distractor.
+      expect(tester.widget<Text>(correctHighlight).data, 'Voy');
+    },
+  );
 
   testWidgets('a correct answer shows no correct-option highlight', (
     tester,
@@ -451,25 +568,32 @@ void main() {
     await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
   });
 
-  testWidgets('the wrong path does not auto-advance and waits for the tap', (
-    tester,
-  ) async {
-    await pump(tester, random: Random(1));
+  testWidgets(
+    'the wrong path does not auto-advance and waits for the tap once locked',
+    (tester) async {
+      await pump(tester, random: Random(1));
 
-    await tester.tap(find.text('Va'));
-    await tester.pump();
+      await tester.tap(find.text('Va'));
+      await tester.pump();
 
-    // No timer on the wrong path: waiting past the delay stays on Q0.
-    await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
-    expect(find.text('I am going'), findsOneWidget);
-    expect(find.text('to get my hair cut'), findsNothing);
+      // One attempt remains: no manual control yet, still open.
+      expect(advance, findsNothing);
 
-    // The manual control is present and advances on tap.
-    expect(advance, findsOneWidget);
-    await tester.tap(advance);
-    await tester.pumpAndSettle();
-    expect(find.text('to get my hair cut'), findsOneWidget);
-  });
+      await tester.tap(find.text('Vamos'));
+      await tester.pump();
+
+      // No timer on the wrong path: waiting past the delay stays on Q0.
+      await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
+      expect(find.text('I am going'), findsOneWidget);
+      expect(find.text('to get my hair cut'), findsNothing);
+
+      // The manual control is present now that attempts are exhausted.
+      expect(advance, findsOneWidget);
+      await tester.tap(advance);
+      await tester.pumpAndSettle();
+      expect(find.text('to get my hair cut'), findsOneWidget);
+    },
+  );
 
   testWidgets('advancing past the last question shows the finished placeholder', (
     tester,
@@ -513,16 +637,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Known mix: Q0 correct (auto), Q1 distractor/wrong (manual tap), Q2 correct
-    // (auto) -> 2/3.
+    // Known mix: Q0 correct (auto), Q1 both attempts wrong (manual tap), Q2
+    // correct (auto) -> 2/3.
     // Q0 correct: pause auto-advances.
     await tester.tap(find.text(questions[0].correctTranslation));
     await tester.pump();
     await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
     await tester.pumpAndSettle();
 
-    // Q1 wrong: waits for the manual control.
+    // Q1 wrong: both attempts spent, then waits for the manual control.
     await tester.tap(find.text(questions[1].distractors.first));
+    await tester.pump();
+    await tester.tap(find.text(questions[1].distractors.second));
     await tester.pump();
     await tester.tap(advance);
     await tester.pumpAndSettle();
@@ -707,8 +833,11 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    // Final question answered wrongly: it must wait for the manual tap.
+    // Final question answered wrongly on both attempts: it must wait for the
+    // manual tap.
     await tester.tap(find.text(questions.last.distractors.first));
+    await tester.pump();
+    await tester.tap(find.text(questions.last.distractors.second));
     await tester.pump();
     await tester.pump(WalkthroughQuestionView.autoAdvanceDelay);
     expect(finished, findsNothing);
