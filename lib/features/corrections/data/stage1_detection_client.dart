@@ -16,11 +16,13 @@ Future<List<String>> callStage1Detection({
   required String model,
   required String systemPrompt,
   required String submittedText,
+  String stageLabel = 'unspecified',
 }) async {
   final replyText = await client.complete(
     model: model,
     systemPrompt: systemPrompt,
     userText: submittedText,
+    stageLabel: stageLabel,
   );
   return parseStage1DetectionArray(replyText);
 }
@@ -45,18 +47,21 @@ Future<List<String>> callStage1AndMergeFlaggedPhrases({
       model: model,
       systemPrompt: stage1DetectionDialectSpanish,
       submittedText: submittedText,
+      stageLabel: 'stage1_dialect',
     ),
     callStage1Detection(
       client: client,
       model: model,
       systemPrompt: stage1RedundancyDetectionSpanish,
       submittedText: submittedText,
+      stageLabel: 'stage1b_redundancy',
     ),
     callStage1Detection(
       client: client,
       model: model,
       systemPrompt: stage1ReflexiveDetectionSpanish,
       submittedText: submittedText,
+      stageLabel: 'stage1c_reflexive',
     ),
   ]);
 

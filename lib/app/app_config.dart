@@ -1,3 +1,11 @@
+/// Candidate model for the staged Spanish correction pipeline
+/// (`runStagedCorrectionPipeline`, wired in via
+/// `OpenAiCorrectionService._correctSpanishTextViaStagedPipeline`). Not yet
+/// used by [AppConfig.openAiCorrectionModel] itself, so grading/retranslation
+/// and every other `OpenAiCorrectionService` call keep using the GPT-5.5
+/// default below.
+const openAiCorrectionPipelineModelTerra = 'gpt-5.6-terra';
+
 class AppConfig {
   const AppConfig({
     required this.openAiApiKey,

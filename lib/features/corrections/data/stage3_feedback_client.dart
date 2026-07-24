@@ -44,6 +44,7 @@ Future<List<Stage3ExplanationResult>> callStage3Feedback({
       errorItems: errorItems,
       dialectalCandidates: dialectalCandidates,
     ),
+    stageLabel: 'stage3_feedback',
   );
   return parseStage3ExplanationArray(replyText);
 }

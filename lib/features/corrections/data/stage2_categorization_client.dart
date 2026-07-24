@@ -22,6 +22,7 @@ Future<List<StagedCorrectionCandidate>> callStage2Categorization({
       fullText: fullText,
       flaggedPhrases: flaggedPhrases,
     ),
+    stageLabel: 'stage2_categorization',
   );
   return parseStage2CategorizationArray(replyText);
 }

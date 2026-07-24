@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../../../app/app_config.dart';
 import '../../../core/enums/language.dart';
 import '../../../core/services/prompt_builder.dart';
 import '../application/correction_response_schema.dart';
@@ -94,7 +95,7 @@ class OpenAiCorrectionService implements CorrectionService {
     try {
       return await runStagedCorrectionPipeline(
         client: _chatCompletionsClient,
-        model: _model,
+        model: openAiCorrectionPipelineModelTerra,
         submittedText: text,
       );
     } on ChatCompletionsException catch (error) {

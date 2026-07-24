@@ -81,6 +81,7 @@ class OpenAiChatCompletionsClient {
     required String model,
     required String systemPrompt,
     required String userText,
+    String stageLabel = 'unspecified',
   }) async {
     try {
       final request = await _httpClient
@@ -99,6 +100,7 @@ class OpenAiChatCompletionsClient {
               {'role': 'system', 'content': systemPrompt},
               {'role': 'user', 'content': userText},
             ],
+            if (model.startsWith('gpt-5.6')) 'reasoning_effort': 'low',
           }),
         ),
       );
@@ -122,6 +124,8 @@ class OpenAiChatCompletionsClient {
         );
       }
 
+      _logUsage(stageLabel: stageLabel, model: model, decoded: decoded);
+
       return _extractReplyText(decoded);
     } on SocketException catch (error) {
       throw ChatCompletionsException(
@@ -143,6 +147,24 @@ class OpenAiChatCompletionsClient {
         kind: ChatCompletionsFailureKind.serviceFailure,
       );
     }
+  }
+
+  /// Prints the raw `usage` object OpenAI returned for this call, tagged
+  /// with [stageLabel] and [model] — read-only diagnostic instrumentation
+  /// for comparing token/cost behavior across models and pipeline stages.
+  /// Does not affect parsing or any pipeline behavior: this runs after the
+  /// response is already known to be a decodable JSON object, and a missing
+  /// `usage` key just logs `null` rather than throwing.
+  static void _logUsage({
+    required String stageLabel,
+    required String model,
+    required Map<String, Object?> decoded,
+  }) {
+    // ignore: avoid_print
+    print(
+      '[usage] stage=$stageLabel model=$model '
+      'usage=${jsonEncode(decoded['usage'])}',
+    );
   }
 
   /// Extracts `choices[0].message.content`, trimmed — the assistant's reply
