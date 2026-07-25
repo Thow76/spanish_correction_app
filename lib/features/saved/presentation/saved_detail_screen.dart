@@ -45,13 +45,22 @@ class _SavedDetailScreenState extends State<SavedDetailScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 Text(
-                  '"${correction.correctedPhrase}"',
+                  // A pure-deletion correction (e.g. removing a redundant
+                  // pronoun) has an empty correctedPhrase by design — the fix
+                  // IS the removal, there's no replacement text. Falling back
+                  // to originalPhrase (the word being removed) keeps this
+                  // headline from rendering as empty quotes.
+                  '"${correction.correctedPhrase.isEmpty ? correction.originalPhrase : correction.correctedPhrase}"',
                   style: TextStyle(
                     color: correction.category.color,
                     fontFamily: 'Sora',
                     fontSize: 28,
                     fontWeight: FontWeight.w600,
                     height: 36 / 28,
+                    decoration: correction.correctedPhrase.isEmpty
+                        ? TextDecoration.underline
+                        : null,
+                    decorationColor: correction.category.color,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),

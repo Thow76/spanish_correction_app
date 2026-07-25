@@ -32,6 +32,16 @@ class SavedCorrectionSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categoryColor = correction.category.color;
+    // A pure-deletion correction (e.g. removing a redundant pronoun) has an
+    // empty correctedPhrase by design — there's no replacement text, the fix
+    // IS the removal. Falling back to originalPhrase (the word being
+    // removed), underlined the same way _SavedErrorLabel marks a flagged
+    // original phrase, keeps the headline from going blank while still
+    // reading as "this is what's flagged," not "this is the suggested fix."
+    final isDeletion = correction.correctedPhrase.isEmpty;
+    final headline = isDeletion
+        ? correction.originalPhrase
+        : correction.correctedPhrase;
 
     return Material(
       color: AppColors.surface,
@@ -77,13 +87,17 @@ class SavedCorrectionSummaryCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              correction.correctedPhrase,
+                              headline,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: categoryColor,
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
+                                decoration: isDeletion
+                                    ? TextDecoration.underline
+                                    : null,
+                                decorationColor: categoryColor,
                               ),
                             ),
                           ),
