@@ -56,14 +56,26 @@ void main() {
       expect(merged, ['trafico', 'volví para casa', 'yo', 'a mí', 'Quejó']);
     });
 
-    test('leaves duplicates between the lists untouched', () {
+    test('drops exact-string duplicates between the lists, keeping the first '
+        'occurrence', () {
       final merged = mergeStage1FlaggedPhrases(
         stage1DetectionFlagged: ['yo'],
         stage1RedundancyFlagged: ['yo'],
         stage1ReflexiveFlagged: ['yo'],
       );
 
-      expect(merged, ['yo', 'yo', 'yo']);
+      expect(merged, ['yo']);
+    });
+
+    test('keeps only the first occurrence of a duplicate when other, '
+        'distinct phrases are also present', () {
+      final merged = mergeStage1FlaggedPhrases(
+        stage1DetectionFlagged: ['trafico', 'yo'],
+        stage1RedundancyFlagged: ['yo', 'a mí'],
+        stage1ReflexiveFlagged: ['Quejó'],
+      );
+
+      expect(merged, ['trafico', 'yo', 'a mí', 'Quejó']);
     });
 
     test('handles any subset of the three lists being empty', () {

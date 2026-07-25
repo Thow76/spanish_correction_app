@@ -73,19 +73,27 @@ Future<List<String>> callStage1AndMergeFlaggedPhrases({
 }
 
 /// Concatenates Stage 1's, Stage 1B's, and Stage 1C's flagged-phrase lists,
-/// in that order. Pure and order-preserving; duplicates (a phrase more than
-/// one pass happens to flag) are left as-is — deduping is a later pipeline
-/// concern, not this function's.
+/// in that order, then drops exact-string duplicates (keeping each phrase's
+/// first occurrence) — a phrase more than one pass flags is billed to Stage 2
+/// only once. This is distinct from the *positional* overlap resolved later
+/// in the pipeline (`resolveOverlappingCandidates`), which dedupes candidates
+/// whose resolved spans overlap even when the flagged text differed; this
+/// step only collapses identical strings before Stage 2 ever sees them, so
+/// Stage 2 isn't asked (and billed) to categorize the same exact phrase
+/// twice. Safe because Stage 2 resolves how many real occurrences of a
+/// phrase need correcting by searching the full text itself (its `occurrence`
+/// field), not by counting how many times a phrase appears in this input
+/// list — see `stage2CategorizationSpanish` in `correction_prompt.dart`.
 List<String> mergeStage1FlaggedPhrases({
   required List<String> stage1DetectionFlagged,
   required List<String> stage1RedundancyFlagged,
   required List<String> stage1ReflexiveFlagged,
 }) {
-  return [
+  return {
     ...stage1DetectionFlagged,
     ...stage1RedundancyFlagged,
     ...stage1ReflexiveFlagged,
-  ];
+  }.toList();
 }
 
 /// Parses a Stage 1-shaped reply — a JSON array of quoted flagged phrases —
