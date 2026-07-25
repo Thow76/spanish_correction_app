@@ -714,6 +714,154 @@ void main() {
       },
     );
 
+    group('phrase-only toggle', () {
+      testWidgets(
+        'defaults to on: Start session uses the resolved single sentence',
+        (tester) async {
+          await pumpBuilder(
+            tester,
+            savedCorrections: [
+              _buildSaved(
+                id: 'sc-1',
+                promptPhrase: 'A trip to the market',
+                correctedSentence:
+                    'Fui al mercado. Compré pan y luego volví a casa.',
+                correctedPhrase: 'mercado',
+                correctedStartIndex: 7,
+              ),
+            ],
+          );
+
+          final toggle = tester.widget<SwitchListTile>(
+            find.byType(SwitchListTile),
+          );
+          expect(toggle.value, isTrue);
+
+          await tester.tap(find.byTooltip('Grammar'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('mercado'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Empezar sesión'));
+          await tester.pumpAndSettle();
+
+          final gameScreen = tester.widget<PromptTranslationGameScreen>(
+            find.byType(PromptTranslationGameScreen),
+          );
+          expect(
+            gameScreen.initialQuestions.single.expectedAnswer,
+            'Fui al mercado.',
+          );
+        },
+      );
+
+      testWidgets(
+        'turning it off uses the whole saved correctedSentence instead of '
+        'just the resolved sentence',
+        (tester) async {
+          await pumpBuilder(
+            tester,
+            savedCorrections: [
+              _buildSaved(
+                id: 'sc-1',
+                promptPhrase: 'A trip to the market',
+                correctedSentence:
+                    'Fui al mercado. Compré pan y luego volví a casa.',
+                correctedPhrase: 'mercado',
+                correctedStartIndex: 7,
+              ),
+            ],
+          );
+
+          await tester.tap(find.byType(SwitchListTile));
+          await tester.pumpAndSettle();
+
+          await tester.tap(find.byTooltip('Grammar'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('mercado'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Empezar sesión'));
+          await tester.pumpAndSettle();
+
+          final gameScreen = tester.widget<PromptTranslationGameScreen>(
+            find.byType(PromptTranslationGameScreen),
+          );
+          expect(
+            gameScreen.initialQuestions.single.expectedAnswer,
+            'Fui al mercado. Compré pan y luego volví a casa.',
+          );
+        },
+      );
+
+      testWidgets(
+        'the word-count badge reflects the current toggle state',
+        (tester) async {
+          await pumpBuilder(
+            tester,
+            savedCorrections: [
+              _buildSaved(
+                id: 'sc-1',
+                promptPhrase: 'A trip to the market',
+                correctedSentence:
+                    'Fui al mercado. Compré pan y luego volví a casa.',
+                correctedPhrase: 'mercado',
+                correctedStartIndex: 7,
+              ),
+            ],
+          );
+          await tester.tap(find.byTooltip('Grammar'));
+          await tester.pumpAndSettle();
+
+          // Phrase only (on): "Fui al mercado." — 3 words.
+          expect(find.text('3 palabra(s)'), findsOneWidget);
+
+          await tester.tap(find.byType(SwitchListTile));
+          await tester.pumpAndSettle();
+
+          // Full text: "Fui al mercado. Compré pan y luego volví a casa." — 10 words.
+          expect(find.text('10 palabra(s)'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'flipping the switch after selecting still applies at session start',
+        (tester) async {
+          await pumpBuilder(
+            tester,
+            savedCorrections: [
+              _buildSaved(
+                id: 'sc-1',
+                promptPhrase: 'A trip to the market',
+                correctedSentence:
+                    'Fui al mercado. Compré pan y luego volví a casa.',
+                correctedPhrase: 'mercado',
+                correctedStartIndex: 7,
+              ),
+            ],
+          );
+
+          await tester.tap(find.byTooltip('Grammar'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('mercado'));
+          await tester.pumpAndSettle();
+
+          // Select first (phrase-only on), then flip the switch off — the
+          // final toggle state at session-start time should win.
+          await tester.tap(find.byType(SwitchListTile));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Empezar sesión'));
+          await tester.pumpAndSettle();
+
+          final gameScreen = tester.widget<PromptTranslationGameScreen>(
+            find.byType(PromptTranslationGameScreen),
+          );
+          expect(
+            gameScreen.initialQuestions.single.expectedAnswer,
+            'Fui al mercado. Compré pan y luego volví a casa.',
+          );
+        },
+      );
+    });
+
     group('review mode ("Seleccionadas")', () {
       testWidgets(
         'shows every selected correction across categories in one list, '

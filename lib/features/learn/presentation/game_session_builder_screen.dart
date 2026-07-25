@@ -23,11 +23,19 @@ import 'prompt_translation_game_screen.dart';
 /// `correctedSentence`) that actually contains its error — resolved once at
 /// load time by [_resolveExpectedAnswer], not exploded into every sentence
 /// the correction's full corrected text happens to contain.
+///
+/// [resolvedSentence] is what's actually practiced by default ("phrase only"
+/// mode); [expectedAnswerFor] also covers the opt-out — practicing
+/// [correction]'s whole saved `correctedSentence` instead, for a learner who
+/// wants the full original context rather than just the isolated sentence.
 class _CorrectionOption {
-  _CorrectionOption({required this.correction, required this.expectedAnswer});
+  _CorrectionOption({required this.correction, required this.resolvedSentence});
 
   final SavedCorrection correction;
-  final String expectedAnswer;
+  final String resolvedSentence;
+
+  String expectedAnswerFor(bool phraseOnly) =>
+      phraseOnly ? resolvedSentence : correction.correctedSentence.trim();
 }
 
 /// Session-builder screen: lets the learner pick one or more categories, then
@@ -85,6 +93,14 @@ class _GameSessionBuilderScreenState extends State<GameSessionBuilderScreen> {
   // once otherwise mixes them together with nothing to tell them apart.
   final Set<ErrorCategory> _collapsedCategories = {};
 
+  // Default (on): practice just the single sentence containing the flagged
+  // error — this is what replaced the old per-sentence checkbox list (too
+  // clunky, too much vertical space per correction). Turning it off swaps
+  // every selected correction's practice text for its whole saved
+  // correctedSentence instead, read at session-start time so flipping the
+  // switch before/after selecting cards behaves identically either way.
+  bool _phraseOnly = true;
+
   @override
   void initState() {
     super.initState();
@@ -110,7 +126,7 @@ class _GameSessionBuilderScreenState extends State<GameSessionBuilderScreen> {
       for (final correction in eligible)
         _CorrectionOption(
           correction: correction,
-          expectedAnswer: _resolveExpectedAnswer(correction),
+          resolvedSentence: _resolveExpectedAnswer(correction),
         ),
     ];
     final availableCategories = ErrorCategory.values
@@ -222,7 +238,33 @@ class _GameSessionBuilderScreenState extends State<GameSessionBuilderScreen> {
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(
+                    _str('Solo la frase', 'Somente a frase'),
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _str(
+                      'Practica solo la frase con el error, no el texto completo.',
+                      'Pratique apenas a frase com o erro, não o texto completo.',
+                    ),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                  value: _phraseOnly,
+                  activeThumbColor: AppColors.cyan,
+                  activeTrackColor: AppColors.cyan.withValues(alpha: 0.4),
+                  onChanged: (value) => setState(() => _phraseOnly = value),
+                ),
+                const SizedBox(height: AppSpacing.md),
                 if (_isLoading)
                   const Center(
                     child: CircularProgressIndicator(color: AppColors.cyan),
@@ -336,7 +378,7 @@ class _GameSessionBuilderScreenState extends State<GameSessionBuilderScreen> {
                                   option.correction.id,
                                 ),
                                 trailing: Text(
-                                  '${_wordCount(option.expectedAnswer)} '
+                                  '${_wordCount(option.expectedAnswerFor(_phraseOnly))} '
                                   '${_str('palabra(s)', 'palavra(s)')}',
                                   style: const TextStyle(
                                     color: AppColors.textSecondary,
@@ -388,7 +430,7 @@ class _GameSessionBuilderScreenState extends State<GameSessionBuilderScreen> {
           GameQuestion(
             source: option.correction,
             promptPhrase: option.correction.promptPhrase.trim(),
-            expectedAnswer: option.expectedAnswer,
+            expectedAnswer: option.expectedAnswerFor(_phraseOnly),
           ),
     ];
 
