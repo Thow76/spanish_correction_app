@@ -100,7 +100,7 @@ class OpenAiChatCompletionsClient {
               {'role': 'system', 'content': systemPrompt},
               {'role': 'user', 'content': userText},
             ],
-            if (model.startsWith('gpt-5.6')) 'reasoning_effort': 'low',
+            if (model.startsWith('gpt-5.6')) 'reasoning_effort': 'high',
           }),
         ),
       );
