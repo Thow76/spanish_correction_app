@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:characters/characters.dart';
 
-import '../../../app/app_config.dart';
 import '../../../core/enums/language.dart';
 import '../../../core/services/prompt_builder.dart';
 import '../application/correction_response_schema.dart';
@@ -50,6 +49,7 @@ class OpenAiCorrectionService implements CorrectionService {
       systemInstruction: PromptBuilder.correctionSystemPrompt(language),
       userText: PromptBuilder.correctionUserContent(language, text),
       textFormat: _correctionResponseFormat,
+      stageLabel: 'legacy_correction',
     );
 
     try {
@@ -98,7 +98,7 @@ class OpenAiCorrectionService implements CorrectionService {
     try {
       return await runStagedCorrectionPipeline(
         client: _chatCompletionsClient,
-        model: openAiCorrectionPipelineModelTerra,
+        model: _model,
         submittedText: text,
       );
     } on ChatCompletionsException catch (error) {
@@ -133,6 +133,7 @@ Corrected phrase: ${correction.correctedPhrase}
 Category: ${correction.category.label}
 Short explanation: ${correction.shortExplanation}
 ''',
+      stageLabel: 'long_explanation',
     );
   }
 
@@ -155,6 +156,7 @@ Category: ${correction.category.label}
 Short explanation: ${correction.shortExplanation}
 ''',
       textFormat: _structuredExplanationResponseFormat,
+      stageLabel: 'structured_explanation',
     );
 
     try {
@@ -187,6 +189,7 @@ Short explanation: ${correction.shortExplanation}
         correctedPhrase: correctedPhrase,
       ),
       textFormat: _promptPhraseResponseFormat,
+      stageLabel: 'prompt_phrase',
     );
 
     try {
@@ -230,6 +233,7 @@ Short explanation: ${correction.shortExplanation}
         targetCategory: targetCategory,
       ),
       textFormat: _gradingResponseFormat,
+      stageLabel: 'grading_retranslation',
     );
 
     try {
@@ -251,6 +255,7 @@ Short explanation: ${correction.shortExplanation}
     required String systemInstruction,
     required String userText,
     Map<String, Object?>? textFormat,
+    String stageLabel = 'unspecified',
   }) async {
     try {
       final request = await _httpClient
@@ -291,6 +296,8 @@ Short explanation: ${correction.shortExplanation}
         throw const FormatException('OpenAI response root is not an object.');
       }
 
+      _logUsage(stageLabel: stageLabel, model: _model, decoded: decoded);
+
       return _extractOutputText(decoded);
     } on SocketException catch (error) {
       throw CorrectionServiceException(
@@ -308,6 +315,24 @@ Short explanation: ${correction.shortExplanation}
         'OpenAI returned an invalid API response: $error',
       );
     }
+  }
+
+  /// Prints the raw `usage` object OpenAI returned for this `/v1/responses`
+  /// call, tagged with [stageLabel] and [model] — same read-only diagnostic
+  /// instrumentation as `OpenAiChatCompletionsClient._logUsage`, covering the
+  /// legacy path (non-Spanish correction, explanations, prompt-phrase
+  /// generation, and retranslation grading) that the staged-pipeline logging
+  /// doesn't reach. Does not affect parsing or any pipeline behavior.
+  static void _logUsage({
+    required String stageLabel,
+    required String model,
+    required Map<String, Object?> decoded,
+  }) {
+    // ignore: avoid_print
+    print(
+      '[usage] stage=$stageLabel model=$model '
+      'usage=${jsonEncode(decoded['usage'])}',
+    );
   }
 
   void _ensureConfigured() {
