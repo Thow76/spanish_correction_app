@@ -24,7 +24,10 @@
 //
 // Targets the classic chat completions endpoint (/v1/chat/completions,
 // `choices[0].message.content`), the same endpoint every other harness in
-// this repo uses.
+// this repo uses. The required `{"corrected_text": "string"}` contract is
+// enforced through `response_format: json_schema`, so the prompt wording can
+// stay exactly as specified in the issue while every model still receives the
+// same response contract.
 //
 // Per-response data recorded (see `_ModelCaseResult`): model name, prompt
 // version, input text, raw model response, parsed corrected text (where
@@ -112,6 +115,22 @@ const String outputPath = String.fromEnvironment(
   'MODEL_COMPARISON_OUTPUT',
   defaultValue: 'docs/model_comparison_harness.md',
 );
+
+const Map<String, Object?> correctedTextResponseFormat = {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'spanish_correction_response',
+    'strict': true,
+    'schema': {
+      'type': 'object',
+      'additionalProperties': false,
+      'required': ['corrected_text'],
+      'properties': {
+        'corrected_text': {'type': 'string'},
+      },
+    },
+  },
+};
 
 /// Delay after every call in the live run, same rate-limit mitigation the
 /// other harnesses in this repo use.
@@ -225,8 +244,9 @@ const List<_TestCase> _cases = [
 ];
 
 /// Builds the raw JSON-able request body for one OpenAI chat completions
-/// call. `response_format: json_object` enforces the "Return JSON only"
-/// requirement at the API level rather than relying solely on the prompt.
+/// call. `response_format: json_schema` enforces the exact
+/// `{"corrected_text": "string"}` contract at the API level rather than
+/// relying solely on the prompt.
 Map<String, Object?> buildChatCompletionsBody({
   required String model,
   required String systemPromptText,
@@ -238,7 +258,7 @@ Map<String, Object?> buildChatCompletionsBody({
       {'role': 'system', 'content': systemPromptText},
       {'role': 'user', 'content': userText},
     ],
-    'response_format': {'type': 'json_object'},
+    'response_format': correctedTextResponseFormat,
   };
 }
 
@@ -273,8 +293,8 @@ String extractReplyText(Map<String, Object?> decodedBody) {
 class _ParsedResponse {
   const _ParsedResponse({required this.validJson, this.correctedText});
 
-  /// True only when the reply decodes as a JSON object whose
-  /// `corrected_text` field is a string — the exact required shape.
+  /// True only when the reply decodes as a JSON object whose only field is
+  /// `corrected_text`, and that field is a string — the exact required shape.
   final bool validJson;
 
   /// The parsed `corrected_text` value, if [validJson] is true.
@@ -302,6 +322,10 @@ _ParsedResponse parseCorrectedTextResponse(String replyText) {
   }
 
   if (decoded is! Map<String, Object?>) {
+    return const _ParsedResponse(validJson: false);
+  }
+
+  if (decoded.length != 1 || !decoded.containsKey('corrected_text')) {
     return const _ParsedResponse(validJson: false);
   }
 
@@ -513,6 +537,14 @@ String _gitHead() {
   }
 }
 
+String _markdownTableCell(String value) {
+  return value
+      .replaceAll('|', r'\|')
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .replaceAll('\n', '<br>');
+}
+
 /// Builds the full markdown comparison report: one section per case with a
 /// table comparing every model's result, then an overall per-model summary
 /// table (valid JSON rate, average latency, total tokens, total estimated
@@ -548,19 +580,19 @@ String _buildReport({
       ..writeln()
       ..writeln(
         '| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | '
-        'Est. cost (USD) | corrected_text |',
+        'Est. cost (USD) | corrected_text | raw_response |',
       )
-      ..writeln('| --- | --- | --- | --- | --- | --- |');
+      ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
 
     for (final model in models) {
       final result = resultsByModel[model];
       if (result == null) {
-        report.writeln('| $model | (no result) | | | | |');
+        report.writeln('| $model | (no result) | | | | | |');
         continue;
       }
       if (result.isError) {
         report.writeln(
-          '| $model | ERROR | ${result.latencyMs} | | | ${result.error} |',
+          '| $model | ERROR | ${result.latencyMs} | | | | ${_markdownTableCell(result.error.toString())} |',
         );
         continue;
       }
@@ -570,12 +602,10 @@ String _buildReport({
       final cost = result.estimatedCostUsd != null
           ? result.estimatedCostUsd!.toStringAsFixed(6)
           : 'unknown';
-      final corrected = (result.correctedText ?? '(unparsed)').replaceAll(
-        '|',
-        r'\|',
-      );
+      final corrected = _markdownTableCell(result.correctedText ?? '(unparsed)');
+      final rawResponse = _markdownTableCell(result.rawResponse ?? '(missing)');
       report.writeln(
-        '| $model | ${result.validJson} | ${result.latencyMs} | $tokens | $cost | $corrected |',
+        '| $model | ${result.validJson} | ${result.latencyMs} | $tokens | $cost | $corrected | $rawResponse |',
       );
     }
     report.writeln();
@@ -702,7 +732,7 @@ void main() {
   });
 
   group('buildChatCompletionsBody', () {
-    test('has model, messages, and json_object response_format', () {
+    test('has model, messages, and strict corrected_text response schema', () {
       final body = buildChatCompletionsBody(
         model: 'gpt-5.5',
         systemPromptText: 'sys',
@@ -714,7 +744,7 @@ void main() {
         {'role': 'system', 'content': 'sys'},
         {'role': 'user', 'content': 'usr'},
       ]);
-      expect(body['response_format'], {'type': 'json_object'});
+      expect(body['response_format'], correctedTextResponseFormat);
     });
   });
 
@@ -749,6 +779,13 @@ void main() {
 
     test('marks invalid when corrected_text is missing', () {
       final parsed = parseCorrectedTextResponse('{"other_field": "x"}');
+      expect(parsed.validJson, isFalse);
+    });
+
+    test('marks invalid when extra fields are present', () {
+      final parsed = parseCorrectedTextResponse(
+        '{"corrected_text": "Hola.", "explanation": "changed punctuation"}',
+      );
       expect(parsed.validJson, isFalse);
     });
 
@@ -953,4 +990,4 @@ void main() {
 }
 
 const String _expectedReportGolden =
-    r'"# Spanish Correction Model Comparison Harness\n\nPrompt version: `v1`  \nModels: `test-model-a`, `test-model-b`  \nCommit: `abc1234`  \nGenerated: 2026-01-01T12:00:00.000Z\n\n## TEST-1\n\n- Input text: `Los niño come.`\n- Note: Synthetic case.\n\n| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text |\n| --- | --- | --- | --- | --- | --- |\n| test-model-a | true | 200 | 20/500000/500020 | unknown | Los niños comen. |\n| test-model-b | ERROR | 9000 | | | Bad state: timed out |\n\n---\n\n## Overall summary\n\n| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |\n| --- | --- | --- | --- | --- | --- |\n| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown |\n| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown |\n"';
+    r'"# Spanish Correction Model Comparison Harness\n\nPrompt version: `v1`  \nModels: `test-model-a`, `test-model-b`  \nCommit: `abc1234`  \nGenerated: 2026-01-01T12:00:00.000Z\n\n## TEST-1\n\n- Input text: `Los niño come.`\n- Note: Synthetic case.\n\n| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |\n| --- | --- | --- | --- | --- | --- | --- |\n| test-model-a | true | 200 | 20/500000/500020 | unknown | Los niños comen. | {\"corrected_text\": \"Los niños comen.\"} |\n| test-model-b | ERROR | 9000 | | | | Bad state: timed out |\n\n---\n\n## Overall summary\n\n| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |\n| --- | --- | --- | --- | --- | --- |\n| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown |\n| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown |\n"';
