@@ -7,6 +7,7 @@ trial-and-error prompt research process.
 
 - `correction_prompts.md`
 - `corrected_index_reliability_probe.md`
+- `category_tiebreak_battery.md`
 - `para_destination_battery.md`
 - `para_destination_battery_not_an_error.md`
 - `para_destination_battery_post_fix.md`
@@ -28,6 +29,7 @@ trial-and-error prompt research process.
 - `verdict_battery_merged.md`
 - `walkthrough_prompt_section3_readiness.md`
 - `walkthrough_prompt_validation.md`
+- `walkthrough_prompt_validation_divergence.md`
 - `walkthrough_prompt_validation_run2.md`
 - `word_choice_boundary_validation.md`
 - `bare_prompt_control_test.md`
@@ -36,3 +38,10 @@ trial-and-error prompt research process.
 
 These files are preserved as history only and are not the current regression
 source of truth.
+
+## Regeneration note
+
+Some active harnesses still default their generated markdown output to `docs/`
+so a live run can be compared with the historical filenames. After review, keep
+new generated reports out of the current-docs surface by moving them here or by
+overriding the harness output path to this archive directory.

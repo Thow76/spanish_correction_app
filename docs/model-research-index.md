@@ -42,3 +42,8 @@ to `docs/archive/legacy-model-reports/`.
 
 They remain available for reference, but they are no longer the current source
 of truth for the app’s prompt behavior.
+
+Active harnesses may still emit markdown reports under `docs/` when run live.
+Treat those outputs as review artifacts: either archive them after inspection or
+run with an output override that writes directly to
+`docs/archive/legacy-model-reports/`.
