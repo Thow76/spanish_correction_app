@@ -23,12 +23,14 @@ class OpenAiCorrectionService implements CorrectionService {
     required String apiKey,
     required String model,
     HttpClient? httpClient,
+    void Function(ChatCompletionsUsage usage)? onUsage,
   }) : _apiKey = apiKey.trim(),
        _model = model.trim(),
        _httpClient = httpClient ?? HttpClient() {
     _chatCompletionsClient = OpenAiChatCompletionsClient(
       apiKey: _apiKey,
       httpClient: _httpClient,
+      onUsage: onUsage,
     );
   }
 
