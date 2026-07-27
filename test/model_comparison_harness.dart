@@ -54,11 +54,23 @@
 // Override the output path with --dart-define=MODEL_COMPARISON_OUTPUT=...
 // (default docs/model_comparison_harness.md).
 //
+// To compare the default higher-tier set against lower-cost/earlier
+// candidates (5.4, the documented ChatGPT 5.3 model ID, and 4.1 family
+// models), pass them explicitly via COMPARISON_MODELS instead of changing
+// the default — the prompt, fixture set, response contract, and
+// scoring/logging format are identical either way, so the model name is
+// still the only variable. For example:
+//   --dart-define=COMPARISON_MODELS=gpt-5.5,gpt-5.4,gpt-5.4-mini,gpt-5.4-nano,gpt-5.3-chat-latest,gpt-4.1,gpt-4.1-mini,gpt-4.1-nano
+//
 // Per-model USD-per-million-token pricing lives in `_pricingPerModel`
 // below. These figures are illustrative placeholders, not verified
 // published pricing — update them before treating `estimatedCostUsd` as
 // authoritative. A model missing from the table yields a `null` estimate
-// rather than a silently wrong number.
+// rather than a silently wrong number. `gpt-5.3-chat-latest` is the
+// documented ChatGPT 5.3 Chat model ID; bare `gpt-5.3` remains omitted
+// unless this project's account verifies it as an available alias. The
+// entries added for `gpt-5.4`, `gpt-5.3-chat-latest`, `gpt-5.3-codex`, and
+// the 4.1 family use OpenAI's published list pricing as of this writing.
 
 import 'dart:convert';
 import 'dart:io';
@@ -168,6 +180,43 @@ const Map<String, _ModelPricing> _pricingPerModel = {
   'gpt-5.6-luna': _ModelPricing(
     inputPerMillionUsd: 0.30,
     outputPerMillionUsd: 1.50,
+  ),
+  // Earlier-generation/lower-cost candidates (see issue: expand the
+  // comparison harness beyond the higher-tier model set). The documented
+  // ChatGPT 5.3 Chat model ID is `gpt-5.3-chat-latest`; bare `gpt-5.3`
+  // deliberately has no entry until this project's account verifies it as
+  // an available alias.
+  'gpt-5.4': _ModelPricing(
+    inputPerMillionUsd: 2.50,
+    outputPerMillionUsd: 15.00,
+  ),
+  'gpt-5.4-mini': _ModelPricing(
+    inputPerMillionUsd: 0.75,
+    outputPerMillionUsd: 4.50,
+  ),
+  'gpt-5.4-nano': _ModelPricing(
+    inputPerMillionUsd: 0.20,
+    outputPerMillionUsd: 1.25,
+  ),
+  'gpt-5.3-chat-latest': _ModelPricing(
+    inputPerMillionUsd: 1.75,
+    outputPerMillionUsd: 14.00,
+  ),
+  'gpt-5.3-codex': _ModelPricing(
+    inputPerMillionUsd: 1.75,
+    outputPerMillionUsd: 14.00,
+  ),
+  'gpt-4.1': _ModelPricing(
+    inputPerMillionUsd: 2.00,
+    outputPerMillionUsd: 8.00,
+  ),
+  'gpt-4.1-mini': _ModelPricing(
+    inputPerMillionUsd: 0.40,
+    outputPerMillionUsd: 1.60,
+  ),
+  'gpt-4.1-nano': _ModelPricing(
+    inputPerMillionUsd: 0.10,
+    outputPerMillionUsd: 0.40,
   ),
 };
 
@@ -826,6 +875,87 @@ void main() {
         outputTokens: 0,
       );
       expect(cost, closeTo(0.15, 1e-9));
+    });
+
+    test('computes cost for the gpt-4.1 candidate', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-4.1',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(cost, closeTo(10.0, 1e-9));
+    });
+
+    test('computes cost for the gpt-4.1-mini candidate', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-4.1-mini',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(cost, closeTo(2.0, 1e-9));
+    });
+
+    test('computes cost for the gpt-5.4 candidate', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-5.4',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(cost, closeTo(17.5, 1e-9));
+    });
+
+    test('computes cost for the gpt-5.4-mini candidate', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-5.4-mini',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(cost, closeTo(5.25, 1e-9));
+    });
+
+    test('computes cost for the gpt-5.4-nano candidate', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-5.4-nano',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(cost, closeTo(1.45, 1e-9));
+    });
+
+    test('computes cost for the gpt-5.3-chat-latest candidate', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-5.3-chat-latest',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(cost, closeTo(15.75, 1e-9));
+    });
+
+    test('computes cost for the gpt-5.3-codex candidate', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-5.3-codex',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(cost, closeTo(15.75, 1e-9));
+    });
+
+    test('computes cost for the gpt-4.1-nano candidate', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-4.1-nano',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(cost, closeTo(0.5, 1e-9));
+    });
+
+    test('reports unknown (null) for the unverified bare gpt-5.3 alias', () {
+      final cost = estimateCostUsd(
+        model: 'gpt-5.3',
+        inputTokens: 100,
+        outputTokens: 100,
+      );
+      expect(cost, isNull);
     });
   });
 
