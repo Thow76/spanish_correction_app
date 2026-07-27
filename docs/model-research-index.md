@@ -37,6 +37,18 @@ Keep these `test/` suites untouched; they are the active model-related checks.
 - `test/model_comparison_harness.dart`
 - `test/pipeline_baseline_harness.dart`
 
+## Shared benchmark fixtures
+
+`test/shared/benchmark_fixtures.dart` holds a small, shared set of
+representative Spanish inputs (short phrase, sentence/short paragraph,
+paragraph, two-paragraph, and near-600-character cases, including a
+CALCS-style calque case) for routine latency/request-count/token-usage/cost/
+model-comparison runs — not a language-quality regression suite. Harnesses
+such as the staged pipeline baseline harness and the model-comparison
+harness can import and reuse it instead of re-declaring their own inputs.
+Its offline fixture-invariant tests live in
+`test/shared/benchmark_fixtures_test.dart`.
+
 ## Archived research artifacts
 
 The historical generated reports, prompt snapshots, and harness writeups moved
