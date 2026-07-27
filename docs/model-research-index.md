@@ -8,6 +8,9 @@ historical trial-and-error reports separately.
 - `docs/correction_prompt_issues_and_solutions.md` tracks the current correction
   prompt decisions, including the standalone Portuguese prompt and the
   retranslation `is_related` gate.
+- `docs/current_spanish_correction_prompt_audit.md` documents the current live
+  Spanish staged correction prompts and prompt-risk wording without changing
+  prompt behavior.
 - `docs/walkthrough_prompt_spec.md` is the current walkthrough contract.
 - `AUDIT.md` is the current codebase audit/reference map.
 
