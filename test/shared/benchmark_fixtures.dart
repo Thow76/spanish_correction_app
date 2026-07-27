@@ -1,12 +1,12 @@
 // Shared Spanish correction benchmark fixture set.
 //
 // Issue: "Define richer Spanish correction benchmark fixture strategy"
-// (closes Thow76/spanish_correction_app#11). Purpose: a small, shared set of
+// (closes spanish_correction_app#11). Purpose: a small, shared set of
 // representative natural-language inputs for latency/request-count/
 // token-usage/cost/model-comparison benchmarking — not a language-quality
 // regression suite, and not a change to prompts, model behavior, UI flow, or
 // the staged pipeline. This complements (does not duplicate) the
-// observability work in Thow76/spanish_correction_app#6: that issue records
+// observability work in spanish_correction_app#6: that issue records
 // latency/tokens/cost (see `test/pipeline_baseline_harness.dart`'s `onUsage`
 // wiring); this file only supplies the inputs such harnesses can run against.
 //

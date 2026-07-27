@@ -2,7 +2,7 @@
 // (`test/shared/benchmark_fixtures.dart`).
 //
 // Issue: "Define richer Spanish correction benchmark fixture strategy"
-// (closes Thow76/spanish_correction_app#11). These are pure fixture-loading/
+// (closes spanish_correction_app#11). These are pure fixture-loading/
 // fixture-selection checks — no live API calls, no `live` tag — verifying
 // the fixture set's own invariants (unique ids, character-limit compliance,
 // length-band coverage, CALCS-style/accent/correctness mix) rather than any
