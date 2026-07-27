@@ -54,6 +54,44 @@ class ChatCompletionsException implements Exception {
   String toString() => 'ChatCompletionsException: $message';
 }
 
+/// Structured, per-request measurement data for one
+/// [OpenAiChatCompletionsClient.complete] call — the same information the
+/// console-only `[usage]` log line already carries (see `_logUsage` below),
+/// plus the wall-clock latency of the call, made available to callers as
+/// data instead of only as a printed line. Exists so latency/token/cost
+/// benchmarking (e.g. `test/pipeline_baseline_harness.dart`) can observe
+/// every stage call a pipeline run makes without re-parsing stdout or
+/// duplicating the HTTP request itself.
+class ChatCompletionsUsage {
+  const ChatCompletionsUsage({
+    required this.stageLabel,
+    required this.model,
+    required this.latencyMs,
+    this.promptTokens,
+    this.completionTokens,
+    this.totalTokens,
+  });
+
+  final String stageLabel;
+  final String model;
+
+  /// Wall-clock time for the whole call — request start to response body
+  /// fully decoded — in milliseconds.
+  final int latencyMs;
+
+  /// `usage.prompt_tokens` from the OpenAI response, or `null` if the
+  /// response carried no `usage` object (or no `prompt_tokens` field).
+  final int? promptTokens;
+
+  /// `usage.completion_tokens` from the OpenAI response, or `null` under
+  /// the same conditions as [promptTokens].
+  final int? completionTokens;
+
+  /// `usage.total_tokens` from the OpenAI response, or `null` under the
+  /// same conditions as [promptTokens].
+  final int? totalTokens;
+}
+
 /// Calls OpenAI's `/v1/chat/completions` endpoint with a system/user message
 /// pair and returns the assistant's raw reply text.
 ///
@@ -70,12 +108,30 @@ class ChatCompletionsException implements Exception {
 /// wired into `correctText()` or any live route — the staged pipeline this
 /// supports is assembled and tested independently before any such wiring.
 class OpenAiChatCompletionsClient {
-  OpenAiChatCompletionsClient({required String apiKey, HttpClient? httpClient})
-    : _apiKey = apiKey.trim(),
-      _httpClient = httpClient ?? HttpClient();
+  OpenAiChatCompletionsClient({
+    required String apiKey,
+    HttpClient? httpClient,
+    void Function(ChatCompletionsUsage usage)? onUsage,
+  }) : _apiKey = apiKey.trim(),
+       _httpClient = httpClient ?? HttpClient(),
+       _onUsage = onUsage;
 
   final String _apiKey;
   final HttpClient _httpClient;
+
+  /// Optional structured-measurement callback — see [ChatCompletionsUsage].
+  /// `null` by default, so existing callers (and their behavior) are
+  /// unaffected; a benchmarking harness supplies this to observe every
+  /// stage call a pipeline run makes without parsing the `[usage]` console
+  /// log. Invoked once the response body has been decoded into a JSON
+  /// object with a 2xx status — i.e. once there is a decodable API
+  /// response to report usage for — which is *before* [_extractReplyText]
+  /// runs. A call can therefore still report usage here and then have
+  /// [complete] throw moments later if the assistant's reply content can't
+  /// be extracted; callers must not treat an observed [ChatCompletionsUsage]
+  /// as proof that the call, or any pipeline stage built on it, completed
+  /// successfully.
+  final void Function(ChatCompletionsUsage usage)? _onUsage;
 
   Future<String> complete({
     required String model,
@@ -83,6 +139,7 @@ class OpenAiChatCompletionsClient {
     required String userText,
     String stageLabel = 'unspecified',
   }) async {
+    final stopwatch = Stopwatch()..start();
     try {
       final request = await _httpClient
           .postUrl(Uri.https('api.openai.com', '/v1/chat/completions'))
@@ -124,7 +181,18 @@ class OpenAiChatCompletionsClient {
         );
       }
 
+      stopwatch.stop();
       _logUsage(stageLabel: stageLabel, model: model, decoded: decoded);
+      if (_onUsage != null) {
+        _onUsage(
+          _usageFrom(
+            stageLabel: stageLabel,
+            model: model,
+            decoded: decoded,
+            latencyMs: stopwatch.elapsedMilliseconds,
+          ),
+        );
+      }
 
       return _extractReplyText(decoded);
     } on SocketException catch (error) {
@@ -164,6 +232,27 @@ class OpenAiChatCompletionsClient {
     print(
       '[usage] stage=$stageLabel model=$model '
       'usage=${jsonEncode(decoded['usage'])}',
+    );
+  }
+
+  /// Builds the structured [ChatCompletionsUsage] passed to [_onUsage] —
+  /// same token fields as [_logUsage]'s printed line, parsed once here and
+  /// shared between them via [decoded]'s `usage` object.
+  static ChatCompletionsUsage _usageFrom({
+    required String stageLabel,
+    required String model,
+    required Map<String, Object?> decoded,
+    required int latencyMs,
+  }) {
+    final usage = decoded['usage'];
+    final usageMap = usage is Map<String, Object?> ? usage : null;
+    return ChatCompletionsUsage(
+      stageLabel: stageLabel,
+      model: model,
+      latencyMs: latencyMs,
+      promptTokens: (usageMap?['prompt_tokens'] as num?)?.toInt(),
+      completionTokens: (usageMap?['completion_tokens'] as num?)?.toInt(),
+      totalTokens: (usageMap?['total_tokens'] as num?)?.toInt(),
     );
   }
 

@@ -35,6 +35,7 @@ Keep these `test/` suites untouched; they are the active model-related checks.
 - `test/category_tiebreak_battery.dart`
 - `test/bare_prompt_control_test.dart`
 - `test/model_comparison_harness.dart`
+- `test/pipeline_baseline_harness.dart`
 
 ## Archived research artifacts
 
