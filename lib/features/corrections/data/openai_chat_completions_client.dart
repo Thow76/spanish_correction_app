@@ -119,11 +119,18 @@ class OpenAiChatCompletionsClient {
   final String _apiKey;
   final HttpClient _httpClient;
 
-  /// Optional structured-measurement callback, invoked once per successful
-  /// [complete] call — see [ChatCompletionsUsage]. `null` by default, so
-  /// existing callers (and their behavior) are unaffected; a benchmarking
-  /// harness supplies this to observe every stage call a pipeline run
-  /// makes without parsing the `[usage]` console log.
+  /// Optional structured-measurement callback — see [ChatCompletionsUsage].
+  /// `null` by default, so existing callers (and their behavior) are
+  /// unaffected; a benchmarking harness supplies this to observe every
+  /// stage call a pipeline run makes without parsing the `[usage]` console
+  /// log. Invoked once the response body has been decoded into a JSON
+  /// object with a 2xx status — i.e. once there is a decodable API
+  /// response to report usage for — which is *before* [_extractReplyText]
+  /// runs. A call can therefore still report usage here and then have
+  /// [complete] throw moments later if the assistant's reply content can't
+  /// be extracted; callers must not treat an observed [ChatCompletionsUsage]
+  /// as proof that the call, or any pipeline stage built on it, completed
+  /// successfully.
   final void Function(ChatCompletionsUsage usage)? _onUsage;
 
   Future<String> complete({

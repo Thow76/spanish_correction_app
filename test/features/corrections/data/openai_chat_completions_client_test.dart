@@ -191,6 +191,50 @@ void main() {
       expect(captured, isEmpty);
     });
 
+    test(
+      'is invoked even when the decoded response has no extractable reply '
+      'content — a decodable response with usage data is enough, regardless '
+      'of whether complete() goes on to succeed',
+      () async {
+        final client = _CapturingHttpClient(
+          jsonEncode({
+            'choices': <Object?>[],
+            'usage': {
+              'prompt_tokens': 10,
+              'completion_tokens': 0,
+              'total_tokens': 10,
+            },
+          }),
+        );
+        final captured = <ChatCompletionsUsage>[];
+
+        await expectLater(
+          () => OpenAiChatCompletionsClient(
+            apiKey: 'test-key',
+            httpClient: client,
+            onUsage: captured.add,
+          ).complete(
+            model: 'gpt-5.5',
+            systemPrompt: 'sys',
+            userText: 'user',
+            stageLabel: 'stage3_feedback',
+          ),
+          throwsA(isA<ChatCompletionsException>()),
+        );
+
+        expect(
+          captured,
+          hasLength(1),
+          reason:
+              'onUsage must fire for a decodable response even though '
+              'complete() ultimately throws while extracting reply content',
+        );
+        expect(captured.single.stageLabel, 'stage3_feedback');
+        expect(captured.single.promptTokens, 10);
+        expect(captured.single.totalTokens, 10);
+      },
+    );
+
     test('defaults to null, leaving existing callers unaffected', () async {
       final client = _CapturingHttpClient(_chatCompletionsEnvelope('Hola'));
 

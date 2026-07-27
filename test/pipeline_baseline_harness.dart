@@ -48,10 +48,15 @@
 // expected to reach the full pipeline, one expected to stay clean (Stage 1
 // early exit), and one dialectal/regional case — recording, per input: the
 // input text, model, commit, total end-to-end latency, request count,
-// stages called, per-stage latency and token usage (via `onUsage`), total
-// input/output/total tokens, estimated cost (reusing
-// `model_comparison_harness.dart`'s pricing-table approach), whether the
-// run exited early, a summary of the correction result, and any error.
+// stages observed, per-stage latency and token usage (via `onUsage`), total
+// input/output/total tokens (shown as `unknown` if any stage is missing a
+// token field — never silently treated as zero), estimated cost (reusing
+// `model_comparison_harness.dart`'s pricing-table approach, and never
+// computed from an incomplete token total), a `RunStatus` distinguishing a
+// successful early exit / full pipeline run from a failed run (and, for a
+// failed run, which stages had already reported usage before it failed —
+// see `RunStatus` and `classifyRunStatus` below), a summary of the
+// correction result, and any error.
 //
 // Run only the offline tests, skipping the live call entirely:
 //   flutter test test/pipeline_baseline_harness.dart --exclude-tags live
@@ -208,46 +213,116 @@ List<ChatCompletionsUsage> _sortedForReport(List<ChatCompletionsUsage> usages) {
   return sorted;
 }
 
-/// Where a run's requests stopped, mirroring `runStagedCorrectionPipeline`'s
-/// two early-return points exactly.
-enum PipelineExitPoint {
-  /// Stage 1/1B/1C ran and flagged nothing; the pipeline returned before
-  /// Stage 2 ever ran.
-  stage1Only,
+/// The three stage labels Stage 1/1B/1C detection can carry — grouped
+/// because they run concurrently and are all "Stage 1" for classification
+/// purposes.
+const Set<String> _stage1Labels = {
+  'stage1_dialect',
+  'stage1b_redundancy',
+  'stage1c_reflexive',
+};
 
-  /// Stage 2 ran, but verdict splitting left no error-verdict or
-  /// dialectal-verdict candidates; the pipeline returned before Stage 3.
-  stage1AndStage2Only,
+/// A run's final outcome for the baseline report — a single field that
+/// combines *whether the run succeeded* with *which stages produced
+/// observed `onUsage` data*, so a failed run can never be mistaken for a
+/// successful early exit (or for a full pipeline run) just because it
+/// happened to fail after some stages had already reported usage.
+///
+/// "Observed" here deliberately does not mean "completed successfully" —
+/// `OpenAiChatCompletionsClient.complete` invokes `onUsage` as soon as it
+/// has a decodable HTTP response, before it attempts to extract/parse the
+/// assistant's reply content. So a request can report usage and still be
+/// the one that ultimately caused the run to fail (e.g. a malformed
+/// assistant reply after a perfectly good HTTP response). The `failedAfter*`
+/// values name what was *observed before failure*, not what *completed*.
+enum RunStatus {
+  /// The run finished without error. Stage 1/1B/1C ran and flagged
+  /// nothing; the pipeline returned before Stage 2 ever ran.
+  completedStage1EarlyExit,
 
-  /// Stage 3 also ran — every stage the pipeline can call.
-  fullPipeline,
+  /// The run finished without error. Stage 2 ran, but verdict splitting
+  /// left no error-verdict or dialectal-verdict candidates; the pipeline
+  /// returned before Stage 3.
+  completedStage2EarlyExit,
+
+  /// The run finished without error and Stage 3 also ran — every stage
+  /// the pipeline can call.
+  completedFullPipeline,
+
+  /// The run threw, and no `onUsage` call was ever observed — failure
+  /// happened before any stage produced a decodable response (or before
+  /// any request was even made).
+  failedNoUsageRecorded,
+
+  /// The run threw, and the only usage observed came from Stage 1/1B/1C —
+  /// failure happened at or before Stage 2.
+  failedAfterObservedStage1,
+
+  /// The run threw, and usage was observed for Stage 2 categorization —
+  /// failure happened at or before Stage 3.
+  failedAfterObservedStage2,
+
+  /// The run threw, and usage was observed for Stage 3 feedback — the
+  /// failure happened after every stage's request had a decodable
+  /// response, most likely while parsing/assembling the final result.
+  failedAfterObservedStage3,
 }
 
-/// Classifies [stagesCalled] (the distinct `stageLabel`s a run's
-/// `ChatCompletionsUsage`s carried) into a [PipelineExitPoint]. Pure —
-/// looks only at which stage labels are present, not at counts, order, or
-/// anything else.
-PipelineExitPoint classifyExitPoint(Set<String> stagesCalled) {
-  if (stagesCalled.contains('stage3_feedback')) {
-    return PipelineExitPoint.fullPipeline;
+/// `true` for every [RunStatus] that represents a run finishing without
+/// throwing — i.e. every value that is *not* one of the `failed*` cases.
+bool isSuccessfulRunStatus(RunStatus status) => switch (status) {
+  RunStatus.completedStage1EarlyExit ||
+  RunStatus.completedStage2EarlyExit ||
+  RunStatus.completedFullPipeline => true,
+  RunStatus.failedNoUsageRecorded ||
+  RunStatus.failedAfterObservedStage1 ||
+  RunStatus.failedAfterObservedStage2 ||
+  RunStatus.failedAfterObservedStage3 => false,
+};
+
+/// Classifies a run into a [RunStatus] from whether it [isError] and which
+/// `stageLabel`s its `ChatCompletionsUsage`s carried ([stagesObserved]).
+/// Pure — looks only at those two inputs, not at counts, order, or
+/// anything else. [isError] is checked first and is authoritative: a run
+/// that threw is *never* classified as a successful early exit or a
+/// successful full pipeline run, no matter which stages reported usage
+/// before it failed.
+RunStatus classifyRunStatus({
+  required bool isError,
+  required Set<String> stagesObserved,
+}) {
+  final reachedStage3 = stagesObserved.contains('stage3_feedback');
+  final reachedStage2 = stagesObserved.contains('stage2_categorization');
+  final reachedStage1 = stagesObserved.any(_stage1Labels.contains);
+
+  if (isError) {
+    if (reachedStage3) return RunStatus.failedAfterObservedStage3;
+    if (reachedStage2) return RunStatus.failedAfterObservedStage2;
+    if (reachedStage1) return RunStatus.failedAfterObservedStage1;
+    return RunStatus.failedNoUsageRecorded;
   }
-  if (stagesCalled.contains('stage2_categorization')) {
-    return PipelineExitPoint.stage1AndStage2Only;
-  }
-  return PipelineExitPoint.stage1Only;
+
+  if (reachedStage3) return RunStatus.completedFullPipeline;
+  if (reachedStage2) return RunStatus.completedStage2EarlyExit;
+  return RunStatus.completedStage1EarlyExit;
 }
 
-bool isEarlyExit(PipelineExitPoint exitPoint) =>
-    exitPoint != PipelineExitPoint.fullPipeline;
-
-String describeExitPoint(PipelineExitPoint exitPoint) {
-  switch (exitPoint) {
-    case PipelineExitPoint.stage1Only:
-      return 'early exit — no flagged phrases after Stage 1/1B/1C';
-    case PipelineExitPoint.stage1AndStage2Only:
-      return 'early exit — no error/dialectal candidates after Stage 2';
-    case PipelineExitPoint.fullPipeline:
-      return 'full pipeline (Stage 3 ran)';
+String describeRunStatus(RunStatus status) {
+  switch (status) {
+    case RunStatus.completedStage1EarlyExit:
+      return 'completed — early exit — no flagged phrases after Stage 1/1B/1C';
+    case RunStatus.completedStage2EarlyExit:
+      return 'completed — early exit — no error/dialectal candidates after Stage 2';
+    case RunStatus.completedFullPipeline:
+      return 'completed — full pipeline (Stage 3 ran)';
+    case RunStatus.failedNoUsageRecorded:
+      return 'FAILED — no usage observed before failure';
+    case RunStatus.failedAfterObservedStage1:
+      return 'FAILED — usage observed only for Stage 1/1B/1C before failure';
+    case RunStatus.failedAfterObservedStage2:
+      return 'FAILED — usage observed through Stage 2 before failure';
+    case RunStatus.failedAfterObservedStage3:
+      return 'FAILED — usage observed through Stage 3 before failure';
   }
 }
 
@@ -276,27 +351,76 @@ class CaseResult {
 
   int get requestCount => stageUsages.length;
 
-  Set<String> get stagesCalled =>
+  /// The distinct `stageLabel`s this run's `ChatCompletionsUsage`s
+  /// carried. Named "observed", not "called" or "completed": `onUsage`
+  /// fires once a request has a decodable HTTP response, which is *not*
+  /// the same as that stage's result having been successfully parsed and
+  /// used by the pipeline — see [RunStatus].
+  Set<String> get stagesObserved =>
       stageUsages.map((usage) => usage.stageLabel).toSet();
 
-  PipelineExitPoint get exitPoint => classifyExitPoint(stagesCalled);
+  RunStatus get runStatus =>
+      classifyRunStatus(isError: isError, stagesObserved: stagesObserved);
 
-  int get totalInputTokens =>
-      stageUsages.fold(0, (sum, usage) => sum + (usage.promptTokens ?? 0));
-
-  int get totalOutputTokens => stageUsages.fold(
-    0,
-    (sum, usage) => sum + (usage.completionTokens ?? 0),
+  /// Sum of every stage's `promptTokens`, or `null` if any stage in
+  /// [stageUsages] is missing that field — a missing per-stage value must
+  /// never be silently treated as zero, since that would understate the
+  /// true total instead of flagging it as incomplete.
+  int? get totalInputTokens => _sumOrNullIfAnyMissing(
+    stageUsages.map((usage) => usage.promptTokens),
   );
 
-  int get totalTokens =>
-      stageUsages.fold(0, (sum, usage) => sum + (usage.totalTokens ?? 0));
-
-  double? get estimatedCostUsd => estimateCostUsd(
-    model: model,
-    inputTokens: totalInputTokens,
-    outputTokens: totalOutputTokens,
+  /// Sum of every stage's `completionTokens`, or `null` under the same
+  /// "any missing value poisons the total" rule as [totalInputTokens].
+  int? get totalOutputTokens => _sumOrNullIfAnyMissing(
+    stageUsages.map((usage) => usage.completionTokens),
   );
+
+  /// Sum of every stage's `totalTokens`, or `null` under the same rule as
+  /// [totalInputTokens].
+  int? get totalTokens => _sumOrNullIfAnyMissing(
+    stageUsages.map((usage) => usage.totalTokens),
+  );
+
+  /// `true` if [stageUsages] is non-empty but at least one of its usages
+  /// is missing a token field — i.e. the token totals above are partial,
+  /// not simply "no usage was ever recorded".
+  bool get hasPartialTokenUsage =>
+      stageUsages.isNotEmpty &&
+      (totalInputTokens == null ||
+          totalOutputTokens == null ||
+          totalTokens == null);
+
+  /// Estimated cost from [totalInputTokens]/[totalOutputTokens], or `null`
+  /// if either total is `null` (unknown model pricing, or an incomplete
+  /// token total) — cost is never estimated from a partial total.
+  double? get estimatedCostUsd {
+    final inputTokens = totalInputTokens;
+    final outputTokens = totalOutputTokens;
+    if (inputTokens == null || outputTokens == null) {
+      return null;
+    }
+    return estimateCostUsd(
+      model: model,
+      inputTokens: inputTokens,
+      outputTokens: outputTokens,
+    );
+  }
+}
+
+/// Sums [values], or returns `null` if any element is `null` — an empty
+/// iterable sums to `0` (a known, empty total), which is distinct from a
+/// non-empty iterable where at least one entry is missing (an unknown,
+/// partial total).
+int? _sumOrNullIfAnyMissing(Iterable<int?> values) {
+  var sum = 0;
+  for (final value in values) {
+    if (value == null) {
+      return null;
+    }
+    sum += value;
+  }
+  return sum;
 }
 
 /// Summarizes a finished [response]'s corrections for the report — a
@@ -333,6 +457,11 @@ String _markdownTableCell(String value) {
 String _formatCost(double? cost) =>
     cost == null ? 'unknown' : cost.toStringAsFixed(6);
 
+/// Renders a nullable token total for the report — `null` means at least
+/// one stage was missing that field, so it's shown as `unknown` rather
+/// than the misleading `0`.
+String _formatTokenTotal(int? total) => total == null ? 'unknown' : '$total';
+
 /// Builds the full markdown baseline report from already-collected
 /// [results] — one section per case (inputs, totals, per-stage detail) plus
 /// an overall summary table. Pure — takes data, makes no calls itself,
@@ -363,14 +492,18 @@ String buildReport({
       ..writeln('- Note: ${testCase?.note ?? '(unknown)'}')
       ..writeln('- Requests made: ${result.requestCount}')
       ..writeln(
-        '- Stages called: '
-        '${result.stagesCalled.isEmpty ? '(none)' : (result.stagesCalled.toList()..sort()).join(', ')}',
+        '- Stages observed: '
+        '${result.stagesObserved.isEmpty ? '(none)' : (result.stagesObserved.toList()..sort()).join(', ')}',
       )
-      ..writeln('- Exit point: ${describeExitPoint(result.exitPoint)}')
+      ..writeln('- Run status: ${describeRunStatus(result.runStatus)}')
       ..writeln('- Total latency (ms): ${result.totalLatencyMs}')
-      ..writeln('- Total input tokens: ${result.totalInputTokens}')
-      ..writeln('- Total output tokens: ${result.totalOutputTokens}')
-      ..writeln('- Total tokens: ${result.totalTokens}')
+      ..writeln(
+        '- Total input tokens: ${_formatTokenTotal(result.totalInputTokens)}',
+      )
+      ..writeln(
+        '- Total output tokens: ${_formatTokenTotal(result.totalOutputTokens)}',
+      )
+      ..writeln('- Total tokens: ${_formatTokenTotal(result.totalTokens)}')
       ..writeln(
         '- Estimated cost (USD): ${_formatCost(result.estimatedCostUsd)}',
       )
@@ -405,15 +538,15 @@ String buildReport({
     ..writeln('## Overall summary')
     ..writeln()
     ..writeln(
-      '| Case | Requests | Exit point | Total latency (ms) | Total tokens | Est. cost (USD) |',
+      '| Case | Requests | Run status | Total latency (ms) | Total tokens | Est. cost (USD) |',
     )
     ..writeln('| --- | --- | --- | --- | --- | --- |');
 
   for (final result in results) {
     report.writeln(
       '| ${result.caseId} | ${result.requestCount} | '
-      '${describeExitPoint(result.exitPoint)} | ${result.totalLatencyMs} | '
-      '${result.totalTokens} | ${_formatCost(result.estimatedCostUsd)} |',
+      '${describeRunStatus(result.runStatus)} | ${result.totalLatencyMs} | '
+      '${_formatTokenTotal(result.totalTokens)} | ${_formatCost(result.estimatedCostUsd)} |',
     );
   }
 
@@ -444,43 +577,105 @@ void main() {
     }
   });
 
-  group('classifyExitPoint', () {
-    test('no stages called classifies as stage1Only', () {
-      expect(classifyExitPoint(<String>{}), PipelineExitPoint.stage1Only);
-    });
-
-    test('stage1 labels only classify as stage1Only', () {
+  group('classifyRunStatus', () {
+    test('no stages observed, no error classifies as completedStage1EarlyExit', () {
       expect(
-        classifyExitPoint({'stage1_dialect', 'stage1b_redundancy', 'stage1c_reflexive'}),
-        PipelineExitPoint.stage1Only,
+        classifyRunStatus(isError: false, stagesObserved: <String>{}),
+        RunStatus.completedStage1EarlyExit,
       );
     });
 
-    test('stage1 + stage2 without stage3 classifies as stage1AndStage2Only', () {
+    test('stage1 labels only, no error classifies as completedStage1EarlyExit', () {
       expect(
-        classifyExitPoint({'stage1_dialect', 'stage2_categorization'}),
-        PipelineExitPoint.stage1AndStage2Only,
+        classifyRunStatus(
+          isError: false,
+          stagesObserved: {'stage1_dialect', 'stage1b_redundancy', 'stage1c_reflexive'},
+        ),
+        RunStatus.completedStage1EarlyExit,
       );
     });
 
-    test('presence of stage3 always classifies as fullPipeline', () {
+    test('stage1 + stage2 without stage3, no error classifies as completedStage2EarlyExit', () {
       expect(
-        classifyExitPoint({'stage1_dialect', 'stage2_categorization', 'stage3_feedback'}),
-        PipelineExitPoint.fullPipeline,
+        classifyRunStatus(
+          isError: false,
+          stagesObserved: {'stage1_dialect', 'stage2_categorization'},
+        ),
+        RunStatus.completedStage2EarlyExit,
+      );
+    });
+
+    test('presence of stage3, no error always classifies as completedFullPipeline', () {
+      expect(
+        classifyRunStatus(
+          isError: false,
+          stagesObserved: {'stage1_dialect', 'stage2_categorization', 'stage3_feedback'},
+        ),
+        RunStatus.completedFullPipeline,
+      );
+    });
+
+    test('error with no usage observed classifies as failedNoUsageRecorded', () {
+      expect(
+        classifyRunStatus(isError: true, stagesObserved: <String>{}),
+        RunStatus.failedNoUsageRecorded,
+      );
+    });
+
+    test('error after only stage1 usage classifies as failedAfterObservedStage1, never as a successful exit', () {
+      expect(
+        classifyRunStatus(
+          isError: true,
+          stagesObserved: {'stage1_dialect', 'stage1b_redundancy'},
+        ),
+        RunStatus.failedAfterObservedStage1,
+      );
+    });
+
+    test('error after stage2 usage (but not stage3) classifies as failedAfterObservedStage2', () {
+      expect(
+        classifyRunStatus(
+          isError: true,
+          stagesObserved: {'stage1_dialect', 'stage2_categorization'},
+        ),
+        RunStatus.failedAfterObservedStage2,
+      );
+    });
+
+    test('error after stage3 usage classifies as failedAfterObservedStage3, never as completedFullPipeline', () {
+      expect(
+        classifyRunStatus(
+          isError: true,
+          stagesObserved: {'stage1_dialect', 'stage2_categorization', 'stage3_feedback'},
+        ),
+        RunStatus.failedAfterObservedStage3,
       );
     });
   });
 
-  group('isEarlyExit / describeExitPoint', () {
-    test('stage1Only and stage1AndStage2Only are early exits; fullPipeline is not', () {
-      expect(isEarlyExit(PipelineExitPoint.stage1Only), isTrue);
-      expect(isEarlyExit(PipelineExitPoint.stage1AndStage2Only), isTrue);
-      expect(isEarlyExit(PipelineExitPoint.fullPipeline), isFalse);
+  group('isSuccessfulRunStatus / describeRunStatus', () {
+    test('only the completed* statuses are successful', () {
+      expect(isSuccessfulRunStatus(RunStatus.completedStage1EarlyExit), isTrue);
+      expect(isSuccessfulRunStatus(RunStatus.completedStage2EarlyExit), isTrue);
+      expect(isSuccessfulRunStatus(RunStatus.completedFullPipeline), isTrue);
+      expect(isSuccessfulRunStatus(RunStatus.failedNoUsageRecorded), isFalse);
+      expect(isSuccessfulRunStatus(RunStatus.failedAfterObservedStage1), isFalse);
+      expect(isSuccessfulRunStatus(RunStatus.failedAfterObservedStage2), isFalse);
+      expect(isSuccessfulRunStatus(RunStatus.failedAfterObservedStage3), isFalse);
     });
 
-    test('describeExitPoint gives a distinct message per exit point', () {
-      final descriptions = PipelineExitPoint.values.map(describeExitPoint).toSet();
-      expect(descriptions.length, PipelineExitPoint.values.length);
+    test('describeRunStatus gives a distinct message per status', () {
+      final descriptions = RunStatus.values.map(describeRunStatus).toSet();
+      expect(descriptions.length, RunStatus.values.length);
+    });
+
+    test('every failed* status description is unmistakably a failure, not an early exit or full pipeline claim', () {
+      for (final status in RunStatus.values.where((s) => !isSuccessfulRunStatus(s))) {
+        final description = describeRunStatus(status);
+        expect(description, contains('FAILED'));
+        expect(description, isNot(contains('early exit')));
+        expect(description, isNot(contains('full pipeline')));
+      }
     });
   });
 
@@ -529,7 +724,7 @@ void main() {
       ),
     ];
 
-    test('aggregates request count, stages called, and token totals', () {
+    test('aggregates request count, stages observed, and token totals', () {
       const result = CaseResult(
         caseId: 'case-1',
         model: 'gpt-5.5',
@@ -543,16 +738,17 @@ void main() {
       );
 
       expect(result.requestCount, 3);
-      expect(result.stagesCalled, {'stage1_dialect', 'stage2_categorization', 'stage3_feedback'});
-      expect(result.exitPoint, PipelineExitPoint.fullPipeline);
+      expect(result.stagesObserved, {'stage1_dialect', 'stage2_categorization', 'stage3_feedback'});
+      expect(result.runStatus, RunStatus.completedFullPipeline);
       expect(result.totalInputTokens, 330);
       expect(result.totalOutputTokens, 90);
       expect(result.totalTokens, 420);
+      expect(result.hasPartialTokenUsage, isFalse);
       expect(result.estimatedCostUsd, isNotNull);
       expect(result.isError, isFalse);
     });
 
-    test('treats a missing usage field as zero rather than throwing', () {
+    test('a missing usage field makes totals and cost unknown, not zero', () {
       const result = CaseResult(
         caseId: 'case-missing-usage',
         model: 'gpt-5.5',
@@ -571,15 +767,72 @@ void main() {
         ),
       );
 
+      expect(result.totalInputTokens, isNull);
+      expect(result.totalOutputTokens, isNull);
+      expect(result.totalTokens, isNull);
+      expect(result.hasPartialTokenUsage, isTrue);
+      expect(
+        result.estimatedCostUsd,
+        isNull,
+        reason: 'cost must never be estimated from a partial token total',
+      );
+      expect(result.runStatus, RunStatus.completedStage1EarlyExit);
+    });
+
+    test('a partial total from one stage among several is still unknown, not just the missing stage', () {
+      const result = CaseResult(
+        caseId: 'case-partial-usage',
+        model: 'gpt-5.5',
+        totalLatencyMs: 1400,
+        stageUsages: [
+          ChatCompletionsUsage(
+            stageLabel: 'stage1_dialect',
+            model: 'gpt-5.5',
+            latencyMs: 500,
+            promptTokens: 100,
+            completionTokens: 20,
+            totalTokens: 120,
+          ),
+          ChatCompletionsUsage(
+            stageLabel: 'stage2_categorization',
+            model: 'gpt-5.5',
+            latencyMs: 500,
+            // Token fields intentionally omitted.
+          ),
+        ],
+        response: CorrectionResponse(
+          originalText: 'x',
+          correctedText: 'x',
+          corrections: [],
+        ),
+      );
+
+      expect(result.totalInputTokens, isNull);
+      expect(result.totalOutputTokens, isNull);
+      expect(result.totalTokens, isNull);
+      expect(result.hasPartialTokenUsage, isTrue);
+      expect(result.estimatedCostUsd, isNull);
+    });
+
+    test('no stage usages at all yields known-zero totals, not "partial"', () {
+      const result = CaseResult(
+        caseId: 'case-no-usage',
+        model: 'gpt-5.5',
+        totalLatencyMs: 100,
+        stageUsages: [],
+        error: StateError('boom'),
+      );
+
       expect(result.totalInputTokens, 0);
       expect(result.totalOutputTokens, 0);
       expect(result.totalTokens, 0);
-      expect(result.exitPoint, PipelineExitPoint.stage1Only);
+      expect(result.hasPartialTokenUsage, isFalse);
+      expect(result.runStatus, RunStatus.failedNoUsageRecorded);
     });
 
-    test('an error result still reports whatever stages ran before failing', () {
+    test('a failed run after only stage1 usage is not classified as a successful early exit', () {
       final result = CaseResult(
-        caseId: 'case-error',
+        caseId: 'case-error-after-stage1',
         model: 'gpt-5.5',
         totalLatencyMs: 1200,
         stageUsages: const [
@@ -597,8 +850,52 @@ void main() {
 
       expect(result.isError, isTrue);
       expect(result.requestCount, 1);
-      expect(result.exitPoint, PipelineExitPoint.stage1Only);
+      expect(result.runStatus, RunStatus.failedAfterObservedStage1);
+      expect(isSuccessfulRunStatus(result.runStatus), isFalse);
       expect(describeError(result.error!), 'Bad state: boom');
+    });
+
+    test('a failed run after stage1 and stage2 usage (before stage3) is failedAfterObservedStage2', () {
+      final result = CaseResult(
+        caseId: 'case-error-after-stage2',
+        model: 'gpt-5.5',
+        totalLatencyMs: 2200,
+        stageUsages: const [
+          ChatCompletionsUsage(
+            stageLabel: 'stage1_dialect',
+            model: 'gpt-5.5',
+            latencyMs: 700,
+            promptTokens: 90,
+            completionTokens: 15,
+            totalTokens: 105,
+          ),
+          ChatCompletionsUsage(
+            stageLabel: 'stage2_categorization',
+            model: 'gpt-5.5',
+            latencyMs: 600,
+            promptTokens: 150,
+            completionTokens: 30,
+            totalTokens: 180,
+          ),
+        ],
+        error: StateError('boom'),
+      );
+
+      expect(result.runStatus, RunStatus.failedAfterObservedStage2);
+      expect(isSuccessfulRunStatus(result.runStatus), isFalse);
+    });
+
+    test('a failed run after full stage3 usage is failedAfterObservedStage3, not completedFullPipeline', () {
+      final result = CaseResult(
+        caseId: 'case-error-after-stage3',
+        model: 'gpt-5.5',
+        totalLatencyMs: 2600,
+        stageUsages: successUsages,
+        error: StateError('parsing blew up after every stage responded'),
+      );
+
+      expect(result.runStatus, RunStatus.failedAfterObservedStage3);
+      expect(isSuccessfulRunStatus(result.runStatus), isFalse);
     });
   });
 
@@ -700,10 +997,13 @@ void main() {
       expect(
         report,
         contains(
-          '- Stages called: stage1_dialect, stage2_categorization, stage3_feedback',
+          '- Stages observed: stage1_dialect, stage2_categorization, stage3_feedback',
         ),
       );
-      expect(report, contains('- Exit point: full pipeline (Stage 3 ran)'));
+      expect(
+        report,
+        contains('- Run status: completed — full pipeline (Stage 3 ran)'),
+      );
       expect(report, contains('- Total tokens: 420'));
       expect(report, contains('| stage1_dialect | 900 | 100 | 20 | 120 |'));
 
@@ -712,23 +1012,102 @@ void main() {
       expect(
         report,
         contains(
-          '- Exit point: early exit — no flagged phrases after Stage 1/1B/1C',
+          '- Run status: completed — early exit — no flagged phrases after Stage 1/1B/1C',
         ),
       );
       expect(report, contains('- Result: no corrections'));
 
       expect(report, contains('## ${_cases[2].id}'));
       expect(report, contains('- Requests made: 0'));
-      expect(report, contains('- Stages called: (none)'));
+      expect(report, contains('- Stages observed: (none)'));
+      expect(
+        report,
+        contains('- Run status: FAILED — no usage observed before failure'),
+      );
       expect(report, contains('- Result: ERROR — Bad state: timed out'));
 
       expect(report, contains('## Overall summary'));
       expect(
         report,
         contains(
-          '| ${_cases[0].id} | 3 | full pipeline (Stage 3 ran) | 3000 | 420 |',
+          '| ${_cases[0].id} | 3 | completed — full pipeline (Stage 3 ran) | 3000 | 420 |',
         ),
       );
+    });
+
+    test('a failed run after observed Stage 1 usage is reported as a failure, not an early exit', () {
+      final report = buildReport(
+        model: 'test-model',
+        commit: 'abc1234',
+        generatedAt: DateTime.utc(2026, 1, 1, 12),
+        cases: _cases,
+        results: [
+          CaseResult(
+            caseId: _cases[0].id,
+            model: 'test-model',
+            totalLatencyMs: 1500,
+            stageUsages: const [
+              ChatCompletionsUsage(
+                stageLabel: 'stage1_dialect',
+                model: 'test-model',
+                latencyMs: 900,
+                promptTokens: 100,
+                completionTokens: 20,
+                totalTokens: 120,
+              ),
+            ],
+            error: StateError('stage2 request timed out'),
+          ),
+        ],
+      );
+
+      expect(report, contains('- Requests made: 1'));
+      expect(report, contains('- Stages observed: stage1_dialect'));
+      expect(
+        report,
+        contains(
+          '- Run status: FAILED — usage observed only for Stage 1/1B/1C before failure',
+        ),
+      );
+      expect(report, isNot(contains('- Run status: completed')));
+      expect(
+        report,
+        contains('- Result: ERROR — Bad state: stage2 request timed out'),
+      );
+    });
+
+    test('missing per-stage token usage renders as unknown, not zero, and cost is unknown', () {
+      final report = buildReport(
+        model: 'test-model',
+        commit: 'abc1234',
+        generatedAt: DateTime.utc(2026, 1, 1, 12),
+        cases: _cases,
+        results: [
+          CaseResult(
+            caseId: _cases[0].id,
+            model: 'test-model',
+            totalLatencyMs: 800,
+            stageUsages: const [
+              ChatCompletionsUsage(
+                stageLabel: 'stage1_dialect',
+                model: 'test-model',
+                latencyMs: 800,
+              ),
+            ],
+            response: const CorrectionResponse(
+              originalText: 'x',
+              correctedText: 'x',
+              corrections: [],
+            ),
+          ),
+        ],
+      );
+
+      expect(report, contains('- Total input tokens: unknown'));
+      expect(report, contains('- Total output tokens: unknown'));
+      expect(report, contains('- Total tokens: unknown'));
+      expect(report, contains('- Estimated cost (USD): unknown'));
+      expect(report, contains('| stage1_dialect | 800 | unknown | unknown | unknown |'));
     });
   });
 
@@ -778,8 +1157,8 @@ void main() {
         // ignore: avoid_print
         print(
           '=== ${testCase.id} === requests=${result.requestCount} '
-          'latency_ms=${result.totalLatencyMs} exit=${describeExitPoint(result.exitPoint)} '
-          'tokens=${result.totalTokens} cost_usd=${_formatCost(result.estimatedCostUsd)}',
+          'latency_ms=${result.totalLatencyMs} status=${describeRunStatus(result.runStatus)} '
+          'tokens=${_formatTokenTotal(result.totalTokens)} cost_usd=${_formatCost(result.estimatedCostUsd)}',
         );
         await Future<void>.delayed(const Duration(milliseconds: callDelayMs));
       }
