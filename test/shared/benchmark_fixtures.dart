@@ -304,7 +304,10 @@ const List<BenchmarkFixture> benchmarkFixtures = [
 BenchmarkFixture benchmarkFixtureById(String id) {
   return benchmarkFixtures.firstWhere(
     (fixture) => fixture.id == id,
-    orElse: () => throw StateError('No benchmark fixture with id "$id".'),
+    orElse: () => throw StateError(
+      'No benchmark fixture with id "$id". Available ids: '
+      '${benchmarkFixtures.map((fixture) => fixture.id).join(', ')}.',
+    ),
   );
 }
 
