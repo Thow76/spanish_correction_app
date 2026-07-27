@@ -8,9 +8,7 @@ import 'package:spanish_correction_app/features/corrections/data/openai_chat_com
 
 void main() {
   test('sends the model, system/user messages, and auth header', () async {
-    final client = _CapturingHttpClient(
-      _chatCompletionsEnvelope('¡Hola!'),
-    );
+    final client = _CapturingHttpClient(_chatCompletionsEnvelope('¡Hola!'));
 
     await OpenAiChatCompletionsClient(
       apiKey: 'test-key',
@@ -124,57 +122,63 @@ void main() {
   });
 
   group('onUsage', () {
-    test('invokes onUsage with the stage label, model, latency, and token counts', () async {
-      final client = _CapturingHttpClient(
-        jsonEncode({
-          'choices': [
-            {
-              'message': {'role': 'assistant', 'content': 'Hola'},
+    test(
+      'invokes onUsage with the stage label, model, latency, and token counts',
+      () async {
+        final client = _CapturingHttpClient(
+          jsonEncode({
+            'choices': [
+              {
+                'message': {'role': 'assistant', 'content': 'Hola'},
+              },
+            ],
+            'usage': {
+              'prompt_tokens': 42,
+              'completion_tokens': 7,
+              'total_tokens': 49,
             },
-          ],
-          'usage': {
-            'prompt_tokens': 42,
-            'completion_tokens': 7,
-            'total_tokens': 49,
-          },
-        }),
-      );
-      final captured = <ChatCompletionsUsage>[];
+          }),
+        );
+        final captured = <ChatCompletionsUsage>[];
 
-      await OpenAiChatCompletionsClient(
-        apiKey: 'test-key',
-        httpClient: client,
-        onUsage: captured.add,
-      ).complete(
-        model: 'gpt-5.5',
-        systemPrompt: 'sys',
-        userText: 'user',
-        stageLabel: 'stage1_dialect',
-      );
+        await OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+          onUsage: captured.add,
+        ).complete(
+          model: 'gpt-5.5',
+          systemPrompt: 'sys',
+          userText: 'user',
+          stageLabel: 'stage1_dialect',
+        );
 
-      expect(captured, hasLength(1));
-      expect(captured.single.stageLabel, 'stage1_dialect');
-      expect(captured.single.model, 'gpt-5.5');
-      expect(captured.single.promptTokens, 42);
-      expect(captured.single.completionTokens, 7);
-      expect(captured.single.totalTokens, 49);
-      expect(captured.single.latencyMs, greaterThanOrEqualTo(0));
-    });
+        expect(captured, hasLength(1));
+        expect(captured.single.stageLabel, 'stage1_dialect');
+        expect(captured.single.model, 'gpt-5.5');
+        expect(captured.single.promptTokens, 42);
+        expect(captured.single.completionTokens, 7);
+        expect(captured.single.totalTokens, 49);
+        expect(captured.single.latencyMs, greaterThanOrEqualTo(0));
+      },
+    );
 
-    test('reports null token fields rather than throwing when usage is missing', () async {
-      final client = _CapturingHttpClient(_chatCompletionsEnvelope('Hola'));
-      final captured = <ChatCompletionsUsage>[];
+    test(
+      'reports null token fields rather than throwing when usage is missing',
+      () async {
+        final client = _CapturingHttpClient(_chatCompletionsEnvelope('Hola'));
+        final captured = <ChatCompletionsUsage>[];
 
-      await OpenAiChatCompletionsClient(
-        apiKey: 'test-key',
-        httpClient: client,
-        onUsage: captured.add,
-      ).complete(model: 'gpt-5.5', systemPrompt: 'sys', userText: 'user');
+        await OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+          onUsage: captured.add,
+        ).complete(model: 'gpt-5.5', systemPrompt: 'sys', userText: 'user');
 
-      expect(captured.single.promptTokens, isNull);
-      expect(captured.single.completionTokens, isNull);
-      expect(captured.single.totalTokens, isNull);
-    });
+        expect(captured.single.promptTokens, isNull);
+        expect(captured.single.completionTokens, isNull);
+        expect(captured.single.totalTokens, isNull);
+      },
+    );
 
     test('is never invoked when the call fails', () async {
       final client = _CapturingHttpClient('upstream error', statusCode: 500);
@@ -191,49 +195,47 @@ void main() {
       expect(captured, isEmpty);
     });
 
-    test(
-      'is invoked even when the decoded response has no extractable reply '
-      'content — a decodable response with usage data is enough, regardless '
-      'of whether complete() goes on to succeed',
-      () async {
-        final client = _CapturingHttpClient(
-          jsonEncode({
-            'choices': <Object?>[],
-            'usage': {
-              'prompt_tokens': 10,
-              'completion_tokens': 0,
-              'total_tokens': 10,
-            },
-          }),
-        );
-        final captured = <ChatCompletionsUsage>[];
+    test('is invoked even when the decoded response has no extractable reply '
+        'content — a decodable response with usage data is enough, regardless '
+        'of whether complete() goes on to succeed', () async {
+      final client = _CapturingHttpClient(
+        jsonEncode({
+          'choices': <Object?>[],
+          'usage': {
+            'prompt_tokens': 10,
+            'completion_tokens': 0,
+            'total_tokens': 10,
+          },
+        }),
+      );
+      final captured = <ChatCompletionsUsage>[];
 
-        await expectLater(
-          () => OpenAiChatCompletionsClient(
-            apiKey: 'test-key',
-            httpClient: client,
-            onUsage: captured.add,
-          ).complete(
-            model: 'gpt-5.5',
-            systemPrompt: 'sys',
-            userText: 'user',
-            stageLabel: 'stage3_feedback',
-          ),
-          throwsA(isA<ChatCompletionsException>()),
-        );
+      await expectLater(
+        () =>
+            OpenAiChatCompletionsClient(
+              apiKey: 'test-key',
+              httpClient: client,
+              onUsage: captured.add,
+            ).complete(
+              model: 'gpt-5.5',
+              systemPrompt: 'sys',
+              userText: 'user',
+              stageLabel: 'stage3_feedback',
+            ),
+        throwsA(isA<ChatCompletionsException>()),
+      );
 
-        expect(
-          captured,
-          hasLength(1),
-          reason:
-              'onUsage must fire for a decodable response even though '
-              'complete() ultimately throws while extracting reply content',
-        );
-        expect(captured.single.stageLabel, 'stage3_feedback');
-        expect(captured.single.promptTokens, 10);
-        expect(captured.single.totalTokens, 10);
-      },
-    );
+      expect(
+        captured,
+        hasLength(1),
+        reason:
+            'onUsage must fire for a decodable response even though '
+            'complete() ultimately throws while extracting reply content',
+      );
+      expect(captured.single.stageLabel, 'stage3_feedback');
+      expect(captured.single.promptTokens, 10);
+      expect(captured.single.totalTokens, 10);
+    });
 
     test('defaults to null, leaving existing callers unaffected', () async {
       final client = _CapturingHttpClient(_chatCompletionsEnvelope('Hola'));
@@ -272,20 +274,15 @@ void main() {
       expect(error.kind, ChatCompletionsFailureKind.connectivity);
     });
 
-    test(
-      'a TimeoutException classifies as serviceFailure, not connectivity — '
-      'matching the legacy /v1/responses path, which treats a timeout as '
-      'apiFailure rather than networkUnavailable',
-      () async {
-        final client = _ThrowingHttpClient(
-          TimeoutException('timed out'),
-        );
+    test('a TimeoutException classifies as serviceFailure, not connectivity — '
+        'matching the legacy /v1/responses path, which treats a timeout as '
+        'apiFailure rather than networkUnavailable', () async {
+      final client = _ThrowingHttpClient(TimeoutException('timed out'));
 
-        final error = await completeAndCaptureException(client);
+      final error = await completeAndCaptureException(client);
 
-        expect(error.kind, ChatCompletionsFailureKind.serviceFailure);
-      },
-    );
+      expect(error.kind, ChatCompletionsFailureKind.serviceFailure);
+    });
 
     test('a non-2xx HTTP status classifies as serviceFailure', () async {
       final client = _CapturingHttpClient('upstream error', statusCode: 500);
