@@ -54,16 +54,23 @@
 // Override the output path with --dart-define=MODEL_COMPARISON_OUTPUT=...
 // (default docs/model_comparison_harness.md).
 //
-// Per-model USD-per-million-token pricing lives in `_pricingPerModel`
-// below. These figures are illustrative placeholders, not verified
-// published pricing — update them before treating `estimatedCostUsd` as
-// authoritative. A model missing from the table yields a `null` estimate
-// rather than a silently wrong number.
+// USD cost estimation uses the shared `test/shared/model_pricing.dart`
+// helpers (see spanish_correction_app#6): a model only gets a dollar
+// figure once a maintainer has verified its pricing against an explicit
+// source and added an entry to `verifiedPricingPerModel` there, with that
+// source, pricing version/effective date, and date-checked recorded
+// alongside the number. `verifiedPricingPerModel` starts empty, so every
+// cost estimate in this harness's reports currently shows as `unknown` —
+// intentionally, not as an omission — while token usage and latency are
+// still recorded either way. Do not reintroduce a local placeholder
+// pricing table here.
 
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
+import 'shared/model_pricing.dart' as pricing;
 
 /// Identifies which version of the prompt/contract produced a result.
 /// Bump this if the system prompt or user prompt template below ever
@@ -139,51 +146,21 @@ const int callDelayMs = int.fromEnvironment(
   defaultValue: 750,
 );
 
-/// USD-per-million-token pricing used for [estimateCostUsd]. Illustrative
-/// placeholders — see the file header. A model not listed here simply
-/// yields no cost estimate rather than a wrong one.
-class _ModelPricing {
-  const _ModelPricing({
-    required this.inputPerMillionUsd,
-    required this.outputPerMillionUsd,
-  });
-
-  final double inputPerMillionUsd;
-  final double outputPerMillionUsd;
-}
-
-const Map<String, _ModelPricing> _pricingPerModel = {
-  'gpt-5.5': _ModelPricing(
-    inputPerMillionUsd: 3.00,
-    outputPerMillionUsd: 12.00,
-  ),
-  'gpt-5.6-sol': _ModelPricing(
-    inputPerMillionUsd: 4.00,
-    outputPerMillionUsd: 16.00,
-  ),
-  'gpt-5.6-terra': _ModelPricing(
-    inputPerMillionUsd: 1.20,
-    outputPerMillionUsd: 6.00,
-  ),
-  'gpt-5.6-luna': _ModelPricing(
-    inputPerMillionUsd: 0.30,
-    outputPerMillionUsd: 1.50,
-  ),
-};
-
-/// Estimated cost in USD for one call, or `null` if [model] has no entry in
-/// [_pricingPerModel].
+/// Estimated cost in USD for one call, or `null` unless `model` has a
+/// verified entry in `pricing.verifiedPricingPerModel` — see the file
+/// header and `test/shared/model_pricing.dart`.
 double? estimateCostUsd({
   required String model,
   required int inputTokens,
   required int outputTokens,
 }) {
-  final pricing = _pricingPerModel[model];
-  if (pricing == null) {
-    return null;
-  }
-  return (inputTokens / 1000000) * pricing.inputPerMillionUsd +
-      (outputTokens / 1000000) * pricing.outputPerMillionUsd;
+  return pricing
+      .estimateCostUsd(
+        model: model,
+        inputTokens: inputTokens,
+        outputTokens: outputTokens,
+      )
+      .usd;
 }
 
 /// One fixed input text in the comparison battery.
@@ -567,6 +544,8 @@ String _buildReport({
   }
   report
     ..writeln('Generated: ${generatedAt.toIso8601String()}')
+    ..writeln()
+    ..write(pricing.pricingSection(models))
     ..writeln();
 
   for (final testCase in cases) {
@@ -602,7 +581,9 @@ String _buildReport({
       final cost = result.estimatedCostUsd != null
           ? result.estimatedCostUsd!.toStringAsFixed(6)
           : 'unknown';
-      final corrected = _markdownTableCell(result.correctedText ?? '(unparsed)');
+      final corrected = _markdownTableCell(
+        result.correctedText ?? '(unparsed)',
+      );
       final rawResponse = _markdownTableCell(result.rawResponse ?? '(missing)');
       report.writeln(
         '| $model | ${result.validJson} | ${result.latencyMs} | $tokens | $cost | $corrected | $rawResponse |',
@@ -801,13 +782,21 @@ void main() {
   });
 
   group('estimateCostUsd', () {
-    test('computes cost for a known model', () {
-      final cost = estimateCostUsd(
-        model: 'gpt-5.5',
-        inputTokens: 1000000,
-        outputTokens: 1000000,
-      );
-      expect(cost, closeTo(15.0, 1e-9));
+    test('returns null for every model until it has verified pricing in '
+        'test/shared/model_pricing.dart (currently none)', () {
+      for (final model in [
+        'gpt-5.5',
+        'gpt-5.6-sol',
+        'gpt-5.6-terra',
+        'gpt-5.6-luna',
+      ]) {
+        final cost = estimateCostUsd(
+          model: model,
+          inputTokens: 1000000,
+          outputTokens: 1000000,
+        );
+        expect(cost, isNull, reason: model);
+      }
     });
 
     test('returns null for an unknown model', () {
@@ -817,15 +806,6 @@ void main() {
         outputTokens: 100,
       );
       expect(cost, isNull);
-    });
-
-    test('scales linearly with token counts', () {
-      final cost = estimateCostUsd(
-        model: 'gpt-5.6-luna',
-        inputTokens: 500000,
-        outputTokens: 0,
-      );
-      expect(cost, closeTo(0.15, 1e-9));
     });
   });
 
@@ -847,28 +827,35 @@ void main() {
   });
 
   group('result builders', () {
-    test('_successResult computes estimated cost from tokens', () {
-      final result = _successResult(
-        model: 'gpt-5.5',
-        caseId: 'grammar-agreement',
-        inputText: 'Los niño come.',
-        rawResponse: '{"corrected_text": "Los niños comen."}',
-        parsed: const _ParsedResponse(
-          validJson: true,
-          correctedText: 'Los niños comen.',
-        ),
-        latencyMs: 250,
-        inputTokens: 100,
-        outputTokens: 50,
-        totalTokens: 150,
-      );
+    test(
+      '_successResult computes estimated cost (null — no verified pricing)',
+      () {
+        final result = _successResult(
+          model: 'gpt-5.5',
+          caseId: 'grammar-agreement',
+          inputText: 'Los niño come.',
+          rawResponse: '{"corrected_text": "Los niños comen."}',
+          parsed: const _ParsedResponse(
+            validJson: true,
+            correctedText: 'Los niños comen.',
+          ),
+          latencyMs: 250,
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        );
 
-      expect(result.isError, isFalse);
-      expect(result.validJson, isTrue);
-      expect(result.correctedText, 'Los niños comen.');
-      expect(result.estimatedCostUsd, isNotNull);
-      expect(result.promptVersion, promptVersion);
-    });
+        expect(result.isError, isFalse);
+        expect(result.validJson, isTrue);
+        expect(result.correctedText, 'Los niños comen.');
+        expect(
+          result.estimatedCostUsd,
+          isNull,
+          reason: 'gpt-5.5 has no verified pricing entry',
+        );
+        expect(result.promptVersion, promptVersion);
+      },
+    );
 
     test('_errorResult carries the error and no token/cost data', () {
       final result = _errorResult(
@@ -990,4 +977,4 @@ void main() {
 }
 
 const String _expectedReportGolden =
-    r'"# Spanish Correction Model Comparison Harness\n\nPrompt version: `v1`  \nModels: `test-model-a`, `test-model-b`  \nCommit: `abc1234`  \nGenerated: 2026-01-01T12:00:00.000Z\n\n## TEST-1\n\n- Input text: `Los niño come.`\n- Note: Synthetic case.\n\n| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |\n| --- | --- | --- | --- | --- | --- | --- |\n| test-model-a | true | 200 | 20/500000/500020 | unknown | Los niños comen. | {\"corrected_text\": \"Los niños comen.\"} |\n| test-model-b | ERROR | 9000 | | | | Bad state: timed out |\n\n---\n\n## Overall summary\n\n| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |\n| --- | --- | --- | --- | --- | --- |\n| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown |\n| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown |\n"';
+    r'"# Spanish Correction Model Comparison Harness\n\nPrompt version: `v1`  \nModels: `test-model-a`, `test-model-b`  \nCommit: `abc1234`  \nGenerated: 2026-01-01T12:00:00.000Z\n\n## Pricing\n\nNo verified pricing is configured for any model in this report. Every cost estimate below shows as `unknown` by design — see `test/shared/model_pricing.dart` to add a verified entry once a maintainer has verified pricing for that model against its provider-published pricing page.\n\n## TEST-1\n\n- Input text: `Los niño come.`\n- Note: Synthetic case.\n\n| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |\n| --- | --- | --- | --- | --- | --- | --- |\n| test-model-a | true | 200 | 20/500000/500020 | unknown | Los niños comen. | {\"corrected_text\": \"Los niños comen.\"} |\n| test-model-b | ERROR | 9000 | | | | Bad state: timed out |\n\n---\n\n## Overall summary\n\n| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |\n| --- | --- | --- | --- | --- | --- |\n| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown |\n| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown |\n"';
