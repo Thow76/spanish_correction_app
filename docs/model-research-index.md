@@ -11,6 +11,8 @@ historical trial-and-error reports separately.
 - `docs/current_spanish_correction_prompt_audit.md` documents the current live
   Spanish staged correction prompts and prompt-risk wording without changing
   prompt behavior.
+- `docs/first_pass_correction_architecture_review.md` recommends the next
+  first-pass Spanish correction architecture and the safeguards to preserve.
 - `docs/walkthrough_prompt_spec.md` is the current walkthrough contract.
 - `AUDIT.md` is the current codebase audit/reference map.
 
