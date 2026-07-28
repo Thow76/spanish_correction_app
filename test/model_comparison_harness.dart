@@ -45,14 +45,34 @@
 // Run only the offline tests, skipping the live call entirely:
 //   flutter test test/model_comparison_harness.dart --exclude-tags live
 //
-// Run the live comparison across every model in `comparisonModels` (costs
-// real API calls):
-//   OPENAI_API_KEY=sk-... flutter test test/model_comparison_harness.dart --timeout none
+// Run the live comparison deliberately (costs real API calls). The live run
+// is skipped unless MODEL_COMPARISON_LIVE is explicitly true, and the model
+// list must be supplied at runtime so candidate names are not treated as
+// confirmed OpenAI API model IDs by this harness:
 //
-// Override the model list with --dart-define=COMPARISON_MODELS=a,b,c
-// (comma-separated, default 'gpt-5.5,gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna').
-// Override the output path with --dart-define=MODEL_COMPARISON_OUTPUT=...
-// (default docs/model_comparison_harness.md).
+//   OPENAI_API_KEY=sk-... \
+//   MODEL_COMPARISON_LIVE=true \
+//   COMPARISON_MODELS=gpt-5.4,gpt-5.3,gpt-4.1 \
+//   flutter test test/model_comparison_harness.dart --tags live --timeout none
+//
+// The same configuration can be passed with --dart-define:
+//
+//   flutter test test/model_comparison_harness.dart \
+//     --tags live \
+//     --timeout none \
+//     --dart-define=MODEL_COMPARISON_LIVE=true \
+//     --dart-define=COMPARISON_MODELS=gpt-5.4,gpt-5.3,gpt-4.1 \
+//     --dart-define=MODEL_COMPARISON_FIXTURE_IDS=short-phrase-missing-accent,sentence-grammar-agreement
+//
+// `COMPARISON_MODELS` is comma-separated and must contain exact OpenAI API
+// model IDs available to the account running the harness. If GPT-5.4,
+// GPT-5.3, and GPT-4.1 are the intended candidates, pass their exact API
+// model names explicitly there rather than editing this file.
+//
+// `MODEL_COMPARISON_FIXTURE_IDS` is optional and comma-separated. When omitted,
+// the harness uses the documented `firstPassModelComparisonFixtures` subset
+// from `test/shared/benchmark_fixtures.dart`. Override the output path with
+// `MODEL_COMPARISON_OUTPUT` (default docs/model_comparison_harness.md).
 //
 // USD cost estimation uses the shared `test/shared/model_pricing.dart`
 // helpers (see spanish_correction_app#6): a model only gets a dollar
@@ -78,6 +98,10 @@ import 'shared/model_pricing.dart' as pricing;
 /// changes, so historical reports stay attributable to the wording that
 /// produced them.
 const String promptVersion = 'v1';
+
+/// Human-readable label for this narrow first-pass prompt. This is metadata
+/// only; changing it does not change prompt wording.
+const String promptLabel = 'simple-spanish-grammar-spelling-punctuation-only';
 
 /// Exact wording from the issue — the same system prompt every model in
 /// the comparison receives. Deliberately not reworded or reformatted.
@@ -105,23 +129,40 @@ String buildUserPrompt(String inputText) {
 }
 
 /// Models compared in the live run, read from --dart-define=COMPARISON_MODELS
-/// (comma-separated). Everything else about the request is identical
-/// across models — same system prompt, same user prompt, same JSON
-/// contract — so this list is the only thing that varies.
-const String _rawComparisonModels = String.fromEnvironment(
+/// or the COMPARISON_MODELS environment variable (comma-separated).
+/// Everything else about the request is identical across models — same
+/// system prompt, same user prompt, same JSON contract — so this list is the
+/// only request field that varies.
+const String _rawComparisonModelsFromDefine = String.fromEnvironment(
   'COMPARISON_MODELS',
-  defaultValue: 'gpt-5.5,gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna',
+  defaultValue: '',
 );
 
-List<String> get comparisonModels => _rawComparisonModels
-    .split(',')
-    .map((m) => m.trim())
-    .where((m) => m.isNotEmpty)
-    .toList();
+List<String> get comparisonModels =>
+    _configuredComparisonModels(Platform.environment);
 
-const String outputPath = String.fromEnvironment(
+const String _rawFixtureIdsFromDefine = String.fromEnvironment(
+  'MODEL_COMPARISON_FIXTURE_IDS',
+  defaultValue: '',
+);
+
+const String _outputPathFromDefine = String.fromEnvironment(
   'MODEL_COMPARISON_OUTPUT',
-  defaultValue: 'docs/model_comparison_harness.md',
+  defaultValue: '',
+);
+
+const String defaultOutputPath = 'docs/model_comparison_harness.md';
+
+String get outputPath => _runtimeString(
+  dartDefineValue: _outputPathFromDefine,
+  environment: Platform.environment,
+  key: 'MODEL_COMPARISON_OUTPUT',
+  defaultValue: defaultOutputPath,
+);
+
+const bool _liveRunOptInFromDefine = bool.fromEnvironment(
+  'MODEL_COMPARISON_LIVE',
+  defaultValue: false,
 );
 
 const Map<String, Object?> correctedTextResponseFormat = {
@@ -167,6 +208,130 @@ double? estimateCostUsd({
 /// The model-comparison battery is a deliberately small subset of the shared
 /// benchmark fixtures, not a harness-local ad hoc fixture list.
 const List<BenchmarkFixture> _cases = firstPassModelComparisonFixtures;
+
+List<String> _parseCommaSeparatedValues(String raw) {
+  return raw
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList(growable: false);
+}
+
+String _runtimeString({
+  required String dartDefineValue,
+  required Map<String, String> environment,
+  required String key,
+  required String defaultValue,
+}) {
+  final fromDefine = dartDefineValue.trim();
+  if (fromDefine.isNotEmpty) {
+    return fromDefine;
+  }
+
+  final fromEnvironment = environment[key]?.trim() ?? '';
+  if (fromEnvironment.isNotEmpty) {
+    return fromEnvironment;
+  }
+
+  return defaultValue;
+}
+
+List<String> _configuredComparisonModels(Map<String, String> environment) {
+  return _parseCommaSeparatedValues(
+    _runtimeString(
+      dartDefineValue: _rawComparisonModelsFromDefine,
+      environment: environment,
+      key: 'COMPARISON_MODELS',
+      defaultValue: '',
+    ),
+  );
+}
+
+String _configuredOutputPath(Map<String, String> environment) {
+  return _runtimeString(
+    dartDefineValue: _outputPathFromDefine,
+    environment: environment,
+    key: 'MODEL_COMPARISON_OUTPUT',
+    defaultValue: defaultOutputPath,
+  );
+}
+
+List<BenchmarkFixture> _configuredFixtureSubset(
+  Map<String, String> environment,
+) {
+  final rawFixtureIds = _runtimeString(
+    dartDefineValue: _rawFixtureIdsFromDefine,
+    environment: environment,
+    key: 'MODEL_COMPARISON_FIXTURE_IDS',
+    defaultValue: '',
+  );
+  return _resolveFixtureSubset(rawFixtureIds, defaultCases: _cases);
+}
+
+List<BenchmarkFixture> _resolveFixtureSubset(
+  String rawFixtureIds, {
+  required List<BenchmarkFixture> defaultCases,
+}) {
+  final ids = _parseCommaSeparatedValues(rawFixtureIds);
+  if (ids.isEmpty) {
+    return List<BenchmarkFixture>.unmodifiable(defaultCases);
+  }
+
+  return List<BenchmarkFixture>.unmodifiable(ids.map(benchmarkFixtureById));
+}
+
+bool _parseBooleanOptIn(String? value) {
+  switch (value?.trim().toLowerCase()) {
+    case '1':
+    case 'true':
+    case 'yes':
+    case 'y':
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool _hasLiveRunOptIn(Map<String, String> environment) {
+  return _liveRunOptInFromDefine ||
+      _parseBooleanOptIn(environment['MODEL_COMPARISON_LIVE']);
+}
+
+class _LiveRunConfig {
+  const _LiveRunConfig({
+    required this.models,
+    required this.cases,
+    required this.outputPath,
+    required this.liveRunOptIn,
+  });
+
+  final List<String> models;
+  final List<BenchmarkFixture> cases;
+  final String outputPath;
+  final bool liveRunOptIn;
+
+  List<String> get caseIds => cases.map((testCase) => testCase.id).toList();
+}
+
+_LiveRunConfig _buildLiveRunConfig(Map<String, String> environment) {
+  return _LiveRunConfig(
+    models: _configuredComparisonModels(environment),
+    cases: _configuredFixtureSubset(environment),
+    outputPath: _configuredOutputPath(environment),
+    liveRunOptIn: _hasLiveRunOptIn(environment),
+  );
+}
+
+String? _liveRunConfigError(_LiveRunConfig config) {
+  if (config.models.isEmpty) {
+    return 'Set COMPARISON_MODELS to a comma-separated list of exact OpenAI '
+        'API model IDs before opting into the live comparison run.';
+  }
+  if (config.cases.isEmpty) {
+    return 'The live comparison run needs at least one fixture case.';
+  }
+  return null;
+}
 
 /// Builds the raw JSON-able request body for one OpenAI chat completions
 /// call. `response_format: json_schema` enforces the exact
@@ -462,6 +627,19 @@ String _gitHead() {
   }
 }
 
+String _gitBranch() {
+  try {
+    final result = Process.runSync('git', [
+      'rev-parse',
+      '--abbrev-ref',
+      'HEAD',
+    ]);
+    return (result.stdout as String).trim();
+  } catch (_) {
+    return 'unknown';
+  }
+}
+
 String _markdownTableCell(String value) {
   return value
       .replaceAll('|', r'\|')
@@ -480,18 +658,32 @@ String _buildReport({
   required DateTime generatedAt,
   required List<BenchmarkFixture> cases,
   required Map<String, Map<String, _ModelCaseResult>> resultsByCaseThenModel,
+  String? branch,
   String? commit,
 }) {
+  final generatedAtUtc = generatedAt.toUtc();
+  final caseIds = cases.map((testCase) => testCase.id).toList();
   final report = StringBuffer()
     ..writeln('# Spanish Correction Model Comparison Harness')
     ..writeln()
-    ..writeln('Prompt version: `$promptVersion`  ')
-    ..writeln('Models: ${models.map((m) => '`$m`').join(', ')}  ');
+    ..writeln('## Run configuration')
+    ..writeln()
+    ..writeln('- Prompt label: `$promptLabel`')
+    ..writeln('- Prompt version: `$promptVersion`')
+    ..writeln('- Models: ${models.map((m) => '`$m`').join(', ')}')
+    ..writeln('- Fixture case ids: ${caseIds.map((id) => '`$id`').join(', ')}')
+    ..writeln('- Generated: ${generatedAtUtc.toIso8601String()}');
+  if (branch != null) {
+    report.writeln('- Git branch: `$branch`');
+  }
   if (commit != null) {
-    report.writeln('Commit: `$commit`  ');
+    report.writeln('- Git commit: `$commit`');
   }
   report
-    ..writeln('Generated: ${generatedAt.toIso8601String()}')
+    ..writeln(
+      '- Cost status: `unknown` unless verified pricing exists in '
+      '`test/shared/model_pricing.dart`',
+    )
     ..writeln()
     ..write(pricing.pricingSection(models))
     ..writeln();
@@ -667,13 +859,74 @@ void main() {
     );
   });
 
-  test('comparisonModels defaults to the four-model comparison set', () {
-    expect(comparisonModels, [
-      'gpt-5.5',
-      'gpt-5.6-sol',
-      'gpt-5.6-terra',
-      'gpt-5.6-luna',
-    ]);
+  group('live run configuration', () {
+    test('comparison model list is explicit and has no hardcoded default', () {
+      expect(_configuredComparisonModels(const {}), isEmpty);
+    });
+
+    test('comparison model list can be supplied from environment', () {
+      expect(
+        _configuredComparisonModels(const {
+          'COMPARISON_MODELS': ' gpt-5.4, gpt-5.3, gpt-4.1 ',
+        }),
+        ['gpt-5.4', 'gpt-5.3', 'gpt-4.1'],
+      );
+    });
+
+    test('fixture subset defaults to the first-pass fixture set', () {
+      final cases = _configuredFixtureSubset(const {});
+      expect(cases, _cases);
+    });
+
+    test('output path defaults and can be supplied from environment', () {
+      expect(_configuredOutputPath(const {}), defaultOutputPath);
+      expect(
+        _configuredOutputPath(const {
+          'MODEL_COMPARISON_OUTPUT': 'docs/model_comparison_first_pass_live.md',
+        }),
+        'docs/model_comparison_first_pass_live.md',
+      );
+    });
+
+    test('fixture subset can be supplied by stable fixture ids', () {
+      final cases = _configuredFixtureSubset(const {
+        'MODEL_COMPARISON_FIXTURE_IDS':
+            'sentence-grammar-agreement, paragraph-calcs-natural',
+      });
+
+      expect(cases.map((testCase) => testCase.id), [
+        'sentence-grammar-agreement',
+        'paragraph-calcs-natural',
+      ]);
+    });
+
+    test('fixture subset rejects unknown ids with the available id list', () {
+      expect(
+        () => _configuredFixtureSubset(const {
+          'MODEL_COMPARISON_FIXTURE_IDS': 'does-not-exist',
+        }),
+        throwsStateError,
+      );
+    });
+
+    test('live opt-in accepts only explicit true-ish values', () {
+      expect(_parseBooleanOptIn('true'), isTrue);
+      expect(_parseBooleanOptIn('1'), isTrue);
+      expect(_parseBooleanOptIn('yes'), isTrue);
+      expect(_parseBooleanOptIn('false'), isFalse);
+      expect(_parseBooleanOptIn(null), isFalse);
+    });
+
+    test('live run config reports missing model list as invalid', () {
+      final config = _LiveRunConfig(
+        models: const [],
+        cases: _cases,
+        outputPath: defaultOutputPath,
+        liveRunOptIn: true,
+      );
+
+      expect(_liveRunConfigError(config), contains('COMPARISON_MODELS'));
+    });
   });
 
   group('buildChatCompletionsBody', () {
@@ -875,6 +1128,7 @@ void main() {
           ),
         },
       },
+      branch: 'prepare-first-pass-live-model-run-config',
       commit: 'abc1234',
     );
 
@@ -884,8 +1138,23 @@ void main() {
   test(
     'model comparison harness (live)',
     () async {
-      final apiKey = Platform.environment['OPENAI_API_KEY']?.trim() ?? '';
+      final config = _buildLiveRunConfig(Platform.environment);
 
+      if (!config.liveRunOptIn) {
+        // ignore: avoid_print
+        print(
+          'Skipping live model comparison. Set MODEL_COMPARISON_LIVE=true '
+          'and COMPARISON_MODELS=<exact OpenAI API model IDs> to opt in.',
+        );
+        return;
+      }
+
+      final configError = _liveRunConfigError(config);
+      if (configError != null) {
+        fail(configError);
+      }
+
+      final apiKey = Platform.environment['OPENAI_API_KEY']?.trim() ?? '';
       if (apiKey.isEmpty) {
         fail(
           'Set OPENAI_API_KEY to run the model comparison harness. This '
@@ -894,12 +1163,13 @@ void main() {
         );
       }
 
-      final models = comparisonModels;
+      final models = config.models;
+      final cases = config.cases;
       final httpClient = HttpClient();
       final resultsByCaseThenModel = <String, Map<String, _ModelCaseResult>>{};
 
       try {
-        for (final testCase in _cases) {
+        for (final testCase in cases) {
           final resultsByModel = <String, _ModelCaseResult>{};
           // ignore: avoid_print
           print('=== ${testCase.id} ===');
@@ -927,15 +1197,19 @@ void main() {
 
       final report = _buildReport(
         models: models,
-        generatedAt: DateTime.now(),
-        cases: _cases,
+        generatedAt: DateTime.now().toUtc(),
+        cases: cases,
         resultsByCaseThenModel: resultsByCaseThenModel,
+        branch: _gitBranch(),
         commit: _gitHead(),
       );
 
-      File(outputPath).writeAsStringSync(report);
+      File(config.outputPath).writeAsStringSync(report);
       // ignore: avoid_print
-      print('Wrote $outputPath (models: ${models.join(", ")})');
+      print(
+        'Wrote ${config.outputPath} '
+        '(models: ${models.join(", ")}, cases: ${config.caseIds.join(", ")})',
+      );
     },
     timeout: const Timeout(Duration(minutes: 30)),
     tags: ['live'],
@@ -943,4 +1217,4 @@ void main() {
 }
 
 const String _expectedReportGolden =
-    r'"# Spanish Correction Model Comparison Harness\n\nPrompt version: `v1`  \nModels: `test-model-a`, `test-model-b`  \nCommit: `abc1234`  \nGenerated: 2026-01-01T12:00:00.000Z\n\n## Pricing\n\nNo verified pricing is configured for any model in this report. Every cost estimate below shows as `unknown` by design — see `test/shared/model_pricing.dart` to add a verified entry once a maintainer has verified pricing for that model against its provider-published pricing page.\n\n## TEST-1\n\n- Input text: `Los niño come.`\n- Note: Synthetic case.\n\n| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |\n| --- | --- | --- | --- | --- | --- | --- |\n| test-model-a | true | 200 | 20/500000/500020 | unknown | Los niños comen. | {\"corrected_text\": \"Los niños comen.\"} |\n| test-model-b | ERROR | 9000 | | | | Bad state: timed out |\n\n---\n\n## Overall summary\n\n| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |\n| --- | --- | --- | --- | --- | --- |\n| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown |\n| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown |\n"';
+    r'"# Spanish Correction Model Comparison Harness\n\n## Run configuration\n\n- Prompt label: `simple-spanish-grammar-spelling-punctuation-only`\n- Prompt version: `v1`\n- Models: `test-model-a`, `test-model-b`\n- Fixture case ids: `TEST-1`\n- Generated: 2026-01-01T12:00:00.000Z\n- Git branch: `prepare-first-pass-live-model-run-config`\n- Git commit: `abc1234`\n- Cost status: `unknown` unless verified pricing exists in `test/shared/model_pricing.dart`\n\n## Pricing\n\nNo verified pricing is configured for any model in this report. Every cost estimate below shows as `unknown` by design — see `test/shared/model_pricing.dart` to add a verified entry once a maintainer has verified pricing for that model against its provider-published pricing page.\n\n## TEST-1\n\n- Input text: `Los niño come.`\n- Note: Synthetic case.\n\n| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |\n| --- | --- | --- | --- | --- | --- | --- |\n| test-model-a | true | 200 | 20/500000/500020 | unknown | Los niños comen. | {\"corrected_text\": \"Los niños comen.\"} |\n| test-model-b | ERROR | 9000 | | | | Bad state: timed out |\n\n---\n\n## Overall summary\n\n| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |\n| --- | --- | --- | --- | --- | --- |\n| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown |\n| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown |\n"';
