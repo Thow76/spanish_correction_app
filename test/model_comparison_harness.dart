@@ -35,12 +35,12 @@
 // latency in milliseconds, input/output/total tokens, and estimated cost
 // in USD. This is what makes the models comparable side by side.
 //
-// Battery: a small, fixed set of Spanish input texts covering objective
-// grammar/spelling/punctuation errors (things the model SHOULD fix) and
-// control cases the model should leave untouched — regional/dialectal
-// Spanish, word-choice/naturalness quirks, and text that is already
-// correct including Spanish diacritics/ñ — so a "fix" applied to a control
-// case is itself a signal of over-correction, not just a missed fix.
+// Battery: a small, fixed first-pass subset from
+// `test/shared/benchmark_fixtures.dart`, covering objective grammar/spelling/
+// punctuation correction cases plus controls the model should leave untouched:
+// regional/dialectal Spanish, CALCS-style natural language, word-choice/
+// naturalness quirks, already-correct text, and accent-sensitive text across
+// short, paragraph, two-paragraph, and near-limit input bands.
 //
 // Run only the offline tests, skipping the live call entirely:
 //   flutter test test/model_comparison_harness.dart --exclude-tags live
@@ -70,6 +70,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'shared/benchmark_fixtures.dart';
 import 'shared/model_pricing.dart' as pricing;
 
 /// Identifies which version of the prompt/contract produced a result.
@@ -163,62 +164,9 @@ double? estimateCostUsd({
       .usd;
 }
 
-/// One fixed input text in the comparison battery.
-class _TestCase {
-  const _TestCase({required this.id, required this.text, required this.note});
-
-  final String id;
-  final String text;
-  final String note;
-}
-
-const List<_TestCase> _cases = [
-  _TestCase(
-    id: 'grammar-agreement',
-    text: 'Los niño come muchas manzana en el jardín.',
-    note:
-        'Objective grammar errors: missing plural agreement ("Los niño" '
-        '-> "Los niños", "manzana" -> "manzanas"). Should be corrected.',
-  ),
-  _TestCase(
-    id: 'spelling-accents',
-    text: 'El corazon del problema es que nadie presto atencion a tiempo.',
-    note:
-        'Objective spelling errors: missing accents on "corazón", '
-        '"prestó", "atención". Should be corrected.',
-  ),
-  _TestCase(
-    id: 'punctuation-question',
-    text: 'Como estas hoy Necesito saber si vienes a la fiesta',
-    note:
-        'Objective punctuation errors: missing inverted/closing question '
-        'marks and missing accent on "cómo"/"estás", missing sentence-'
-        'final punctuation. Should be corrected.',
-  ),
-  _TestCase(
-    id: 'control-voseo',
-    text: 'Vos tenés razón, che, así que dale nomás.',
-    note:
-        'Control case: valid Argentine voseo/regional Spanish, correctly '
-        'spelled and punctuated. Must NOT be rewritten to "tú tienes".',
-  ),
-  _TestCase(
-    id: 'control-word-choice',
-    text: 'Voy a coger el autobús para ir al trabajo.',
-    note:
-        'Control case: "coger" is a word-choice/regional-register matter, '
-        'not a grammar/spelling/punctuation error. Text is already '
-        'grammatically correct and must NOT be rewritten.',
-  ),
-  _TestCase(
-    id: 'control-already-correct',
-    text: 'Mañana visitaré a mi abuela en su pequeño pueblo junto al río.',
-    note:
-        'Control case: already correct, with several Spanish diacritics '
-        'and ñ. Must be returned unchanged, and the special characters '
-        'must survive round-trip through the model untouched.',
-  ),
-];
+/// The model-comparison battery is a deliberately small subset of the shared
+/// benchmark fixtures, not a harness-local ad hoc fixture list.
+const List<BenchmarkFixture> _cases = firstPassModelComparisonFixtures;
 
 /// Builds the raw JSON-able request body for one OpenAI chat completions
 /// call. `response_format: json_schema` enforces the exact
@@ -412,7 +360,7 @@ Future<_ModelCaseResult> _runOnce({
   required HttpClient httpClient,
   required String apiKey,
   required String model,
-  required _TestCase testCase,
+  required BenchmarkFixture testCase,
 }) async {
   final stopwatch = Stopwatch()..start();
   try {
@@ -530,7 +478,7 @@ String _markdownTableCell(String value) {
 String _buildReport({
   required List<String> models,
   required DateTime generatedAt,
-  required List<_TestCase> cases,
+  required List<BenchmarkFixture> cases,
   required Map<String, Map<String, _ModelCaseResult>> resultsByCaseThenModel,
   String? commit,
 }) {
@@ -652,6 +600,10 @@ String _buildReport({
 }
 
 void main() {
+  test('battery uses the shared first-pass benchmark fixture subset', () {
+    expect(_cases, same(firstPassModelComparisonFixtures));
+  });
+
   test('battery cases are well-formed and cover the required scenarios', () {
     final ids = _cases.map((c) => c.id).toSet();
     expect(ids.length, _cases.length, reason: 'Case ids must be unique.');
@@ -659,18 +611,30 @@ void main() {
     for (final testCase in _cases) {
       expect(testCase.text.trim(), isNotEmpty, reason: testCase.id);
       expect(testCase.note.trim(), isNotEmpty, reason: testCase.id);
+      expect(
+        testCase.text.length,
+        lessThanOrEqualTo(appCharacterLimit),
+        reason: testCase.id,
+      );
     }
 
+    final bands = _cases.map((c) => c.lengthBand).toSet();
     expect(
-      ids,
-      containsAll(<String>[
-        'grammar-agreement',
-        'spelling-accents',
-        'punctuation-question',
-        'control-voseo',
-        'control-word-choice',
-        'control-already-correct',
+      bands,
+      containsAll(<BenchmarkLengthBand>[
+        BenchmarkLengthBand.shortPhrase,
+        BenchmarkLengthBand.paragraph,
+        BenchmarkLengthBand.twoParagraph,
+        BenchmarkLengthBand.nearLimit,
       ]),
+    );
+    expect(_cases.where((c) => c.isCorrectionCase), isNotEmpty);
+    expect(_cases.where((c) => c.isControlCase), isNotEmpty);
+    expect(_cases.where((c) => c.isCalcsStyle), isNotEmpty);
+    expect(_cases.where((c) => c.isAccentSensitive), isNotEmpty);
+    expect(
+      _cases.where((c) => c.isControlCase && c.isValidRegionalSpanish),
+      isNotEmpty,
     );
   });
 
@@ -878,10 +842,12 @@ void main() {
       models: ['test-model-a', 'test-model-b'],
       generatedAt: DateTime.utc(2026, 1, 1, 12),
       cases: const [
-        _TestCase(
+        BenchmarkFixture(
           id: 'TEST-1',
           text: 'Los niño come.',
           note: 'Synthetic case.',
+          lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+          kind: BenchmarkFixtureKind.correction,
         ),
       ],
       resultsByCaseThenModel: {
