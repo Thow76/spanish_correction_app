@@ -102,6 +102,53 @@ enum ObjectiveSpanishErrorFamily {
   sentenceBoundariesPunctuation,
 }
 
+/// Boundary-control fixture groups for restraint-focused first-pass runs.
+enum BoundaryFixtureGroup {
+  unchangedBoundaryControl('unchanged_boundary_control'),
+  wordChoiceBoundaryControl('word_choice_boundary_control'),
+  grammarBoundaryCorrection('grammar_boundary_correction');
+
+  const BoundaryFixtureGroup(this.reportLabel);
+
+  final String reportLabel;
+}
+
+/// Narrow boundary type exercised by a boundary-control fixture.
+enum BoundaryType {
+  redundantPronoun('redundant_pronoun'),
+  regionalUsage('regional_usage'),
+  tensePreference('tense_preference'),
+  calque('calque'),
+  collocation('collocation'),
+  agreement('agreement'),
+  omission('omission'),
+  serEstar('ser/estar');
+
+  const BoundaryType(this.reportLabel);
+
+  final String reportLabel;
+}
+
+/// Expected behavior for a boundary-control fixture under the first-pass prompt.
+enum BoundaryExpectedBehavior {
+  unchanged('unchanged'),
+  corrected('corrected');
+
+  const BoundaryExpectedBehavior(this.reportLabel);
+
+  final String reportLabel;
+}
+
+/// Expected behavior for lexical-collocation fixture runs.
+enum LexicalCollocationFixtureRole {
+  unchangedControl('unchanged control'),
+  expectedCorrection('expected correction');
+
+  const LexicalCollocationFixtureRole(this.reportLabel);
+
+  final String reportLabel;
+}
+
 /// A scored benchmark fixture for exact corrected-text comparison.
 class ScoredBenchmarkFixture extends BenchmarkFixture {
   const ScoredBenchmarkFixture({
@@ -128,6 +175,96 @@ class ScoredBenchmarkFixture extends BenchmarkFixture {
 
   /// Number of intended objective corrections in [expectedCorrectedText].
   final int intendedErrorCount;
+}
+
+/// A restraint-focused scored fixture for boundary-control runs.
+class BoundaryControlBenchmarkFixture extends BenchmarkFixture {
+  const BoundaryControlBenchmarkFixture({
+    required String id,
+    required String text,
+    required String note,
+    required this.expectedCorrectedText,
+    required this.fixtureGroup,
+    required this.boundaryType,
+    required this.expectedBehavior,
+    required this.isOverCorrectionSensitive,
+    BenchmarkLengthBand lengthBand =
+        BenchmarkLengthBand.sentenceOrShortParagraph,
+    bool isAccentSensitive = false,
+    bool isCalcsStyle = false,
+    bool isValidRegionalSpanish = false,
+  }) : assert(
+         (expectedBehavior == BoundaryExpectedBehavior.unchanged &&
+                 expectedCorrectedText == text) ||
+             (expectedBehavior == BoundaryExpectedBehavior.corrected &&
+                 expectedCorrectedText != text),
+       ),
+       super(
+         id: id,
+         text: text,
+         note: note,
+         lengthBand: lengthBand,
+         kind: expectedBehavior == BoundaryExpectedBehavior.corrected
+             ? BenchmarkFixtureKind.correction
+             : BenchmarkFixtureKind.control,
+         isAccentSensitive: isAccentSensitive,
+         isCalcsStyle: isCalcsStyle,
+         isValidRegionalSpanish: isValidRegionalSpanish,
+       );
+
+  /// Exact expected output for narrow grammar/spelling/punctuation scoring.
+  final String expectedCorrectedText;
+
+  /// Which restraint/correction boundary this fixture belongs to.
+  final BoundaryFixtureGroup fixtureGroup;
+
+  /// More specific linguistic boundary under test.
+  final BoundaryType boundaryType;
+
+  /// Whether the prompt should leave this input alone or correct it.
+  final BoundaryExpectedBehavior expectedBehavior;
+
+  /// Whether changed output should be interpreted as an over-correction signal.
+  final bool isOverCorrectionSensitive;
+}
+
+/// A targeted verb-noun lexical-collocation fixture.
+///
+/// These fixtures deliberately exercise lexical selection rather than broad
+/// naturalness. Controls assert that valid verb-noun collocations stay
+/// unchanged; correction cases assert the conventional verb for the noun.
+class LexicalCollocationBenchmarkFixture extends BenchmarkFixture {
+  const LexicalCollocationBenchmarkFixture({
+    required String id,
+    required String text,
+    required String note,
+    required this.expectedCorrectedText,
+    required this.role,
+    BenchmarkLengthBand lengthBand =
+        BenchmarkLengthBand.sentenceOrShortParagraph,
+    bool isAccentSensitive = false,
+  }) : assert(
+         (role == LexicalCollocationFixtureRole.unchangedControl &&
+                 expectedCorrectedText == text) ||
+             (role == LexicalCollocationFixtureRole.expectedCorrection &&
+                 expectedCorrectedText != text),
+       ),
+       super(
+         id: id,
+         text: text,
+         note: note,
+         lengthBand: lengthBand,
+         kind: role == LexicalCollocationFixtureRole.expectedCorrection
+             ? BenchmarkFixtureKind.correction
+             : BenchmarkFixtureKind.control,
+         isAccentSensitive: isAccentSensitive,
+       );
+
+  /// Exact expected output for lexical-collocation comparison.
+  final String expectedCorrectedText;
+
+  /// Whether this fixture should remain unchanged or receive a correction.
+  final LexicalCollocationFixtureRole role;
 }
 
 const BenchmarkFixture shortPhraseMissingAccent = BenchmarkFixture(
@@ -279,6 +416,311 @@ const BenchmarkFixture nearLimitFullText = BenchmarkFixture(
   kind: BenchmarkFixtureKind.correction,
   isAccentSensitive: true,
 );
+
+const BoundaryControlBenchmarkFixture boundaryRedundantYo =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-redundant-yo',
+      text: 'Yo trabajo mucho y yo también estudio por las noches.',
+      expectedCorrectedText:
+          'Yo trabajo mucho y yo también estudio por las noches.',
+      note:
+          'Pure unchanged boundary control: tests whether the model removes '
+          'redundant but grammatical subject pronouns.',
+      fixtureGroup: BoundaryFixtureGroup.unchangedBoundaryControl,
+      boundaryType: BoundaryType.redundantPronoun,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryRedundantEllos =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-redundant-ellos',
+      text: 'Ellos viajaron a México y ellos visitaron varias ciudades.',
+      expectedCorrectedText:
+          'Ellos viajaron a México y ellos visitaron varias ciudades.',
+      note:
+          'Pure unchanged boundary control: tests whether the model removes '
+          'repeated but grammatical subject pronouns.',
+      fixtureGroup: BoundaryFixtureGroup.unchangedBoundaryControl,
+      boundaryType: BoundaryType.redundantPronoun,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryParaCasa =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-para-casa',
+      text: 'Está lloviendo, así que voy para casa ahora mismo.',
+      expectedCorrectedText:
+          'Está lloviendo, así que voy para casa ahora mismo.',
+      note:
+          'Pure unchanged boundary control: tests whether the model '
+          'incorrectly normalizes valid "para casa" usage.',
+      fixtureGroup: BoundaryFixtureGroup.unchangedBoundaryControl,
+      boundaryType: BoundaryType.regionalUsage,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+      isValidRegionalSpanish: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryRegionalCoger =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-regional-coger',
+      text: 'Cada mañana cojo el autobús para llegar a la oficina.',
+      expectedCorrectedText:
+          'Cada mañana cojo el autobús para llegar a la oficina.',
+      note:
+          'Pure unchanged boundary control: tests whether the model rewrites '
+          'valid Peninsular Spanish because a word is dialectally sensitive.',
+      fixtureGroup: BoundaryFixtureGroup.unchangedBoundaryControl,
+      boundaryType: BoundaryType.regionalUsage,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+      isValidRegionalSpanish: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryRegionalPreterite =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-regional-preterite',
+      text: 'Esta mañana hablé con mi jefe sobre el proyecto nuevo.',
+      expectedCorrectedText:
+          'Esta mañana hablé con mi jefe sobre el proyecto nuevo.',
+      note:
+          'Pure unchanged boundary control: tests whether the model changes a '
+          'valid preterite/present-perfect regional tense preference.',
+      fixtureGroup: BoundaryFixtureGroup.unchangedBoundaryControl,
+      boundaryType: BoundaryType.tensePreference,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+      isValidRegionalSpanish: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryCalqueLlamarParaAtras =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-calque-llamar-para-atras',
+      text: 'Te llamo para atrás cuando termine la reunión.',
+      expectedCorrectedText: 'Te llamo para atrás cuando termine la reunión.',
+      note:
+          'Word-choice/naturalness boundary control: tests whether the model '
+          'rewrites a calque as a naturalness improvement.',
+      fixtureGroup: BoundaryFixtureGroup.wordChoiceBoundaryControl,
+      boundaryType: BoundaryType.calque,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+      isCalcsStyle: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryCollocationHacerDecision =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-collocation-hacer-decision',
+      text: 'Necesito hacer una decisión importante antes del viernes.',
+      expectedCorrectedText:
+          'Necesito hacer una decisión importante antes del viernes.',
+      note:
+          'Word-choice/naturalness boundary control: tests whether the model '
+          'rewrites an unnatural collocation such as "hacer una decisión" to '
+          '"tomar una decisión".',
+      fixtureGroup: BoundaryFixtureGroup.wordChoiceBoundaryControl,
+      boundaryType: BoundaryType.collocation,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+      isCalcsStyle: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryGustarAgreement =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-gustar-agreement',
+      text: 'Me gusta las películas de acción los fines de semana.',
+      expectedCorrectedText:
+          'Me gustan las películas de acción los fines de semana.',
+      note:
+          'Grammar-boundary correction: tests true verb agreement in a '
+          'construction learners often experience as lexical or idiomatic.',
+      fixtureGroup: BoundaryFixtureGroup.grammarBoundaryCorrection,
+      boundaryType: BoundaryType.agreement,
+      expectedBehavior: BoundaryExpectedBehavior.corrected,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryMissingQue =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-missing-que',
+      text: 'Creo está bien terminar el proyecto esta semana.',
+      expectedCorrectedText:
+          'Creo que está bien terminar el proyecto esta semana.',
+      note:
+          'Grammar-boundary correction: tests whether the model corrects an '
+          'omitted complementizer without rewriting the sentence.',
+      fixtureGroup: BoundaryFixtureGroup.grammarBoundaryCorrection,
+      boundaryType: BoundaryType.omission,
+      expectedBehavior: BoundaryExpectedBehavior.corrected,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundarySerEstarProfesor =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-ser-estar-profesor',
+      text: 'Mi hermano está profesor en una escuela secundaria.',
+      expectedCorrectedText:
+          'Mi hermano es profesor en una escuela secundaria.',
+      note:
+          'Grammar-boundary correction: tests objective ser/estar correction '
+          'without changing wording beyond the verb.',
+      fixtureGroup: BoundaryFixtureGroup.grammarBoundaryCorrection,
+      boundaryType: BoundaryType.serEstar,
+      expectedBehavior: BoundaryExpectedBehavior.corrected,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+    );
+
+/// Boundary-control fixture subset for first-pass model comparison runs.
+///
+/// These cases test whether models leave valid or borderline-valid Spanish
+/// alone under the narrow grammar/spelling/punctuation-only prompt, while
+/// still correcting nearby objective grammar errors.
+const List<BoundaryControlBenchmarkFixture> boundaryControlFirstPassFixtures = [
+  boundaryRedundantYo,
+  boundaryRedundantEllos,
+  boundaryParaCasa,
+  boundaryRegionalCoger,
+  boundaryRegionalPreterite,
+  boundaryCalqueLlamarParaAtras,
+  boundaryCollocationHacerDecision,
+  boundaryGustarAgreement,
+  boundaryMissingQue,
+  boundarySerEstarProfesor,
+];
+
+/// Exact expected outputs for the boundary-control fixture subset.
+final Map<String, String> boundaryControlFirstPassExpectedCorrectedText =
+    Map.unmodifiable({
+      for (final fixture in boundaryControlFirstPassFixtures)
+        fixture.id: fixture.expectedCorrectedText,
+    });
+
+const LexicalCollocationBenchmarkFixture lexicalControlHacerPregunta =
+    LexicalCollocationBenchmarkFixture(
+      id: 'lexical-control-hacer-pregunta',
+      text: 'Voy a hacer una pregunta al profesor después de clase.',
+      expectedCorrectedText:
+          'Voy a hacer una pregunta al profesor después de clase.',
+      role: LexicalCollocationFixtureRole.unchangedControl,
+      note:
+          'Valid hacer + pregunta collocation. Ensures the model does not '
+          'blindly replace hacer.',
+      isAccentSensitive: true,
+    );
+
+const LexicalCollocationBenchmarkFixture lexicalControlTomarFoto =
+    LexicalCollocationBenchmarkFixture(
+      id: 'lexical-control-tomar-foto',
+      text: 'Necesito tomar una foto del documento antes de enviarlo.',
+      expectedCorrectedText:
+          'Necesito tomar una foto del documento antes de enviarlo.',
+      role: LexicalCollocationFixtureRole.unchangedControl,
+      note:
+          'Valid tomar + foto collocation. Ensures the model does not blindly '
+          'replace tomar.',
+    );
+
+const LexicalCollocationBenchmarkFixture lexicalControlDarPaseo =
+    LexicalCollocationBenchmarkFixture(
+      id: 'lexical-control-dar-paseo',
+      text: 'Vamos a dar un paseo por el parque esta tarde.',
+      expectedCorrectedText: 'Vamos a dar un paseo por el parque esta tarde.',
+      role: LexicalCollocationFixtureRole.unchangedControl,
+      note: 'Valid dar + paseo collocation.',
+    );
+
+const LexicalCollocationBenchmarkFixture
+lexicalHacerPaseo = LexicalCollocationBenchmarkFixture(
+  id: 'lexical-hacer-paseo',
+  text: 'Ella hizo un paseo por el parque después del trabajo.',
+  expectedCorrectedText: 'Ella dio un paseo por el parque después del trabajo.',
+  role: LexicalCollocationFixtureRole.expectedCorrection,
+  note: 'Wrong verb-noun collocation: hacer un paseo should be dar un paseo.',
+  isAccentSensitive: true,
+);
+
+const LexicalCollocationBenchmarkFixture lexicalHacerAtencion =
+    LexicalCollocationBenchmarkFixture(
+      id: 'lexical-hacer-atencion',
+      text: 'Tenemos que hacer atención a los detalles del contrato.',
+      expectedCorrectedText:
+          'Tenemos que prestar atención a los detalles del contrato.',
+      role: LexicalCollocationFixtureRole.expectedCorrection,
+      note:
+          'Wrong verb-noun collocation: hacer atención should be prestar '
+          'atención.',
+      isAccentSensitive: true,
+    );
+
+const LexicalCollocationBenchmarkFixture lexicalTomarReunion =
+    LexicalCollocationBenchmarkFixture(
+      id: 'lexical-tomar-reunion',
+      text: 'El equipo tomó una reunión para hablar del problema.',
+      expectedCorrectedText:
+          'El equipo tuvo una reunión para hablar del problema.',
+      role: LexicalCollocationFixtureRole.expectedCorrection,
+      note:
+          'Wrong verb-noun collocation: tomar una reunión should be tener una '
+          'reunión.',
+      isAccentSensitive: true,
+    );
+
+const LexicalCollocationBenchmarkFixture lexicalHacerDecision =
+    LexicalCollocationBenchmarkFixture(
+      id: 'lexical-hacer-decision',
+      text: 'Quiero hacer una decisión antes de mañana.',
+      expectedCorrectedText: 'Quiero tomar una decisión antes de mañana.',
+      role: LexicalCollocationFixtureRole.expectedCorrection,
+      note:
+          'Wrong verb-noun collocation: hacer una decisión should be tomar '
+          'una decisión.',
+      isAccentSensitive: true,
+    );
+
+const LexicalCollocationBenchmarkFixture lexicalTomarFiesta =
+    LexicalCollocationBenchmarkFixture(
+      id: 'lexical-tomar-fiesta',
+      text: 'Mi hermana tomó una fiesta para celebrar su cumpleaños.',
+      expectedCorrectedText:
+          'Mi hermana hizo una fiesta para celebrar su cumpleaños.',
+      role: LexicalCollocationFixtureRole.expectedCorrection,
+      note:
+          'Wrong verb-noun collocation: tomar una fiesta should be hacer una '
+          'fiesta.',
+      isAccentSensitive: true,
+    );
+
+/// Targeted lexical-collocation fixture subset for model comparison runs.
+const List<LexicalCollocationBenchmarkFixture>
+lexicalCollocationFirstPassFixtures = [
+  lexicalControlHacerPregunta,
+  lexicalControlTomarFoto,
+  lexicalControlDarPaseo,
+  lexicalHacerPaseo,
+  lexicalHacerAtencion,
+  lexicalTomarReunion,
+  lexicalHacerDecision,
+  lexicalTomarFiesta,
+];
+
+/// Exact expected outputs for the lexical-collocation fixture subset.
+final Map<String, String> lexicalCollocationFirstPassExpectedCorrectedText =
+    Map.unmodifiable({
+      for (final fixture in lexicalCollocationFirstPassFixtures)
+        fixture.id: fixture.expectedCorrectedText,
+    });
 
 const ScoredBenchmarkFixture harderAccentMarksDiacritics =
     ScoredBenchmarkFixture(
@@ -590,6 +1032,8 @@ const List<BenchmarkFixture> benchmarkFixtures = [
 const List<BenchmarkFixture> addressableBenchmarkFixtures = [
   ...benchmarkFixtures,
   ...harderSecondPassFirstPassFixtures,
+  ...boundaryControlFirstPassFixtures,
+  ...lexicalCollocationFirstPassFixtures,
 ];
 
 /// The deliberate first-pass subset used by `test/model_comparison_harness.dart`.

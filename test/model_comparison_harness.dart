@@ -52,6 +52,7 @@
 //
 //   OPENAI_API_KEY=sk-... \
 //   MODEL_COMPARISON_LIVE=true \
+//   MODEL_COMPARISON_RUNS_PER_CASE=5 \
 //   COMPARISON_MODELS=gpt-5.4,gpt-5.3-chat-latest,gpt-4.1 \
 //   flutter test test/model_comparison_harness.dart --tags live --timeout none
 //
@@ -76,6 +77,9 @@
 // the harness uses the documented `firstPassModelComparisonFixtures` subset
 // from `test/shared/benchmark_fixtures.dart`. Override the output path with
 // `MODEL_COMPARISON_OUTPUT` (default docs/model_comparison_harness.md).
+// `MODEL_COMPARISON_RUNS_PER_CASE` defaults to 1. Set it to a positive integer
+// such as 5 to repeat every selected model/fixture pair and compare stability,
+// latency, token use, and estimated cost variation.
 //
 // USD cost estimation uses the shared `test/shared/model_pricing.dart`
 // helpers (see spanish_correction_app#6): a model only gets a dollar
@@ -145,6 +149,11 @@ List<String> get comparisonModels =>
 
 const String _rawFixtureIdsFromDefine = String.fromEnvironment(
   'MODEL_COMPARISON_FIXTURE_IDS',
+  defaultValue: '',
+);
+
+const String _rawRunsPerCaseFromDefine = String.fromEnvironment(
+  'MODEL_COMPARISON_RUNS_PER_CASE',
   defaultValue: '',
 );
 
@@ -240,6 +249,8 @@ final Map<String, String> _firstPassExpectedCorrectedText = Map.unmodifiable({
       'estábamos muy cansados pero contentos, y decidimos que teníamos que '
       'regresar pronto porque el lugar nos había gustado mucho a todos.',
   ...harderSecondPassFirstPassExpectedCorrectedText,
+  ...boundaryControlFirstPassExpectedCorrectedText,
+  ...lexicalCollocationFirstPassExpectedCorrectedText,
 });
 
 List<String> _parseCommaSeparatedValues(String raw) {
@@ -289,6 +300,32 @@ String _configuredOutputPath(Map<String, String> environment) {
   );
 }
 
+int _configuredRunsPerCase(Map<String, String> environment) {
+  final rawRunsPerCase = _runtimeString(
+    dartDefineValue: _rawRunsPerCaseFromDefine,
+    environment: environment,
+    key: 'MODEL_COMPARISON_RUNS_PER_CASE',
+    defaultValue: '',
+  );
+  return _parseRunsPerCase(rawRunsPerCase);
+}
+
+int _parseRunsPerCase(String rawRunsPerCase) {
+  final trimmed = rawRunsPerCase.trim();
+  if (trimmed.isEmpty) {
+    return 1;
+  }
+
+  final parsed = int.tryParse(trimmed);
+  if (parsed == null || parsed < 1) {
+    throw StateError(
+      'MODEL_COMPARISON_RUNS_PER_CASE must be a positive integer; '
+      'received "$rawRunsPerCase".',
+    );
+  }
+  return parsed;
+}
+
 List<BenchmarkFixture> _configuredFixtureSubset(
   Map<String, String> environment,
 ) {
@@ -335,12 +372,14 @@ class _LiveRunConfig {
     required this.models,
     required this.cases,
     required this.outputPath,
+    required this.runsPerCase,
     required this.liveRunOptIn,
   });
 
   final List<String> models;
   final List<BenchmarkFixture> cases;
   final String outputPath;
+  final int runsPerCase;
   final bool liveRunOptIn;
 
   List<String> get caseIds => cases.map((testCase) => testCase.id).toList();
@@ -351,6 +390,7 @@ _LiveRunConfig _buildLiveRunConfig(Map<String, String> environment) {
     models: _configuredComparisonModels(environment),
     cases: _configuredFixtureSubset(environment),
     outputPath: _configuredOutputPath(environment),
+    runsPerCase: _configuredRunsPerCase(environment),
     liveRunOptIn: _hasLiveRunOptIn(environment),
   );
 }
@@ -362,6 +402,9 @@ String? _liveRunConfigError(_LiveRunConfig config) {
   }
   if (config.cases.isEmpty) {
     return 'The live comparison run needs at least one fixture case.';
+  }
+  if (config.runsPerCase < 1) {
+    return 'MODEL_COMPARISON_RUNS_PER_CASE must be a positive integer.';
   }
   return null;
 }
@@ -468,6 +511,7 @@ class _ModelCaseResult {
     required this.model,
     required this.promptVersion,
     required this.caseId,
+    this.runNumber = 1,
     required this.inputText,
     required this.validJson,
     required this.latencyMs,
@@ -483,6 +527,7 @@ class _ModelCaseResult {
   final String model;
   final String promptVersion;
   final String caseId;
+  final int runNumber;
   final String inputText;
   final bool validJson;
   final int latencyMs;
@@ -566,6 +611,7 @@ _ReviewStatus _reviewStatusFor(
 _ModelCaseResult _successResult({
   required String model,
   required String caseId,
+  int runNumber = 1,
   required String inputText,
   required String rawResponse,
   required _ParsedResponse parsed,
@@ -586,6 +632,7 @@ _ModelCaseResult _successResult({
     model: model,
     promptVersion: promptVersion,
     caseId: caseId,
+    runNumber: runNumber,
     inputText: inputText,
     rawResponse: rawResponse,
     correctedText: parsed.correctedText,
@@ -601,6 +648,7 @@ _ModelCaseResult _successResult({
 _ModelCaseResult _errorResult({
   required String model,
   required String caseId,
+  int runNumber = 1,
   required String inputText,
   required int latencyMs,
   required Object error,
@@ -609,6 +657,7 @@ _ModelCaseResult _errorResult({
     model: model,
     promptVersion: promptVersion,
     caseId: caseId,
+    runNumber: runNumber,
     inputText: inputText,
     validJson: false,
     latencyMs: latencyMs,
@@ -625,6 +674,7 @@ Future<_ModelCaseResult> _runOnce({
   required String apiKey,
   required String model,
   required BenchmarkFixture testCase,
+  required int runNumber,
 }) async {
   final stopwatch = Stopwatch()..start();
   try {
@@ -681,6 +731,7 @@ Future<_ModelCaseResult> _runOnce({
     return _successResult(
       model: model,
       caseId: testCase.id,
+      runNumber: runNumber,
       inputText: testCase.text,
       rawResponse: replyText,
       parsed: parsed,
@@ -694,6 +745,7 @@ Future<_ModelCaseResult> _runOnce({
     return _errorResult(
       model: model,
       caseId: testCase.id,
+      runNumber: runNumber,
       inputText: testCase.text,
       latencyMs: stopwatch.elapsedMilliseconds,
       error: error,
@@ -754,16 +806,229 @@ String _formatCostForReport(double? cost) {
   return 'verified ${cost.toStringAsFixed(6)}';
 }
 
-/// Builds the full markdown comparison report: one section per case with a
-/// table comparing every model's result, then an overall per-model summary
-/// table (valid JSON rate, average latency, total tokens, total estimated
-/// cost). Pure — takes already-collected [resultsByCaseThenModel] rather
-/// than making any calls itself, golden-testable against synthetic data.
+String _formatAggregateCostForReport({
+  required double totalCost,
+  required int pricedRuns,
+  required int totalRuns,
+}) {
+  if (pricedRuns == 0) {
+    return _formatCostForReport(null);
+  }
+  final formatted = _formatCostForReport(totalCost);
+  if (pricedRuns == totalRuns) {
+    return formatted;
+  }
+  return '$formatted (known $pricedRuns/$totalRuns runs)';
+}
+
+String _formatLatency(double? latencyMs) {
+  if (latencyMs == null) {
+    return 'n/a';
+  }
+  return latencyMs.toStringAsFixed(1);
+}
+
+String _formatOptionalInt(int? value) => value?.toString() ?? 'n/a';
+
+String _actualOutputForReport(_ModelCaseResult result) {
+  if (result.correctedText != null) {
+    return result.correctedText!;
+  }
+  if (result.isError) {
+    return 'ERROR: ${result.error}';
+  }
+  if (result.rawResponse != null) {
+    return '(unparsed) ${result.rawResponse}';
+  }
+  return '(missing)';
+}
+
+String _numberedMarkdownListCell(Iterable<String> values) {
+  final entries = values.toList(growable: false);
+  if (entries.isEmpty) {
+    return '(none)';
+  }
+  return _markdownTableCell(
+    [
+      for (var i = 0; i < entries.length; i++) '${i + 1}. ${entries[i]}',
+    ].join('\n'),
+  );
+}
+
+class _ResultAggregate {
+  _ResultAggregate({
+    required this.totalRuns,
+    required this.passedRuns,
+    required this.validJsonRuns,
+    required this.distinctActualOutputs,
+    required this.averageLatencyMs,
+    required this.minLatencyMs,
+    required this.maxLatencyMs,
+    required this.totalTokens,
+    required this.totalEstimatedCostUsd,
+    required this.pricedRuns,
+    required this.scoredRuns,
+    required this.expectedCorrections,
+    required this.correctionRuns,
+    required this.missedFixes,
+    required this.controlsUnchanged,
+    required this.controlRuns,
+    required this.overCorrections,
+    required this.unexpectedOutputs,
+  });
+
+  final int totalRuns;
+  final int passedRuns;
+  final int validJsonRuns;
+  final List<String> distinctActualOutputs;
+  final double? averageLatencyMs;
+  final int? minLatencyMs;
+  final int? maxLatencyMs;
+  final int totalTokens;
+  final double totalEstimatedCostUsd;
+  final int pricedRuns;
+  final int scoredRuns;
+  final int expectedCorrections;
+  final int correctionRuns;
+  final int missedFixes;
+  final int controlsUnchanged;
+  final int controlRuns;
+  final int overCorrections;
+  final int unexpectedOutputs;
+
+  bool get outputsIdentical => distinctActualOutputs.length <= 1;
+
+  String get passRate => _formatRate(passedRuns, scoredRuns);
+  String get validJsonRate => _formatRate(validJsonRuns, totalRuns);
+  String get expectedCorrectionRate =>
+      _formatRate(expectedCorrections, correctionRuns);
+  String get missedFixRate => _formatRate(missedFixes, correctionRuns);
+  String get controlsUnchangedRate =>
+      _formatRate(controlsUnchanged, controlRuns);
+  String get overCorrectionRate => _formatRate(overCorrections, controlRuns);
+  String get costLabel => _formatAggregateCostForReport(
+    totalCost: totalEstimatedCostUsd,
+    pricedRuns: pricedRuns,
+    totalRuns: totalRuns,
+  );
+}
+
+_ResultAggregate _aggregateResultsForFixtures({
+  required List<BenchmarkFixture> cases,
+  required Iterable<_ModelCaseResult> results,
+}) {
+  final casesById = {for (final testCase in cases) testCase.id: testCase};
+  var totalRuns = 0;
+  var passedRuns = 0;
+  var validJsonRuns = 0;
+  var scoredRuns = 0;
+  var expectedCorrections = 0;
+  var correctionRuns = 0;
+  var missedFixes = 0;
+  var controlsUnchanged = 0;
+  var controlRuns = 0;
+  var overCorrections = 0;
+  var unexpectedOutputs = 0;
+  var latencySum = 0;
+  int? minLatencyMs;
+  int? maxLatencyMs;
+  var totalTokens = 0;
+  var totalEstimatedCostUsd = 0.0;
+  var pricedRuns = 0;
+  final distinctActualOutputs = <String>{};
+
+  for (final result in results) {
+    totalRuns++;
+    final testCase = casesById[result.caseId];
+    if (testCase != null) {
+      final hasExpectedOutput = _firstPassExpectedCorrectedText.containsKey(
+        testCase.id,
+      );
+      final status = _reviewStatusFor(testCase, result);
+      if (hasExpectedOutput) {
+        scoredRuns++;
+      }
+      if (hasExpectedOutput && status.isTaskSuccess) {
+        passedRuns++;
+      }
+      if (result.validJson) {
+        validJsonRuns++;
+      }
+      if (hasExpectedOutput && testCase.isCorrectionCase) {
+        correctionRuns++;
+      }
+      if (hasExpectedOutput && testCase.isControlCase) {
+        controlRuns++;
+      }
+      switch (status) {
+        case _ReviewStatus.expectedCorrection:
+          expectedCorrections++;
+        case _ReviewStatus.missedCorrection:
+          missedFixes++;
+        case _ReviewStatus.unexpectedCorrection:
+          unexpectedOutputs++;
+        case _ReviewStatus.unchangedControl:
+          controlsUnchanged++;
+        case _ReviewStatus.overCorrection:
+          overCorrections++;
+        case _ReviewStatus.invalidJson:
+        case _ReviewStatus.error:
+        case _ReviewStatus.unscored:
+          break;
+      }
+    }
+
+    distinctActualOutputs.add(_actualOutputForReport(result));
+    latencySum += result.latencyMs;
+    minLatencyMs = minLatencyMs == null
+        ? result.latencyMs
+        : (result.latencyMs < minLatencyMs ? result.latencyMs : minLatencyMs);
+    maxLatencyMs = maxLatencyMs == null
+        ? result.latencyMs
+        : (result.latencyMs > maxLatencyMs ? result.latencyMs : maxLatencyMs);
+    if (result.totalTokens != null) {
+      totalTokens += result.totalTokens!;
+    }
+    if (result.estimatedCostUsd != null) {
+      totalEstimatedCostUsd += result.estimatedCostUsd!;
+      pricedRuns++;
+    }
+  }
+
+  return _ResultAggregate(
+    totalRuns: totalRuns,
+    passedRuns: passedRuns,
+    validJsonRuns: validJsonRuns,
+    distinctActualOutputs: distinctActualOutputs.toList(growable: false),
+    averageLatencyMs: totalRuns == 0 ? null : latencySum / totalRuns,
+    minLatencyMs: minLatencyMs,
+    maxLatencyMs: maxLatencyMs,
+    totalTokens: totalTokens,
+    totalEstimatedCostUsd: totalEstimatedCostUsd,
+    pricedRuns: pricedRuns,
+    scoredRuns: scoredRuns,
+    expectedCorrections: expectedCorrections,
+    correctionRuns: correctionRuns,
+    missedFixes: missedFixes,
+    controlsUnchanged: controlsUnchanged,
+    controlRuns: controlRuns,
+    overCorrections: overCorrections,
+    unexpectedOutputs: unexpectedOutputs,
+  );
+}
+
+/// Builds the full markdown comparison report: one section per case with
+/// per-model aggregate rows and individual run rows, then overall per-model
+/// aggregate/scoring tables. Pure — takes already-collected
+/// [resultsByCaseThenModel] rather than making any calls itself,
+/// golden-testable against synthetic data.
 String _buildReport({
   required List<String> models,
   required DateTime generatedAt,
   required List<BenchmarkFixture> cases,
-  required Map<String, Map<String, _ModelCaseResult>> resultsByCaseThenModel,
+  required int runsPerCase,
+  required Map<String, Map<String, List<_ModelCaseResult>>>
+  resultsByCaseThenModel,
   String? branch,
   String? commit,
 }) {
@@ -778,6 +1043,7 @@ String _buildReport({
     ..writeln('- Prompt version: `$promptVersion`')
     ..writeln('- Models: ${models.map((m) => '`$m`').join(', ')}')
     ..writeln('- Fixture case ids: ${caseIds.map((id) => '`$id`').join(', ')}')
+    ..writeln('- Runs per model/fixture case: `$runsPerCase`')
     ..writeln('- Generated: ${generatedAtUtc.toIso8601String()}');
   if (branch != null) {
     report.writeln('- Git branch: `$branch`');
@@ -796,50 +1062,84 @@ String _buildReport({
 
   for (final testCase in cases) {
     final resultsByModel = resultsByCaseThenModel[testCase.id] ?? const {};
+    final expectedCorrectedText =
+        _firstPassExpectedCorrectedText[testCase.id] ?? '(unscored)';
 
     report
       ..writeln('## ${testCase.id}')
       ..writeln()
       ..writeln('- Input text: `${testCase.text}`')
       ..writeln('- Note: ${testCase.note}')
-      ..writeln(
-        '- Expected corrected_text: '
-        '`${_firstPassExpectedCorrectedText[testCase.id] ?? '(unscored)'}`',
-      )
+      ..writeln('- Expected corrected_text: `$expectedCorrectedText`')
       ..writeln()
       ..writeln(
-        '| Model | Valid JSON | Review status | Latency (ms) | '
-        'Tokens (in/out/total) | Est. cost (USD) | corrected_text | '
-        'raw_response |',
+        '| Model | Runs passed | Outputs identical | Distinct actual outputs | '
+        'Avg latency (ms) | Min latency (ms) | Max latency (ms) | '
+        'Total tokens | Total est. cost (USD) |',
       )
-      ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- |');
+      ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
 
     for (final model in models) {
-      final result = resultsByModel[model];
-      if (result == null) {
-        report.writeln('| $model | (no result) | | | | | | |');
-        continue;
-      }
-      final status = _reviewStatusFor(testCase, result).reportLabel;
-      if (result.isError) {
+      final results = resultsByModel[model] ?? const <_ModelCaseResult>[];
+      final aggregate = _aggregateResultsForFixtures(
+        cases: [testCase],
+        results: results,
+      );
+      report.writeln(
+        '| $model | ${aggregate.passedRuns}/${aggregate.scoredRuns} | '
+        '${aggregate.outputsIdentical} | '
+        '${_numberedMarkdownListCell(aggregate.distinctActualOutputs)} | '
+        '${_formatLatency(aggregate.averageLatencyMs)} | '
+        '${_formatOptionalInt(aggregate.minLatencyMs)} | '
+        '${_formatOptionalInt(aggregate.maxLatencyMs)} | '
+        '${aggregate.totalTokens} | ${aggregate.costLabel} |',
+      );
+    }
+
+    report
+      ..writeln()
+      ..writeln('### Individual runs')
+      ..writeln()
+      ..writeln(
+        '| Model | Fixture id | Run | Input text | Expected output | '
+        'Actual output | Pass/fail | Valid JSON | Review status | '
+        'Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | '
+        'raw_response |',
+      )
+      ..writeln(
+        '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+      );
+
+    for (final model in models) {
+      final results = resultsByModel[model] ?? const <_ModelCaseResult>[];
+      if (results.isEmpty) {
         report.writeln(
-          '| $model | ERROR | $status | ${result.latencyMs} | | | | '
-          '${_markdownTableCell(result.error.toString())} |',
+          '| $model | ${testCase.id} | (no result) | | | | | | | | | | |',
         );
         continue;
       }
-      final tokens = result.totalTokens != null
-          ? '${result.inputTokens}/${result.outputTokens}/${result.totalTokens}'
-          : 'unknown';
-      final cost = _formatCostForReport(result.estimatedCostUsd);
-      final corrected = _markdownTableCell(
-        result.correctedText ?? '(unparsed)',
-      );
-      final rawResponse = _markdownTableCell(result.rawResponse ?? '(missing)');
-      report.writeln(
-        '| $model | ${result.validJson} | $status | ${result.latencyMs} | '
-        '$tokens | $cost | $corrected | $rawResponse |',
-      );
+
+      final sortedResults = [...results]
+        ..sort((a, b) => a.runNumber.compareTo(b.runNumber));
+      for (final result in sortedResults) {
+        final status = _reviewStatusFor(testCase, result);
+        final tokens = result.totalTokens != null
+            ? '${result.inputTokens}/${result.outputTokens}/${result.totalTokens}'
+            : 'unknown';
+        final actualOutput = _markdownTableCell(_actualOutputForReport(result));
+        final rawResponse = _markdownTableCell(
+          result.rawResponse ?? result.error?.toString() ?? '(missing)',
+        );
+        report.writeln(
+          '| $model | ${result.caseId} | ${result.runNumber} | '
+          '${_markdownTableCell(result.inputText)} | '
+          '${_markdownTableCell(expectedCorrectedText)} | '
+          '$actualOutput | ${status.isTaskSuccess ? 'PASS' : 'FAIL'} | '
+          '${result.validJson} | ${status.reportLabel} | ${result.latencyMs} | '
+          '$tokens | ${_formatCostForReport(result.estimatedCostUsd)} | '
+          '$rawResponse |',
+        );
+      }
     }
     report.writeln();
   }
@@ -847,124 +1147,58 @@ String _buildReport({
   report
     ..writeln('---')
     ..writeln()
-    ..writeln('## Overall summary')
+    ..writeln('## Overall model aggregates')
     ..writeln()
     ..writeln(
-      '| Model | Cases | Valid JSON rate | Task success rate | '
-      'Expected corrections | Missed fixes | Controls unchanged | '
-      'Over-corrections | Unexpected outputs | Avg latency (ms) | '
-      'Total tokens | Total est. cost (USD) |',
+      '| Model | Total runs | Total passed | Pass rate | Avg latency (ms) | '
+      'Min latency (ms) | Max latency (ms) | Total tokens | '
+      'Total est. cost (USD) |',
     )
-    ..writeln(
-      '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
-    );
+    ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
 
   for (final model in models) {
-    var caseCount = 0;
-    var validJsonCount = 0;
-    var scoredCount = 0;
-    var taskSuccessCount = 0;
-    var expectedCorrectionCount = 0;
-    var correctionCaseCount = 0;
-    var missedCorrectionCount = 0;
-    var unchangedControlCount = 0;
-    var controlCaseCount = 0;
-    var overCorrectionCount = 0;
-    var unexpectedCorrectionCount = 0;
-    var latencySum = 0;
-    var latencyCount = 0;
-    var totalTokens = 0;
-    var totalCost = 0.0;
-    var hasCost = false;
-
-    for (final testCase in cases) {
-      final result = resultsByCaseThenModel[testCase.id]?[model];
-      if (result == null) {
-        continue;
-      }
-      caseCount++;
-      if (result.validJson) {
-        validJsonCount++;
-      }
-      final status = _reviewStatusFor(testCase, result);
-      final hasExpectedOutput = _firstPassExpectedCorrectedText.containsKey(
-        testCase.id,
-      );
-      if (hasExpectedOutput) {
-        scoredCount++;
-      }
-      if (hasExpectedOutput && status.isTaskSuccess) {
-        taskSuccessCount++;
-      }
-      if (hasExpectedOutput && testCase.isCorrectionCase) {
-        correctionCaseCount++;
-      }
-      if (hasExpectedOutput && testCase.isControlCase) {
-        controlCaseCount++;
-      }
-      switch (status) {
-        case _ReviewStatus.expectedCorrection:
-          expectedCorrectionCount++;
-        case _ReviewStatus.missedCorrection:
-          missedCorrectionCount++;
-        case _ReviewStatus.unexpectedCorrection:
-          unexpectedCorrectionCount++;
-        case _ReviewStatus.unchangedControl:
-          unchangedControlCount++;
-        case _ReviewStatus.overCorrection:
-          overCorrectionCount++;
-        case _ReviewStatus.invalidJson:
-        case _ReviewStatus.error:
-        case _ReviewStatus.unscored:
-          break;
-      }
-      if (!result.isError) {
-        latencySum += result.latencyMs;
-        latencyCount++;
-      }
-      if (result.totalTokens != null) {
-        totalTokens += result.totalTokens!;
-      }
-      if (result.estimatedCostUsd != null) {
-        totalCost += result.estimatedCostUsd!;
-        hasCost = true;
-      }
-    }
-
-    final validJsonRate = caseCount == 0
-        ? '0.0% (0/0)'
-        : '${(validJsonCount / caseCount * 100).toStringAsFixed(1)}% '
-              '($validJsonCount/$caseCount)';
-    final taskSuccessRate = _formatRate(taskSuccessCount, scoredCount);
-    final expectedCorrectionRate = _formatRate(
-      expectedCorrectionCount,
-      correctionCaseCount,
+    final allModelResults = [
+      for (final testCase in cases)
+        ...?resultsByCaseThenModel[testCase.id]?[model],
+    ];
+    final aggregate = _aggregateResultsForFixtures(
+      cases: cases,
+      results: allModelResults,
     );
-    final missedCorrectionRate = _formatRate(
-      missedCorrectionCount,
-      correctionCaseCount,
-    );
-    final unchangedControlRate = _formatRate(
-      unchangedControlCount,
-      controlCaseCount,
-    );
-    final overCorrectionRate = _formatRate(
-      overCorrectionCount,
-      controlCaseCount,
-    );
-    final avgLatency = latencyCount == 0
-        ? 'n/a'
-        : (latencySum / latencyCount).toStringAsFixed(1);
-    final costLabel = hasCost
-        ? _formatCostForReport(totalCost)
-        : _formatCostForReport(null);
 
     report.writeln(
-      '| $model | $caseCount | $validJsonRate | $taskSuccessRate | '
-      '$expectedCorrectionRate | $missedCorrectionRate | '
-      '$unchangedControlRate | $overCorrectionRate | '
-      '$unexpectedCorrectionCount | $avgLatency | $totalTokens | '
-      '$costLabel |',
+      '| $model | ${aggregate.totalRuns} | ${aggregate.passedRuns} | '
+      '${aggregate.passRate} | ${_formatLatency(aggregate.averageLatencyMs)} | '
+      '${_formatOptionalInt(aggregate.minLatencyMs)} | '
+      '${_formatOptionalInt(aggregate.maxLatencyMs)} | '
+      '${aggregate.totalTokens} | ${aggregate.costLabel} |',
+    );
+  }
+
+  report
+    ..writeln()
+    ..writeln('## Overall scoring breakdown')
+    ..writeln()
+    ..writeln(
+      '| Model | Valid JSON rate | Expected corrections | Missed fixes | '
+      'Controls unchanged | Over-corrections | Unexpected outputs |',
+    )
+    ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
+
+  for (final model in models) {
+    final allModelResults = [
+      for (final testCase in cases)
+        ...?resultsByCaseThenModel[testCase.id]?[model],
+    ];
+    final aggregate = _aggregateResultsForFixtures(
+      cases: cases,
+      results: allModelResults,
+    );
+    report.writeln(
+      '| $model | ${aggregate.validJsonRate} | '
+      '${aggregate.expectedCorrectionRate} | ${aggregate.missedFixRate} | '
+      '${aggregate.controlsUnchangedRate} | ${aggregate.overCorrectionRate} | '
+      '${aggregate.unexpectedOutputs} |',
     );
   }
 
@@ -1045,6 +1279,26 @@ void main() {
     }
   });
 
+  test('boundary-control expected outputs are available to the harness', () {
+    for (final fixture in boundaryControlFirstPassFixtures) {
+      expect(
+        _firstPassExpectedCorrectedText[fixture.id],
+        fixture.expectedCorrectedText,
+        reason: fixture.id,
+      );
+    }
+  });
+
+  test('lexical-collocation expected outputs are available to the harness', () {
+    for (final fixture in lexicalCollocationFirstPassFixtures) {
+      expect(
+        _firstPassExpectedCorrectedText[fixture.id],
+        fixture.expectedCorrectedText,
+        reason: fixture.id,
+      );
+    }
+  });
+
   test('systemPrompt matches the issue wording exactly', () {
     expect(
       systemPrompt,
@@ -1103,6 +1357,38 @@ void main() {
       );
     });
 
+    test('runs per case defaults to one', () {
+      expect(_configuredRunsPerCase(const {}), 1);
+    });
+
+    test('runs per case can be supplied from environment', () {
+      expect(
+        _configuredRunsPerCase(const {'MODEL_COMPARISON_RUNS_PER_CASE': ' 5 '}),
+        5,
+      );
+    });
+
+    test('runs per case rejects invalid values clearly', () {
+      expect(
+        () => _configuredRunsPerCase(const {
+          'MODEL_COMPARISON_RUNS_PER_CASE': 'zero',
+        }),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('MODEL_COMPARISON_RUNS_PER_CASE'),
+          ),
+        ),
+      );
+      expect(
+        () => _configuredRunsPerCase(const {
+          'MODEL_COMPARISON_RUNS_PER_CASE': '0',
+        }),
+        throwsStateError,
+      );
+    });
+
     test('fixture subset can be supplied by stable fixture ids', () {
       final cases = _configuredFixtureSubset(const {
         'MODEL_COMPARISON_FIXTURE_IDS':
@@ -1114,6 +1400,35 @@ void main() {
         'paragraph-calcs-natural',
       ]);
     });
+
+    test('boundary-control subset can be supplied by stable fixture ids', () {
+      final cases = _configuredFixtureSubset({
+        'MODEL_COMPARISON_FIXTURE_IDS': boundaryControlFirstPassFixtures
+            .map((fixture) => fixture.id)
+            .join(','),
+      });
+
+      expect(
+        cases.map((testCase) => testCase.id),
+        boundaryControlFirstPassFixtures.map((fixture) => fixture.id),
+      );
+    });
+
+    test(
+      'lexical-collocation subset can be supplied by stable fixture ids',
+      () {
+        final cases = _configuredFixtureSubset({
+          'MODEL_COMPARISON_FIXTURE_IDS': lexicalCollocationFirstPassFixtures
+              .map((fixture) => fixture.id)
+              .join(','),
+        });
+
+        expect(
+          cases.map((testCase) => testCase.id),
+          lexicalCollocationFirstPassFixtures.map((fixture) => fixture.id),
+        );
+      },
+    );
 
     test('fixture subset rejects unknown ids with the available id list', () {
       expect(
@@ -1137,6 +1452,7 @@ void main() {
         models: const [],
         cases: _cases,
         outputPath: defaultOutputPath,
+        runsPerCase: 1,
         liveRunOptIn: true,
       );
 
@@ -1446,16 +1762,14 @@ void main() {
     });
   });
 
-  test('report renders task status and per-model outcome rates', () {
-    final report = _buildReport(
-      models: ['model-a', 'model-b'],
-      generatedAt: DateTime.utc(2026, 1, 1, 12),
-      cases: const [sentenceGrammarAgreement, sentenceCorrectVoseo],
-      resultsByCaseThenModel: {
-        sentenceGrammarAgreement.id: {
-          'model-a': _successResult(
+  group('repeated run aggregation', () {
+    test('counts repeated passes and failures', () {
+      final results = [
+        for (var runNumber = 1; runNumber <= 4; runNumber++)
+          _successResult(
             model: 'model-a',
             caseId: sentenceGrammarAgreement.id,
+            runNumber: runNumber,
             inputText: sentenceGrammarAgreement.text,
             rawResponse:
                 '{"corrected_text": "Los niños comen muchas manzanas en el jardín."}',
@@ -1463,80 +1777,192 @@ void main() {
               validJson: true,
               correctedText: 'Los niños comen muchas manzanas en el jardín.',
             ),
-            latencyMs: 200,
+            latencyMs: 100 + runNumber,
             inputTokens: 20,
             outputTokens: 10,
             totalTokens: 30,
           ),
-          'model-b': _successResult(
-            model: 'model-b',
-            caseId: sentenceGrammarAgreement.id,
-            inputText: sentenceGrammarAgreement.text,
-            rawResponse:
-                '{"corrected_text": "Los niño come muchas manzana en el jardín."}',
-            parsed: const _ParsedResponse(
-              validJson: true,
-              correctedText: 'Los niño come muchas manzana en el jardín.',
+        _successResult(
+          model: 'model-a',
+          caseId: sentenceGrammarAgreement.id,
+          runNumber: 5,
+          inputText: sentenceGrammarAgreement.text,
+          rawResponse:
+              '{"corrected_text": "Los niño come muchas manzana en el jardín."}',
+          parsed: const _ParsedResponse(
+            validJson: true,
+            correctedText: 'Los niño come muchas manzana en el jardín.',
+          ),
+          latencyMs: 120,
+          inputTokens: 20,
+          outputTokens: 10,
+          totalTokens: 30,
+        ),
+      ];
+
+      final aggregate = _aggregateResultsForFixtures(
+        cases: const [sentenceGrammarAgreement],
+        results: results,
+      );
+
+      expect(aggregate.totalRuns, 5);
+      expect(aggregate.scoredRuns, 5);
+      expect(aggregate.passedRuns, 4);
+      expect(aggregate.passRate, '80.0% (4/5)');
+      expect(aggregate.expectedCorrections, 4);
+      expect(aggregate.missedFixes, 1);
+      expect(aggregate.totalTokens, 150);
+      expect(aggregate.averageLatencyMs, closeTo(106.0, 1e-9));
+      expect(aggregate.minLatencyMs, 101);
+      expect(aggregate.maxLatencyMs, 120);
+    });
+
+    test('detects distinct actual outputs across repeated runs', () {
+      final repeatedOutputs = [
+        _successResult(
+          model: 'model-a',
+          caseId: sentenceCorrectVoseo.id,
+          runNumber: 1,
+          inputText: sentenceCorrectVoseo.text,
+          rawResponse:
+              '{"corrected_text": "Vos tenés razón, che, así que dale nomás."}',
+          parsed: const _ParsedResponse(
+            validJson: true,
+            correctedText: 'Vos tenés razón, che, así que dale nomás.',
+          ),
+          latencyMs: 100,
+        ),
+        _successResult(
+          model: 'model-a',
+          caseId: sentenceCorrectVoseo.id,
+          runNumber: 2,
+          inputText: sentenceCorrectVoseo.text,
+          rawResponse:
+              '{"corrected_text": "Tú tienes razón, amigo, así que adelante."}',
+          parsed: const _ParsedResponse(
+            validJson: true,
+            correctedText: 'Tú tienes razón, amigo, así que adelante.',
+          ),
+          latencyMs: 110,
+        ),
+      ];
+
+      final aggregate = _aggregateResultsForFixtures(
+        cases: const [sentenceCorrectVoseo],
+        results: repeatedOutputs,
+      );
+
+      expect(aggregate.outputsIdentical, isFalse);
+      expect(aggregate.distinctActualOutputs, [
+        'Vos tenés razón, che, así que dale nomás.',
+        'Tú tienes razón, amigo, así que adelante.',
+      ]);
+    });
+  });
+
+  test('report renders task status and per-model outcome rates', () {
+    final report = _buildReport(
+      models: ['model-a', 'model-b'],
+      generatedAt: DateTime.utc(2026, 1, 1, 12),
+      cases: const [sentenceGrammarAgreement, sentenceCorrectVoseo],
+      runsPerCase: 1,
+      resultsByCaseThenModel: {
+        sentenceGrammarAgreement.id: {
+          'model-a': [
+            _successResult(
+              model: 'model-a',
+              caseId: sentenceGrammarAgreement.id,
+              inputText: sentenceGrammarAgreement.text,
+              rawResponse:
+                  '{"corrected_text": "Los niños comen muchas manzanas en el jardín."}',
+              parsed: const _ParsedResponse(
+                validJson: true,
+                correctedText: 'Los niños comen muchas manzanas en el jardín.',
+              ),
+              latencyMs: 200,
+              inputTokens: 20,
+              outputTokens: 10,
+              totalTokens: 30,
             ),
-            latencyMs: 220,
-            inputTokens: 20,
-            outputTokens: 10,
-            totalTokens: 30,
-          ),
+          ],
+          'model-b': [
+            _successResult(
+              model: 'model-b',
+              caseId: sentenceGrammarAgreement.id,
+              inputText: sentenceGrammarAgreement.text,
+              rawResponse:
+                  '{"corrected_text": "Los niño come muchas manzana en el jardín."}',
+              parsed: const _ParsedResponse(
+                validJson: true,
+                correctedText: 'Los niño come muchas manzana en el jardín.',
+              ),
+              latencyMs: 220,
+              inputTokens: 20,
+              outputTokens: 10,
+              totalTokens: 30,
+            ),
+          ],
         },
         sentenceCorrectVoseo.id: {
-          'model-a': _successResult(
-            model: 'model-a',
-            caseId: sentenceCorrectVoseo.id,
-            inputText: sentenceCorrectVoseo.text,
-            rawResponse:
-                '{"corrected_text": "Vos tenés razón, che, así que dale nomás."}',
-            parsed: const _ParsedResponse(
-              validJson: true,
-              correctedText: 'Vos tenés razón, che, así que dale nomás.',
+          'model-a': [
+            _successResult(
+              model: 'model-a',
+              caseId: sentenceCorrectVoseo.id,
+              inputText: sentenceCorrectVoseo.text,
+              rawResponse:
+                  '{"corrected_text": "Vos tenés razón, che, así que dale nomás."}',
+              parsed: const _ParsedResponse(
+                validJson: true,
+                correctedText: 'Vos tenés razón, che, así que dale nomás.',
+              ),
+              latencyMs: 210,
+              inputTokens: 20,
+              outputTokens: 10,
+              totalTokens: 30,
             ),
-            latencyMs: 210,
-            inputTokens: 20,
-            outputTokens: 10,
-            totalTokens: 30,
-          ),
-          'model-b': _successResult(
-            model: 'model-b',
-            caseId: sentenceCorrectVoseo.id,
-            inputText: sentenceCorrectVoseo.text,
-            rawResponse:
-                '{"corrected_text": "Tú tienes razón, amigo, así que adelante."}',
-            parsed: const _ParsedResponse(
-              validJson: true,
-              correctedText: 'Tú tienes razón, amigo, así que adelante.',
+          ],
+          'model-b': [
+            _successResult(
+              model: 'model-b',
+              caseId: sentenceCorrectVoseo.id,
+              inputText: sentenceCorrectVoseo.text,
+              rawResponse:
+                  '{"corrected_text": "Tú tienes razón, amigo, así que adelante."}',
+              parsed: const _ParsedResponse(
+                validJson: true,
+                correctedText: 'Tú tienes razón, amigo, así que adelante.',
+              ),
+              latencyMs: 230,
+              inputTokens: 20,
+              outputTokens: 10,
+              totalTokens: 30,
             ),
-            latencyMs: 230,
-            inputTokens: 20,
-            outputTokens: 10,
-            totalTokens: 30,
-          ),
+          ],
         },
       },
     );
 
-    expect(report, contains('| model-a | true | expected_correction |'));
-    expect(report, contains('| model-a | true | unchanged_control |'));
-    expect(report, contains('| model-b | true | missed_correction |'));
-    expect(report, contains('| model-b | true | over_correction |'));
+    expect(report, contains('| model-a | sentence-grammar-agreement | 1 |'));
+    expect(report, contains('| model-a | sentence-correct-voseo | 1 |'));
+    expect(report, contains('| model-b | sentence-grammar-agreement | 1 |'));
+    expect(report, contains('| model-b | sentence-correct-voseo | 1 |'));
+    expect(report, contains('| PASS | true | expected_correction |'));
+    expect(report, contains('| PASS | true | unchanged_control |'));
+    expect(report, contains('| FAIL | true | missed_correction |'));
+    expect(report, contains('| FAIL | true | over_correction |'));
     expect(
       report,
-      contains(
-        '| model-a | 2 | 100.0% (2/2) | 100.0% (2/2) | '
-        '100.0% (1/1) | 0.0% (0/1) | 100.0% (1/1) | '
-        '0.0% (0/1) | 0 | 205.0 | 60 |',
-      ),
+      contains('| model-a | 2 | 2 | 100.0% (2/2) | 205.0 | 200 | 210 | 60 |'),
+    );
+    expect(
+      report,
+      contains('| model-b | 2 | 0 | 0.0% (0/2) | 225.0 | 220 | 230 | 60 |'),
     );
     expect(
       report,
       contains(
-        '| model-b | 2 | 100.0% (2/2) | 0.0% (0/2) | '
-        '0.0% (0/1) | 100.0% (1/1) | 0.0% (0/1) | '
-        '100.0% (1/1) | 0 | 225.0 | 60 |',
+        '| model-a | 100.0% (2/2) | 100.0% (1/1) | 0.0% (0/1) | '
+        '100.0% (1/1) | 0.0% (0/1) | 0 |',
       ),
     );
   });
@@ -1554,29 +1980,34 @@ void main() {
           kind: BenchmarkFixtureKind.correction,
         ),
       ],
+      runsPerCase: 1,
       resultsByCaseThenModel: {
         'TEST-1': {
-          'test-model-a': _successResult(
-            model: 'test-model-a',
-            caseId: 'TEST-1',
-            inputText: 'Los niño come.',
-            rawResponse: '{"corrected_text": "Los niños comen."}',
-            parsed: const _ParsedResponse(
-              validJson: true,
-              correctedText: 'Los niños comen.',
+          'test-model-a': [
+            _successResult(
+              model: 'test-model-a',
+              caseId: 'TEST-1',
+              inputText: 'Los niño come.',
+              rawResponse: '{"corrected_text": "Los niños comen."}',
+              parsed: const _ParsedResponse(
+                validJson: true,
+                correctedText: 'Los niños comen.',
+              ),
+              latencyMs: 200,
+              inputTokens: 20,
+              outputTokens: 500000,
+              totalTokens: 500020,
             ),
-            latencyMs: 200,
-            inputTokens: 20,
-            outputTokens: 500000,
-            totalTokens: 500020,
-          ),
-          'test-model-b': _errorResult(
-            model: 'test-model-b',
-            caseId: 'TEST-1',
-            inputText: 'Los niño come.',
-            latencyMs: 9000,
-            error: StateError('timed out'),
-          ),
+          ],
+          'test-model-b': [
+            _errorResult(
+              model: 'test-model-b',
+              caseId: 'TEST-1',
+              inputText: 'Los niño come.',
+              latencyMs: 9000,
+              error: StateError('timed out'),
+            ),
+          ],
         },
       },
       branch: 'prepare-first-pass-live-model-run-config',
@@ -1599,36 +2030,41 @@ void main() {
           kind: BenchmarkFixtureKind.correction,
         ),
       ],
+      runsPerCase: 1,
       resultsByCaseThenModel: {
         'TEST-1': {
-          'gpt-4.1': _successResult(
-            model: 'gpt-4.1',
-            caseId: 'TEST-1',
-            inputText: 'Los niño come.',
-            rawResponse: '{"corrected_text": "Los niños comen."}',
-            parsed: const _ParsedResponse(
-              validJson: true,
-              correctedText: 'Los niños comen.',
+          'gpt-4.1': [
+            _successResult(
+              model: 'gpt-4.1',
+              caseId: 'TEST-1',
+              inputText: 'Los niño come.',
+              rawResponse: '{"corrected_text": "Los niños comen."}',
+              parsed: const _ParsedResponse(
+                validJson: true,
+                correctedText: 'Los niños comen.',
+              ),
+              latencyMs: 200,
+              inputTokens: 20,
+              outputTokens: 500000,
+              totalTokens: 500020,
             ),
-            latencyMs: 200,
-            inputTokens: 20,
-            outputTokens: 500000,
-            totalTokens: 500020,
-          ),
-          'gpt-5.3': _successResult(
-            model: 'gpt-5.3',
-            caseId: 'TEST-1',
-            inputText: 'Los niño come.',
-            rawResponse: '{"corrected_text": "Los niños comen."}',
-            parsed: const _ParsedResponse(
-              validJson: true,
-              correctedText: 'Los niños comen.',
+          ],
+          'gpt-5.3': [
+            _successResult(
+              model: 'gpt-5.3',
+              caseId: 'TEST-1',
+              inputText: 'Los niño come.',
+              rawResponse: '{"corrected_text": "Los niños comen."}',
+              parsed: const _ParsedResponse(
+                validJson: true,
+                correctedText: 'Los niños comen.',
+              ),
+              latencyMs: 250,
+              inputTokens: 20,
+              outputTokens: 500000,
+              totalTokens: 500020,
             ),
-            latencyMs: 250,
-            inputTokens: 20,
-            outputTokens: 500000,
-            totalTokens: 500020,
-          ),
+          ],
         },
       },
     );
@@ -1645,31 +2081,31 @@ void main() {
     expect(
       report,
       contains(
-        '| gpt-4.1 | true | unscored | 200 | 20/500000/500020 | '
+        '| gpt-4.1 | TEST-1 | 1 | Los niño come. | (unscored) | '
+        'Los niños comen. | FAIL | true | unscored | 200 | 20/500000/500020 | '
         'verified 4.000040 |',
       ),
     );
     expect(
       report,
       contains(
-        '| gpt-5.3 | true | unscored | 250 | 20/500000/500020 | '
+        '| gpt-5.3 | TEST-1 | 1 | Los niño come. | (unscored) | '
+        'Los niños comen. | FAIL | true | unscored | 250 | 20/500000/500020 | '
         'unknown (pricing unavailable/unverified) |',
       ),
     );
     expect(
       report,
       contains(
-        '| gpt-4.1 | 1 | 100.0% (1/1) | 0.0% (0/0) | '
-        '0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | '
-        '0 | 200.0 | 500020 | verified 4.000040 |',
+        '| gpt-4.1 | 1 | 0 | 0.0% (0/0) | 200.0 | 200 | 200 | '
+        '500020 | verified 4.000040 |',
       ),
     );
     expect(
       report,
       contains(
-        '| gpt-5.3 | 1 | 100.0% (1/1) | 0.0% (0/0) | '
-        '0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | '
-        '0 | 250.0 | 500020 | '
+        '| gpt-5.3 | 1 | 0 | 0.0% (0/0) | 250.0 | 250 | 250 | '
+        '500020 | '
         'unknown (pricing unavailable/unverified) |',
       ),
     );
@@ -1706,27 +2142,40 @@ void main() {
       final models = config.models;
       final cases = config.cases;
       final httpClient = HttpClient();
-      final resultsByCaseThenModel = <String, Map<String, _ModelCaseResult>>{};
+      final resultsByCaseThenModel =
+          <String, Map<String, List<_ModelCaseResult>>>{};
 
       try {
         for (final testCase in cases) {
-          final resultsByModel = <String, _ModelCaseResult>{};
+          final resultsByModel = <String, List<_ModelCaseResult>>{};
           // ignore: avoid_print
           print('=== ${testCase.id} ===');
 
           for (final model in models) {
-            final result = await _runOnce(
-              httpClient: httpClient,
-              apiKey: apiKey,
-              model: model,
-              testCase: testCase,
-            );
-            resultsByModel[model] = result;
-            // ignore: avoid_print
-            print('[$model] ${_describeResult(result)}');
-            await Future<void>.delayed(
-              const Duration(milliseconds: callDelayMs),
-            );
+            final modelResults = <_ModelCaseResult>[];
+            for (
+              var runNumber = 1;
+              runNumber <= config.runsPerCase;
+              runNumber++
+            ) {
+              final result = await _runOnce(
+                httpClient: httpClient,
+                apiKey: apiKey,
+                model: model,
+                testCase: testCase,
+                runNumber: runNumber,
+              );
+              modelResults.add(result);
+              final runLabel = config.runsPerCase == 1
+                  ? model
+                  : '$model run $runNumber/${config.runsPerCase}';
+              // ignore: avoid_print
+              print('[$runLabel] ${_describeResult(result)}');
+              await Future<void>.delayed(
+                const Duration(milliseconds: callDelayMs),
+              );
+            }
+            resultsByModel[model] = modelResults;
           }
 
           resultsByCaseThenModel[testCase.id] = resultsByModel;
@@ -1739,6 +2188,7 @@ void main() {
         models: models,
         generatedAt: DateTime.now().toUtc(),
         cases: cases,
+        runsPerCase: config.runsPerCase,
         resultsByCaseThenModel: resultsByCaseThenModel,
         branch: _gitBranch(),
         commit: _gitHead(),
@@ -1748,7 +2198,8 @@ void main() {
       // ignore: avoid_print
       print(
         'Wrote ${config.outputPath} '
-        '(models: ${models.join(", ")}, cases: ${config.caseIds.join(", ")})',
+        '(models: ${models.join(", ")}, cases: ${config.caseIds.join(", ")}, '
+        'runs per case: ${config.runsPerCase})',
       );
     },
     timeout: const Timeout(Duration(minutes: 30)),
@@ -1765,6 +2216,7 @@ const String _expectedReportGolden =
 - Prompt version: `v1`
 - Models: `test-model-a`, `test-model-b`
 - Fixture case ids: `TEST-1`
+- Runs per model/fixture case: `1`
 - Generated: 2026-01-01T12:00:00.000Z
 - Git branch: `prepare-first-pass-live-model-run-config`
 - Git commit: `abc1234`
@@ -1782,17 +2234,31 @@ Unknown cost because pricing is unavailable or unverified for: `test-model-a`, `
 - Note: Synthetic case.
 - Expected corrected_text: `(unscored)`
 
-| Model | Valid JSON | Review status | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| test-model-a | true | unscored | 200 | 20/500000/500020 | unknown (pricing unavailable/unverified) | Los niños comen. | {"corrected_text": "Los niños comen."} |
-| test-model-b | ERROR | error | 9000 | | | | Bad state: timed out |
+| Model | Runs passed | Outputs identical | Distinct actual outputs | Avg latency (ms) | Min latency (ms) | Max latency (ms) | Total tokens | Total est. cost (USD) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| test-model-a | 0/0 | true | 1. Los niños comen. | 200.0 | 200 | 200 | 500020 | unknown (pricing unavailable/unverified) |
+| test-model-b | 0/0 | true | 1. ERROR: Bad state: timed out | 9000.0 | 9000 | 9000 | 0 | unknown (pricing unavailable/unverified) |
+
+### Individual runs
+
+| Model | Fixture id | Run | Input text | Expected output | Actual output | Pass/fail | Valid JSON | Review status | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | raw_response |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| test-model-a | TEST-1 | 1 | Los niño come. | (unscored) | Los niños comen. | FAIL | true | unscored | 200 | 20/500000/500020 | unknown (pricing unavailable/unverified) | {"corrected_text": "Los niños comen."} |
+| test-model-b | TEST-1 | 1 | Los niño come. | (unscored) | ERROR: Bad state: timed out | FAIL | false | error | 9000 | unknown | unknown (pricing unavailable/unverified) | Bad state: timed out |
 
 ---
 
-## Overall summary
+## Overall model aggregates
 
-| Model | Cases | Valid JSON rate | Task success rate | Expected corrections | Missed fixes | Controls unchanged | Over-corrections | Unexpected outputs | Avg latency (ms) | Total tokens | Total est. cost (USD) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| test-model-a | 1 | 100.0% (1/1) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0 | 200.0 | 500020 | unknown (pricing unavailable/unverified) |
-| test-model-b | 1 | 0.0% (0/1) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0 | n/a | 0 | unknown (pricing unavailable/unverified) |
+| Model | Total runs | Total passed | Pass rate | Avg latency (ms) | Min latency (ms) | Max latency (ms) | Total tokens | Total est. cost (USD) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| test-model-a | 1 | 0 | 0.0% (0/0) | 200.0 | 200 | 200 | 500020 | unknown (pricing unavailable/unverified) |
+| test-model-b | 1 | 0 | 0.0% (0/0) | 9000.0 | 9000 | 9000 | 0 | unknown (pricing unavailable/unverified) |
+
+## Overall scoring breakdown
+
+| Model | Valid JSON rate | Expected corrections | Missed fixes | Controls unchanged | Over-corrections | Unexpected outputs |
+| --- | --- | --- | --- | --- | --- | --- |
+| test-model-a | 100.0% (1/1) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0 |
+| test-model-b | 0.0% (0/1) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0 |
 ''';
