@@ -212,6 +212,36 @@ double? estimateCostUsd({
 /// benchmark fixtures, not a harness-local ad hoc fixture list.
 const List<BenchmarkFixture> _cases = firstPassModelComparisonFixtures;
 
+/// Harness-local expected outputs for exact first-pass result scoring.
+///
+/// The shared benchmark fixtures intentionally stay prompt/report agnostic;
+/// expected output lives here because this harness owns the narrow
+/// grammar/spelling/punctuation-only interpretation. Control fixtures are
+/// included explicitly with unchanged text so over-corrections can be counted.
+final Map<String, String> _firstPassExpectedCorrectedText = Map.unmodifiable({
+  'short-phrase-missing-accent': 'Voy al parque mañana por la tarde.',
+  'sentence-grammar-agreement': 'Los niños comen muchas manzanas en el jardín.',
+  'sentence-punctuation-question':
+      '¿Cómo estás hoy? Necesito saber si vienes a la fiesta.',
+  'sentence-correct-voseo': sentenceCorrectVoseo.text,
+  'sentence-regional-word-choice': sentenceRegionalWordChoice.text,
+  'paragraph-calcs-natural': paragraphCalcsNatural.text,
+  'paragraph-mixed-errors':
+      'Ayer fui a la tienda y compré pan, leche y unas manzanas. Cuando '
+      'llegué a casa, mi hermano me preguntó si quería ayudarlo con la '
+      'tarea, pero yo estaba muy cansado después del trabajo.',
+  'two-paragraph-already-correct': twoParagraphAlreadyCorrect.text,
+  'near-limit-full-text':
+      'El fin de semana pasado decidimos hacer un viaje corto a la montaña '
+      'para descansar del trabajo y de la ciudad. Salimos muy temprano, antes '
+      'de que saliera el sol, y llegamos al pequeño pueblo justo a tiempo para '
+      'desayunar en un café que mi hermano había recomendado. Durante la tarde '
+      'caminamos por un sendero cerca del río, sacamos muchas fotos y hablamos '
+      'de nuestros planes para el próximo año. Cuando volvimos al hotel, todos '
+      'estábamos muy cansados pero contentos, y decidimos que teníamos que '
+      'regresar pronto porque el lugar nos había gustado mucho a todos.',
+});
+
 List<String> _parseCommaSeparatedValues(String raw) {
   return raw
       .split(',')
@@ -399,7 +429,7 @@ class _ParsedResponse {
 /// the model not to include one, since real models sometimes add one
 /// anyway and this harness is measuring JSON reliability, not punishing a
 /// recoverable formatting slip.
-_ParsedResponse parseCorrectedTextResponse(String replyText) {
+_ParsedResponse _parseCorrectedTextResponse(String replyText) {
   final trimmed = replyText.trim();
   final start = trimmed.indexOf('{');
   final end = trimmed.lastIndexOf('}');
@@ -465,6 +495,72 @@ class _ModelCaseResult {
   final Object? error;
 
   bool get isError => error != null;
+}
+
+enum _ReviewStatus {
+  expectedCorrection('expected_correction'),
+  missedCorrection('missed_correction'),
+  unexpectedCorrection('unexpected_correction'),
+  unchangedControl('unchanged_control'),
+  overCorrection('over_correction'),
+  invalidJson('invalid_json'),
+  error('error'),
+  unscored('unscored');
+
+  const _ReviewStatus(this.reportLabel);
+
+  final String reportLabel;
+
+  bool get isTaskSuccess =>
+      this == _ReviewStatus.expectedCorrection ||
+      this == _ReviewStatus.unchangedControl;
+}
+
+_ReviewStatus _classifyFirstPassOutput({
+  required BenchmarkFixtureKind kind,
+  required String inputText,
+  required String? expectedCorrectedText,
+  required bool validJson,
+  required String? correctedText,
+  required bool isError,
+}) {
+  if (isError) {
+    return _ReviewStatus.error;
+  }
+  if (!validJson || correctedText == null) {
+    return _ReviewStatus.invalidJson;
+  }
+  if (expectedCorrectedText == null) {
+    return _ReviewStatus.unscored;
+  }
+
+  if (kind == BenchmarkFixtureKind.control) {
+    return correctedText == expectedCorrectedText
+        ? _ReviewStatus.unchangedControl
+        : _ReviewStatus.overCorrection;
+  }
+
+  if (correctedText == expectedCorrectedText) {
+    return _ReviewStatus.expectedCorrection;
+  }
+  if (correctedText == inputText) {
+    return _ReviewStatus.missedCorrection;
+  }
+  return _ReviewStatus.unexpectedCorrection;
+}
+
+_ReviewStatus _reviewStatusFor(
+  BenchmarkFixture testCase,
+  _ModelCaseResult result,
+) {
+  return _classifyFirstPassOutput(
+    kind: testCase.kind,
+    inputText: testCase.text,
+    expectedCorrectedText: _firstPassExpectedCorrectedText[testCase.id],
+    validJson: result.validJson,
+    correctedText: result.correctedText,
+    isError: result.isError,
+  );
 }
 
 _ModelCaseResult _successResult({
@@ -570,7 +666,7 @@ Future<_ModelCaseResult> _runOnce({
     }
 
     final replyText = extractReplyText(decoded);
-    final parsed = parseCorrectedTextResponse(replyText);
+    final parsed = _parseCorrectedTextResponse(replyText);
 
     final usage = decoded['usage'];
     int? inputTokens;
@@ -706,22 +802,29 @@ String _buildReport({
       ..writeln()
       ..writeln('- Input text: `${testCase.text}`')
       ..writeln('- Note: ${testCase.note}')
+      ..writeln(
+        '- Expected corrected_text: '
+        '`${_firstPassExpectedCorrectedText[testCase.id] ?? '(unscored)'}`',
+      )
       ..writeln()
       ..writeln(
-        '| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | '
-        'Est. cost (USD) | corrected_text | raw_response |',
+        '| Model | Valid JSON | Review status | Latency (ms) | '
+        'Tokens (in/out/total) | Est. cost (USD) | corrected_text | '
+        'raw_response |',
       )
-      ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
+      ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- |');
 
     for (final model in models) {
       final result = resultsByModel[model];
       if (result == null) {
-        report.writeln('| $model | (no result) | | | | | |');
+        report.writeln('| $model | (no result) | | | | | | |');
         continue;
       }
+      final status = _reviewStatusFor(testCase, result).reportLabel;
       if (result.isError) {
         report.writeln(
-          '| $model | ERROR | ${result.latencyMs} | | | | ${_markdownTableCell(result.error.toString())} |',
+          '| $model | ERROR | $status | ${result.latencyMs} | | | | '
+          '${_markdownTableCell(result.error.toString())} |',
         );
         continue;
       }
@@ -734,7 +837,8 @@ String _buildReport({
       );
       final rawResponse = _markdownTableCell(result.rawResponse ?? '(missing)');
       report.writeln(
-        '| $model | ${result.validJson} | ${result.latencyMs} | $tokens | $cost | $corrected | $rawResponse |',
+        '| $model | ${result.validJson} | $status | ${result.latencyMs} | '
+        '$tokens | $cost | $corrected | $rawResponse |',
       );
     }
     report.writeln();
@@ -746,14 +850,27 @@ String _buildReport({
     ..writeln('## Overall summary')
     ..writeln()
     ..writeln(
-      '| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | '
-      'Total est. cost (USD) |',
+      '| Model | Cases | Valid JSON rate | Task success rate | '
+      'Expected corrections | Missed fixes | Controls unchanged | '
+      'Over-corrections | Unexpected outputs | Avg latency (ms) | '
+      'Total tokens | Total est. cost (USD) |',
     )
-    ..writeln('| --- | --- | --- | --- | --- | --- |');
+    ..writeln(
+      '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    );
 
   for (final model in models) {
     var caseCount = 0;
     var validJsonCount = 0;
+    var scoredCount = 0;
+    var taskSuccessCount = 0;
+    var expectedCorrectionCount = 0;
+    var correctionCaseCount = 0;
+    var missedCorrectionCount = 0;
+    var unchangedControlCount = 0;
+    var controlCaseCount = 0;
+    var overCorrectionCount = 0;
+    var unexpectedCorrectionCount = 0;
     var latencySum = 0;
     var latencyCount = 0;
     var totalTokens = 0;
@@ -768,6 +885,38 @@ String _buildReport({
       caseCount++;
       if (result.validJson) {
         validJsonCount++;
+      }
+      final status = _reviewStatusFor(testCase, result);
+      final hasExpectedOutput = _firstPassExpectedCorrectedText.containsKey(
+        testCase.id,
+      );
+      if (hasExpectedOutput) {
+        scoredCount++;
+      }
+      if (hasExpectedOutput && status.isTaskSuccess) {
+        taskSuccessCount++;
+      }
+      if (hasExpectedOutput && testCase.isCorrectionCase) {
+        correctionCaseCount++;
+      }
+      if (hasExpectedOutput && testCase.isControlCase) {
+        controlCaseCount++;
+      }
+      switch (status) {
+        case _ReviewStatus.expectedCorrection:
+          expectedCorrectionCount++;
+        case _ReviewStatus.missedCorrection:
+          missedCorrectionCount++;
+        case _ReviewStatus.unexpectedCorrection:
+          unexpectedCorrectionCount++;
+        case _ReviewStatus.unchangedControl:
+          unchangedControlCount++;
+        case _ReviewStatus.overCorrection:
+          overCorrectionCount++;
+        case _ReviewStatus.invalidJson:
+        case _ReviewStatus.error:
+        case _ReviewStatus.unscored:
+          break;
       }
       if (!result.isError) {
         latencySum += result.latencyMs;
@@ -786,6 +935,23 @@ String _buildReport({
         ? '0.0% (0/0)'
         : '${(validJsonCount / caseCount * 100).toStringAsFixed(1)}% '
               '($validJsonCount/$caseCount)';
+    final taskSuccessRate = _formatRate(taskSuccessCount, scoredCount);
+    final expectedCorrectionRate = _formatRate(
+      expectedCorrectionCount,
+      correctionCaseCount,
+    );
+    final missedCorrectionRate = _formatRate(
+      missedCorrectionCount,
+      correctionCaseCount,
+    );
+    final unchangedControlRate = _formatRate(
+      unchangedControlCount,
+      controlCaseCount,
+    );
+    final overCorrectionRate = _formatRate(
+      overCorrectionCount,
+      controlCaseCount,
+    );
     final avgLatency = latencyCount == 0
         ? 'n/a'
         : (latencySum / latencyCount).toStringAsFixed(1);
@@ -794,11 +960,23 @@ String _buildReport({
         : _formatCostForReport(null);
 
     report.writeln(
-      '| $model | $caseCount | $validJsonRate | $avgLatency | $totalTokens | $costLabel |',
+      '| $model | $caseCount | $validJsonRate | $taskSuccessRate | '
+      '$expectedCorrectionRate | $missedCorrectionRate | '
+      '$unchangedControlRate | $overCorrectionRate | '
+      '$unexpectedCorrectionCount | $avgLatency | $totalTokens | '
+      '$costLabel |',
     );
   }
 
   return report.toString();
+}
+
+String _formatRate(int numerator, int denominator) {
+  if (denominator == 0) {
+    return '0.0% (0/0)';
+  }
+  return '${(numerator / denominator * 100).toStringAsFixed(1)}% '
+      '($numerator/$denominator)';
 }
 
 void main() {
@@ -838,6 +1016,23 @@ void main() {
       _cases.where((c) => c.isControlCase && c.isValidRegionalSpanish),
       isNotEmpty,
     );
+  });
+
+  test('first-pass expected outputs cover every harness fixture', () {
+    expect(
+      _firstPassExpectedCorrectedText.keys.toSet(),
+      _cases.map((testCase) => testCase.id).toSet(),
+    );
+
+    for (final testCase in _cases) {
+      final expected = _firstPassExpectedCorrectedText[testCase.id];
+      expect(expected, isNotNull, reason: testCase.id);
+      if (testCase.isControlCase) {
+        expect(expected, testCase.text, reason: testCase.id);
+      } else {
+        expect(expected, isNot(testCase.text), reason: testCase.id);
+      }
+    }
   });
 
   test('systemPrompt matches the issue wording exactly', () {
@@ -939,6 +1134,105 @@ void main() {
     });
   });
 
+  group('_classifyFirstPassOutput', () {
+    test('marks exact expected fixes on correction cases', () {
+      final status = _classifyFirstPassOutput(
+        kind: BenchmarkFixtureKind.correction,
+        inputText: 'Los niño come.',
+        expectedCorrectedText: 'Los niños comen.',
+        validJson: true,
+        correctedText: 'Los niños comen.',
+        isError: false,
+      );
+
+      expect(status, _ReviewStatus.expectedCorrection);
+    });
+
+    test('marks unchanged correction cases as missed corrections', () {
+      final status = _classifyFirstPassOutput(
+        kind: BenchmarkFixtureKind.correction,
+        inputText: 'Los niño come.',
+        expectedCorrectedText: 'Los niños comen.',
+        validJson: true,
+        correctedText: 'Los niño come.',
+        isError: false,
+      );
+
+      expect(status, _ReviewStatus.missedCorrection);
+    });
+
+    test('marks changed-but-not-expected correction cases separately', () {
+      final status = _classifyFirstPassOutput(
+        kind: BenchmarkFixtureKind.correction,
+        inputText: 'Los niño come.',
+        expectedCorrectedText: 'Los niños comen.',
+        validJson: true,
+        correctedText: 'Los niños comen bien.',
+        isError: false,
+      );
+
+      expect(status, _ReviewStatus.unexpectedCorrection);
+    });
+
+    test('marks unchanged controls and over-corrected controls', () {
+      final unchanged = _classifyFirstPassOutput(
+        kind: BenchmarkFixtureKind.control,
+        inputText: sentenceCorrectVoseo.text,
+        expectedCorrectedText: sentenceCorrectVoseo.text,
+        validJson: true,
+        correctedText: sentenceCorrectVoseo.text,
+        isError: false,
+      );
+      final overCorrected = _classifyFirstPassOutput(
+        kind: BenchmarkFixtureKind.control,
+        inputText: sentenceCorrectVoseo.text,
+        expectedCorrectedText: sentenceCorrectVoseo.text,
+        validJson: true,
+        correctedText: 'Tú tienes razón, amigo, así que adelante.',
+        isError: false,
+      );
+
+      expect(unchanged, _ReviewStatus.unchangedControl);
+      expect(overCorrected, _ReviewStatus.overCorrection);
+    });
+
+    test('marks invalid JSON, errors, and unscored cases distinctly', () {
+      expect(
+        _classifyFirstPassOutput(
+          kind: BenchmarkFixtureKind.correction,
+          inputText: 'Los niño come.',
+          expectedCorrectedText: 'Los niños comen.',
+          validJson: false,
+          correctedText: null,
+          isError: false,
+        ),
+        _ReviewStatus.invalidJson,
+      );
+      expect(
+        _classifyFirstPassOutput(
+          kind: BenchmarkFixtureKind.correction,
+          inputText: 'Los niño come.',
+          expectedCorrectedText: 'Los niños comen.',
+          validJson: false,
+          correctedText: null,
+          isError: true,
+        ),
+        _ReviewStatus.error,
+      );
+      expect(
+        _classifyFirstPassOutput(
+          kind: BenchmarkFixtureKind.correction,
+          inputText: 'Los niño come.',
+          expectedCorrectedText: null,
+          validJson: true,
+          correctedText: 'Los niños comen.',
+          isError: false,
+        ),
+        _ReviewStatus.unscored,
+      );
+    });
+  });
+
   group('buildChatCompletionsBody', () {
     test('has model, messages, and strict corrected_text response schema', () {
       final body = buildChatCompletionsBody(
@@ -956,15 +1250,15 @@ void main() {
     });
   });
 
-  group('parseCorrectedTextResponse', () {
+  group('_parseCorrectedTextResponse', () {
     test('parses a well-formed contract response', () {
-      final parsed = parseCorrectedTextResponse('{"corrected_text": "Hola."}');
+      final parsed = _parseCorrectedTextResponse('{"corrected_text": "Hola."}');
       expect(parsed.validJson, isTrue);
       expect(parsed.correctedText, 'Hola.');
     });
 
     test('tolerates a Markdown code fence around the JSON object', () {
-      final parsed = parseCorrectedTextResponse(
+      final parsed = _parseCorrectedTextResponse(
         '```json\n{"corrected_text": "Hola."}\n```',
       );
       expect(parsed.validJson, isTrue);
@@ -972,7 +1266,7 @@ void main() {
     });
 
     test('preserves Spanish diacritics and ñ in the parsed value', () {
-      final parsed = parseCorrectedTextResponse(
+      final parsed = _parseCorrectedTextResponse(
         '{"corrected_text": "Mañana visitaré a mi abuela junto al río."}',
       );
       expect(parsed.validJson, isTrue);
@@ -980,30 +1274,30 @@ void main() {
     });
 
     test('marks invalid when the reply is not JSON at all', () {
-      final parsed = parseCorrectedTextResponse('not json');
+      final parsed = _parseCorrectedTextResponse('not json');
       expect(parsed.validJson, isFalse);
       expect(parsed.correctedText, isNull);
     });
 
     test('marks invalid when corrected_text is missing', () {
-      final parsed = parseCorrectedTextResponse('{"other_field": "x"}');
+      final parsed = _parseCorrectedTextResponse('{"other_field": "x"}');
       expect(parsed.validJson, isFalse);
     });
 
     test('marks invalid when extra fields are present', () {
-      final parsed = parseCorrectedTextResponse(
+      final parsed = _parseCorrectedTextResponse(
         '{"corrected_text": "Hola.", "explanation": "changed punctuation"}',
       );
       expect(parsed.validJson, isFalse);
     });
 
     test('marks invalid when corrected_text is not a string', () {
-      final parsed = parseCorrectedTextResponse('{"corrected_text": 5}');
+      final parsed = _parseCorrectedTextResponse('{"corrected_text": 5}');
       expect(parsed.validJson, isFalse);
     });
 
     test('marks invalid for an empty string', () {
-      final parsed = parseCorrectedTextResponse('');
+      final parsed = _parseCorrectedTextResponse('');
       expect(parsed.validJson, isFalse);
     });
   });
@@ -1135,6 +1429,101 @@ void main() {
     });
   });
 
+  test('report renders task status and per-model outcome rates', () {
+    final report = _buildReport(
+      models: ['model-a', 'model-b'],
+      generatedAt: DateTime.utc(2026, 1, 1, 12),
+      cases: const [sentenceGrammarAgreement, sentenceCorrectVoseo],
+      resultsByCaseThenModel: {
+        sentenceGrammarAgreement.id: {
+          'model-a': _successResult(
+            model: 'model-a',
+            caseId: sentenceGrammarAgreement.id,
+            inputText: sentenceGrammarAgreement.text,
+            rawResponse:
+                '{"corrected_text": "Los niños comen muchas manzanas en el jardín."}',
+            parsed: const _ParsedResponse(
+              validJson: true,
+              correctedText: 'Los niños comen muchas manzanas en el jardín.',
+            ),
+            latencyMs: 200,
+            inputTokens: 20,
+            outputTokens: 10,
+            totalTokens: 30,
+          ),
+          'model-b': _successResult(
+            model: 'model-b',
+            caseId: sentenceGrammarAgreement.id,
+            inputText: sentenceGrammarAgreement.text,
+            rawResponse:
+                '{"corrected_text": "Los niño come muchas manzana en el jardín."}',
+            parsed: const _ParsedResponse(
+              validJson: true,
+              correctedText: 'Los niño come muchas manzana en el jardín.',
+            ),
+            latencyMs: 220,
+            inputTokens: 20,
+            outputTokens: 10,
+            totalTokens: 30,
+          ),
+        },
+        sentenceCorrectVoseo.id: {
+          'model-a': _successResult(
+            model: 'model-a',
+            caseId: sentenceCorrectVoseo.id,
+            inputText: sentenceCorrectVoseo.text,
+            rawResponse:
+                '{"corrected_text": "Vos tenés razón, che, así que dale nomás."}',
+            parsed: const _ParsedResponse(
+              validJson: true,
+              correctedText: 'Vos tenés razón, che, así que dale nomás.',
+            ),
+            latencyMs: 210,
+            inputTokens: 20,
+            outputTokens: 10,
+            totalTokens: 30,
+          ),
+          'model-b': _successResult(
+            model: 'model-b',
+            caseId: sentenceCorrectVoseo.id,
+            inputText: sentenceCorrectVoseo.text,
+            rawResponse:
+                '{"corrected_text": "Tú tienes razón, amigo, así que adelante."}',
+            parsed: const _ParsedResponse(
+              validJson: true,
+              correctedText: 'Tú tienes razón, amigo, así que adelante.',
+            ),
+            latencyMs: 230,
+            inputTokens: 20,
+            outputTokens: 10,
+            totalTokens: 30,
+          ),
+        },
+      },
+    );
+
+    expect(report, contains('| model-a | true | expected_correction |'));
+    expect(report, contains('| model-a | true | unchanged_control |'));
+    expect(report, contains('| model-b | true | missed_correction |'));
+    expect(report, contains('| model-b | true | over_correction |'));
+    expect(
+      report,
+      contains(
+        '| model-a | 2 | 100.0% (2/2) | 100.0% (2/2) | '
+        '100.0% (1/1) | 0.0% (0/1) | 100.0% (1/1) | '
+        '0.0% (0/1) | 0 | 205.0 | 60 |',
+      ),
+    );
+    expect(
+      report,
+      contains(
+        '| model-b | 2 | 100.0% (2/2) | 0.0% (0/2) | '
+        '0.0% (0/1) | 100.0% (1/1) | 0.0% (0/1) | '
+        '100.0% (1/1) | 0 | 225.0 | 60 |',
+      ),
+    );
+  });
+
   test('report golden test', () {
     final report = _buildReport(
       models: ['test-model-a', 'test-model-b'],
@@ -1239,26 +1628,31 @@ void main() {
     expect(
       report,
       contains(
-        '| gpt-4.1 | true | 200 | 20/500000/500020 | verified 4.000040 |',
+        '| gpt-4.1 | true | unscored | 200 | 20/500000/500020 | '
+        'verified 4.000040 |',
       ),
     );
     expect(
       report,
       contains(
-        '| gpt-5.3 | true | 250 | 20/500000/500020 | '
+        '| gpt-5.3 | true | unscored | 250 | 20/500000/500020 | '
         'unknown (pricing unavailable/unverified) |',
       ),
     );
     expect(
       report,
       contains(
-        '| gpt-4.1 | 1 | 100.0% (1/1) | 200.0 | 500020 | verified 4.000040 |',
+        '| gpt-4.1 | 1 | 100.0% (1/1) | 0.0% (0/0) | '
+        '0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | '
+        '0 | 200.0 | 500020 | verified 4.000040 |',
       ),
     );
     expect(
       report,
       contains(
-        '| gpt-5.3 | 1 | 100.0% (1/1) | 250.0 | 500020 | '
+        '| gpt-5.3 | 1 | 100.0% (1/1) | 0.0% (0/0) | '
+        '0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | '
+        '0 | 250.0 | 500020 | '
         'unknown (pricing unavailable/unverified) |',
       ),
     );
@@ -1369,18 +1763,19 @@ Unknown cost because pricing is unavailable or unverified for: `test-model-a`, `
 
 - Input text: `Los niño come.`
 - Note: Synthetic case.
+- Expected corrected_text: `(unscored)`
 
-| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |
-| --- | --- | --- | --- | --- | --- | --- |
-| test-model-a | true | 200 | 20/500000/500020 | unknown (pricing unavailable/unverified) | Los niños comen. | {"corrected_text": "Los niños comen."} |
-| test-model-b | ERROR | 9000 | | | | Bad state: timed out |
+| Model | Valid JSON | Review status | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| test-model-a | true | unscored | 200 | 20/500000/500020 | unknown (pricing unavailable/unverified) | Los niños comen. | {"corrected_text": "Los niños comen."} |
+| test-model-b | ERROR | error | 9000 | | | | Bad state: timed out |
 
 ---
 
 ## Overall summary
 
-| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |
-| --- | --- | --- | --- | --- | --- |
-| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown (pricing unavailable/unverified) |
-| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown (pricing unavailable/unverified) |
+| Model | Cases | Valid JSON rate | Task success rate | Expected corrections | Missed fixes | Controls unchanged | Over-corrections | Unexpected outputs | Avg latency (ms) | Total tokens | Total est. cost (USD) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| test-model-a | 1 | 100.0% (1/1) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0 | 200.0 | 500020 | unknown (pricing unavailable/unverified) |
+| test-model-b | 1 | 0.0% (0/1) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0.0% (0/0) | 0 | n/a | 0 | unknown (pricing unavailable/unverified) |
 ''';
