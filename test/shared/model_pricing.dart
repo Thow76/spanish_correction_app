@@ -18,31 +18,42 @@
 // `$15.000000`) with no indication they were unverified. That is exactly
 // what this file exists to prevent.
 //
-// [verifiedPricingPerModel] starts EMPTY and MUST stay empty until a
-// maintainer personally opens the model provider's own published pricing
-// page, confirms the number, and adds an entry with [VerifiedModelPricing
-// .source] (the URL), [VerifiedModelPricing.pricingVersionOrEffectiveDate]
-// (the version or effective date shown on that page), and
-// [VerifiedModelPricing.dateChecked] (the day of that confirmation) all
-// filled in. Do not add an entry from memory, a script's guess, a
-// secondary/aggregator source, or a web-search summary — a model missing
-// from this map yields `unknown` cost (see [CostEstimate.unknown]), which
-// is correct and safe; a wrong entry silently produces a wrong yet
-// confident-looking dollar figure.
+// [verifiedPricingPerModel] MUST only contain entries whose model id and
+// price have been confirmed by a maintainer against the model provider's own
+// published pricing page. Each entry records the exact model id, token prices,
+// currency, pricing unit, source URL, pricing version/effective date if the
+// source publishes one, and date checked. Do not add an entry from memory, a
+// script's guess, a secondary/aggregator source, or a web-search summary — a
+// model missing from this map yields `unknown` cost (see
+// [CostEstimate.unknown]), which is correct and safe; a wrong entry silently
+// produces a wrong yet confident-looking dollar figure.
 
 /// One model's verified USD-per-million-token pricing, plus the metadata
 /// required to treat a cost estimate derived from it as trustworthy.
 class VerifiedModelPricing {
   const VerifiedModelPricing({
+    required this.modelId,
     required this.inputPerMillionUsd,
     required this.outputPerMillionUsd,
+    required this.currency,
+    required this.pricingUnit,
     required this.source,
     required this.pricingVersionOrEffectiveDate,
     required this.dateChecked,
   });
 
+  /// Exact API model id this entry applies to. This must match the key used
+  /// in [verifiedPricingPerModel].
+  final String modelId;
+
   final double inputPerMillionUsd;
   final double outputPerMillionUsd;
+
+  /// Currency used by [inputPerMillionUsd] and [outputPerMillionUsd].
+  final String currency;
+
+  /// Provider-published unit for these prices, e.g. `per 1M text tokens`.
+  final String pricingUnit;
 
   /// Where this pricing was confirmed — e.g. a URL to the provider's own
   /// published pricing page. Required, never blank.
@@ -60,10 +71,45 @@ class VerifiedModelPricing {
   final String dateChecked;
 }
 
-/// Verified pricing, keyed by model id. See the file header — this MUST
-/// stay empty until every entry has been personally confirmed against its
-/// own [VerifiedModelPricing.source].
-const Map<String, VerifiedModelPricing> verifiedPricingPerModel = {};
+/// Verified pricing, keyed by exact API model id.
+const Map<String, VerifiedModelPricing> verifiedPricingPerModel = {
+  'gpt-5.4': VerifiedModelPricing(
+    modelId: 'gpt-5.4',
+    inputPerMillionUsd: 2.50,
+    outputPerMillionUsd: 15.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-5.4',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+  'gpt-5.3-chat-latest': VerifiedModelPricing(
+    modelId: 'gpt-5.3-chat-latest',
+    inputPerMillionUsd: 1.75,
+    outputPerMillionUsd: 14.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-5.3-chat-latest',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+  'gpt-4.1': VerifiedModelPricing(
+    modelId: 'gpt-4.1',
+    inputPerMillionUsd: 2.00,
+    outputPerMillionUsd: 8.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-4.1',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+};
 
 /// The result of [estimateCostUsd]: either a verified dollar estimate plus
 /// the pricing metadata that justifies it, or an explicit "unknown" a
@@ -99,7 +145,11 @@ class CostEstimate {
     if (entry == null) {
       return null;
     }
-    return 'source=${entry.source}, '
+    return 'model=${entry.modelId}, '
+        'input=${entry.inputPerMillionUsd} ${entry.currency}, '
+        'output=${entry.outputPerMillionUsd} ${entry.currency}, '
+        'unit=${entry.pricingUnit}, '
+        'source=${entry.source}, '
         'pricing version/effective date=${entry.pricingVersionOrEffectiveDate}, '
         'checked=${entry.dateChecked}';
   }
@@ -139,25 +189,45 @@ String pricingSection(
   Map<String, VerifiedModelPricing> pricingTable = verifiedPricingPerModel,
 }) {
   final verifiedLines = <String>[];
+  final unknownModels = <String>[];
   for (final model in models) {
     final pricing = pricingTable[model];
     if (pricing == null) {
+      unknownModels.add(model);
       continue;
     }
     verifiedLines.add(
-      '- `$model`: source=${pricing.source}, '
+      '- `$model`: input=${pricing.inputPerMillionUsd} ${pricing.currency}, '
+      'output=${pricing.outputPerMillionUsd} ${pricing.currency}, '
+      'unit=${pricing.pricingUnit}, source=${pricing.source}, '
       'pricing version/effective date=${pricing.pricingVersionOrEffectiveDate}, '
       'checked=${pricing.dateChecked}',
     );
   }
 
-  final body = verifiedLines.isEmpty
-      ? 'No verified pricing is configured for any model in this report. '
-            'Every cost estimate below shows as `unknown` by design — see '
-            '`test/shared/model_pricing.dart` to add a verified entry once '
-            'a maintainer has verified pricing for that model against its '
-            'provider-published pricing page.'
-      : verifiedLines.join('\n');
+  final bodyLines = <String>[];
+  if (verifiedLines.isEmpty) {
+    bodyLines.add(
+      'No verified pricing is configured for any model in this report. '
+      'Every cost estimate below shows as `unknown` by design — see '
+      '`test/shared/model_pricing.dart` to add a verified entry once '
+      'a maintainer has verified pricing for that model against its '
+      'provider-published pricing page.',
+    );
+  } else {
+    bodyLines
+      ..add('Verified estimated costs use:')
+      ..addAll(verifiedLines);
+  }
 
-  return '## Pricing\n\n$body\n';
+  if (unknownModels.isNotEmpty) {
+    bodyLines
+      ..add('')
+      ..add(
+        'Unknown cost because pricing is unavailable or unverified for: '
+        '${unknownModels.map((model) => '`$model`').join(', ')}.',
+      );
+  }
+
+  return '## Pricing\n\n${bodyLines.join('\n')}\n';
 }

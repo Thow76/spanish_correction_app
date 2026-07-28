@@ -52,7 +52,7 @@
 //
 //   OPENAI_API_KEY=sk-... \
 //   MODEL_COMPARISON_LIVE=true \
-//   COMPARISON_MODELS=gpt-5.4,gpt-5.3,gpt-4.1 \
+//   COMPARISON_MODELS=gpt-5.4,gpt-5.3-chat-latest,gpt-4.1 \
 //   flutter test test/model_comparison_harness.dart --tags live --timeout none
 //
 // The same configuration can be passed with --dart-define:
@@ -61,13 +61,16 @@
 //     --tags live \
 //     --timeout none \
 //     --dart-define=MODEL_COMPARISON_LIVE=true \
-//     --dart-define=COMPARISON_MODELS=gpt-5.4,gpt-5.3,gpt-4.1 \
+//     --dart-define=COMPARISON_MODELS=gpt-5.4,gpt-5.3-chat-latest,gpt-4.1 \
 //     --dart-define=MODEL_COMPARISON_FIXTURE_IDS=short-phrase-missing-accent,sentence-grammar-agreement
 //
 // `COMPARISON_MODELS` is comma-separated and must contain exact OpenAI API
 // model IDs available to the account running the harness. If GPT-5.4,
-// GPT-5.3, and GPT-4.1 are the intended candidates, pass their exact API
-// model names explicitly there rather than editing this file.
+// GPT-5.3 Chat, and GPT-4.1 are the intended candidates, pass exact API
+// ids such as `gpt-5.4`, `gpt-5.3-chat-latest`, and `gpt-4.1` explicitly
+// there rather than editing this file. Plain display labels such as
+// `gpt-5.3` intentionally remain unpriced unless OpenAI documents them as
+// exact API model ids.
 //
 // `MODEL_COMPARISON_FIXTURE_IDS` is optional and comma-separated. When omitted,
 // the harness uses the documented `firstPassModelComparisonFixtures` subset
@@ -611,8 +614,8 @@ String _describeResult(_ModelCaseResult result) {
       ? '${result.inputTokens}/${result.outputTokens}/${result.totalTokens}'
       : 'unknown';
   final cost = result.estimatedCostUsd != null
-      ? '\$${result.estimatedCostUsd!.toStringAsFixed(6)}'
-      : 'unknown';
+      ? 'verified \$${result.estimatedCostUsd!.toStringAsFixed(6)}'
+      : 'unknown (pricing unavailable/unverified)';
   return 'valid_json=${result.validJson} latency_ms=${result.latencyMs} '
       'tokens(in/out/total)=$tokens cost_usd=$cost '
       'corrected_text="$corrected"';
@@ -646,6 +649,13 @@ String _markdownTableCell(String value) {
       .replaceAll('\r\n', '\n')
       .replaceAll('\r', '\n')
       .replaceAll('\n', '<br>');
+}
+
+String _formatCostForReport(double? cost) {
+  if (cost == null) {
+    return 'unknown (pricing unavailable/unverified)';
+  }
+  return 'verified ${cost.toStringAsFixed(6)}';
 }
 
 /// Builds the full markdown comparison report: one section per case with a
@@ -718,9 +728,7 @@ String _buildReport({
       final tokens = result.totalTokens != null
           ? '${result.inputTokens}/${result.outputTokens}/${result.totalTokens}'
           : 'unknown';
-      final cost = result.estimatedCostUsd != null
-          ? result.estimatedCostUsd!.toStringAsFixed(6)
-          : 'unknown';
+      final cost = _formatCostForReport(result.estimatedCostUsd);
       final corrected = _markdownTableCell(
         result.correctedText ?? '(unparsed)',
       );
@@ -781,7 +789,9 @@ String _buildReport({
     final avgLatency = latencyCount == 0
         ? 'n/a'
         : (latencySum / latencyCount).toStringAsFixed(1);
-    final costLabel = hasCost ? totalCost.toStringAsFixed(6) : 'unknown';
+    final costLabel = hasCost
+        ? _formatCostForReport(totalCost)
+        : _formatCostForReport(null);
 
     report.writeln(
       '| $model | $caseCount | $validJsonRate | $avgLatency | $totalTokens | $costLabel |',
@@ -867,9 +877,9 @@ void main() {
     test('comparison model list can be supplied from environment', () {
       expect(
         _configuredComparisonModels(const {
-          'COMPARISON_MODELS': ' gpt-5.4, gpt-5.3, gpt-4.1 ',
+          'COMPARISON_MODELS': ' gpt-5.4, gpt-5.3-chat-latest, gpt-4.1 ',
         }),
-        ['gpt-5.4', 'gpt-5.3', 'gpt-4.1'],
+        ['gpt-5.4', 'gpt-5.3-chat-latest', 'gpt-4.1'],
       );
     });
 
@@ -999,14 +1009,25 @@ void main() {
   });
 
   group('estimateCostUsd', () {
-    test('returns null for every model until it has verified pricing in '
-        'test/shared/model_pricing.dart (currently none)', () {
-      for (final model in [
-        'gpt-5.5',
-        'gpt-5.6-sol',
-        'gpt-5.6-terra',
-        'gpt-5.6-luna',
-      ]) {
+    test('returns a verified cost for verified first-pass model ids', () {
+      final expectedCosts = {
+        'gpt-5.4': 17.50,
+        'gpt-5.3-chat-latest': 15.75,
+        'gpt-4.1': 10.00,
+      };
+
+      for (final entry in expectedCosts.entries) {
+        final cost = estimateCostUsd(
+          model: entry.key,
+          inputTokens: 1000000,
+          outputTokens: 1000000,
+        );
+        expect(cost, closeTo(entry.value, 1e-9), reason: entry.key);
+      }
+    });
+
+    test('returns null for unverified model ids', () {
+      for (final model in ['gpt-5.5', 'gpt-5.6-sol', 'gpt-5.3']) {
         final cost = estimateCostUsd(
           model: model,
           inputTokens: 1000000,
@@ -1074,6 +1095,30 @@ void main() {
       },
     );
 
+    test(
+      '_successResult computes verified estimated cost when pricing exists',
+      () {
+        final result = _successResult(
+          model: 'gpt-4.1',
+          caseId: 'grammar-agreement',
+          inputText: 'Los niño come.',
+          rawResponse: '{"corrected_text": "Los niños comen."}',
+          parsed: const _ParsedResponse(
+            validJson: true,
+            correctedText: 'Los niños comen.',
+          ),
+          latencyMs: 250,
+          inputTokens: 1000000,
+          outputTokens: 1000000,
+          totalTokens: 2000000,
+        );
+
+        expect(result.isError, isFalse);
+        expect(result.estimatedCostUsd, closeTo(10.0, 1e-9));
+        expect(result.promptVersion, promptVersion);
+      },
+    );
+
     test('_errorResult carries the error and no token/cost data', () {
       final result = _errorResult(
         model: 'gpt-5.5',
@@ -1132,7 +1177,91 @@ void main() {
       commit: 'abc1234',
     );
 
-    expect(report, jsonDecode(_expectedReportGolden));
+    expect(report, _expectedReportGolden);
+  });
+
+  test('report renders verified and unknown costs distinctly', () {
+    final report = _buildReport(
+      models: ['gpt-4.1', 'gpt-5.3'],
+      generatedAt: DateTime.utc(2026, 1, 1, 12),
+      cases: const [
+        BenchmarkFixture(
+          id: 'TEST-1',
+          text: 'Los niño come.',
+          note: 'Synthetic case.',
+          lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+          kind: BenchmarkFixtureKind.correction,
+        ),
+      ],
+      resultsByCaseThenModel: {
+        'TEST-1': {
+          'gpt-4.1': _successResult(
+            model: 'gpt-4.1',
+            caseId: 'TEST-1',
+            inputText: 'Los niño come.',
+            rawResponse: '{"corrected_text": "Los niños comen."}',
+            parsed: const _ParsedResponse(
+              validJson: true,
+              correctedText: 'Los niños comen.',
+            ),
+            latencyMs: 200,
+            inputTokens: 20,
+            outputTokens: 500000,
+            totalTokens: 500020,
+          ),
+          'gpt-5.3': _successResult(
+            model: 'gpt-5.3',
+            caseId: 'TEST-1',
+            inputText: 'Los niño come.',
+            rawResponse: '{"corrected_text": "Los niños comen."}',
+            parsed: const _ParsedResponse(
+              validJson: true,
+              correctedText: 'Los niños comen.',
+            ),
+            latencyMs: 250,
+            inputTokens: 20,
+            outputTokens: 500000,
+            totalTokens: 500020,
+          ),
+        },
+      },
+    );
+
+    expect(report, contains('Verified estimated costs use:'));
+    expect(report, contains('`gpt-4.1`: input=2.0 USD'));
+    expect(
+      report,
+      contains(
+        'Unknown cost because pricing is unavailable or unverified for: '
+        '`gpt-5.3`.',
+      ),
+    );
+    expect(
+      report,
+      contains(
+        '| gpt-4.1 | true | 200 | 20/500000/500020 | verified 4.000040 |',
+      ),
+    );
+    expect(
+      report,
+      contains(
+        '| gpt-5.3 | true | 250 | 20/500000/500020 | '
+        'unknown (pricing unavailable/unverified) |',
+      ),
+    );
+    expect(
+      report,
+      contains(
+        '| gpt-4.1 | 1 | 100.0% (1/1) | 200.0 | 500020 | verified 4.000040 |',
+      ),
+    );
+    expect(
+      report,
+      contains(
+        '| gpt-5.3 | 1 | 100.0% (1/1) | 250.0 | 500020 | '
+        'unknown (pricing unavailable/unverified) |',
+      ),
+    );
   });
 
   test(
@@ -1217,4 +1346,41 @@ void main() {
 }
 
 const String _expectedReportGolden =
-    r'"# Spanish Correction Model Comparison Harness\n\n## Run configuration\n\n- Prompt label: `simple-spanish-grammar-spelling-punctuation-only`\n- Prompt version: `v1`\n- Models: `test-model-a`, `test-model-b`\n- Fixture case ids: `TEST-1`\n- Generated: 2026-01-01T12:00:00.000Z\n- Git branch: `prepare-first-pass-live-model-run-config`\n- Git commit: `abc1234`\n- Cost status: `unknown` unless verified pricing exists in `test/shared/model_pricing.dart`\n\n## Pricing\n\nNo verified pricing is configured for any model in this report. Every cost estimate below shows as `unknown` by design — see `test/shared/model_pricing.dart` to add a verified entry once a maintainer has verified pricing for that model against its provider-published pricing page.\n\n## TEST-1\n\n- Input text: `Los niño come.`\n- Note: Synthetic case.\n\n| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |\n| --- | --- | --- | --- | --- | --- | --- |\n| test-model-a | true | 200 | 20/500000/500020 | unknown | Los niños comen. | {\"corrected_text\": \"Los niños comen.\"} |\n| test-model-b | ERROR | 9000 | | | | Bad state: timed out |\n\n---\n\n## Overall summary\n\n| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |\n| --- | --- | --- | --- | --- | --- |\n| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown |\n| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown |\n"';
+    '''# Spanish Correction Model Comparison Harness
+
+## Run configuration
+
+- Prompt label: `simple-spanish-grammar-spelling-punctuation-only`
+- Prompt version: `v1`
+- Models: `test-model-a`, `test-model-b`
+- Fixture case ids: `TEST-1`
+- Generated: 2026-01-01T12:00:00.000Z
+- Git branch: `prepare-first-pass-live-model-run-config`
+- Git commit: `abc1234`
+- Cost status: `unknown` unless verified pricing exists in `test/shared/model_pricing.dart`
+
+## Pricing
+
+No verified pricing is configured for any model in this report. Every cost estimate below shows as `unknown` by design — see `test/shared/model_pricing.dart` to add a verified entry once a maintainer has verified pricing for that model against its provider-published pricing page.
+
+Unknown cost because pricing is unavailable or unverified for: `test-model-a`, `test-model-b`.
+
+## TEST-1
+
+- Input text: `Los niño come.`
+- Note: Synthetic case.
+
+| Model | Valid JSON | Latency (ms) | Tokens (in/out/total) | Est. cost (USD) | corrected_text | raw_response |
+| --- | --- | --- | --- | --- | --- | --- |
+| test-model-a | true | 200 | 20/500000/500020 | unknown (pricing unavailable/unverified) | Los niños comen. | {"corrected_text": "Los niños comen."} |
+| test-model-b | ERROR | 9000 | | | | Bad state: timed out |
+
+---
+
+## Overall summary
+
+| Model | Cases | Valid JSON rate | Avg latency (ms) | Total tokens | Total est. cost (USD) |
+| --- | --- | --- | --- | --- | --- |
+| test-model-a | 1 | 100.0% (1/1) | 200.0 | 500020 | unknown (pricing unavailable/unverified) |
+| test-model-b | 1 | 0.0% (0/1) | n/a | 0 | unknown (pricing unavailable/unverified) |
+''';
