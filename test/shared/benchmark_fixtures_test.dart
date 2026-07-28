@@ -194,4 +194,155 @@ void main() {
       }
     });
   });
+
+  group('the original first-pass fixture subset is unchanged', () {
+    test('firstPassModelComparisonFixtures keeps its original nine ids', () {
+      final ids = firstPassModelComparisonFixtures
+          .map((fixture) => fixture.id)
+          .toList();
+      expect(ids, [
+        'short-phrase-missing-accent',
+        'sentence-grammar-agreement',
+        'sentence-punctuation-question',
+        'sentence-correct-voseo',
+        'sentence-regional-word-choice',
+        'paragraph-calcs-natural',
+        'paragraph-mixed-errors',
+        'two-paragraph-already-correct',
+        'near-limit-full-text',
+      ]);
+    });
+
+    test('benchmarkFixtures keeps its original eleven ids', () {
+      final ids = benchmarkFixtures.map((fixture) => fixture.id).toList();
+      expect(ids, [
+        'short-phrase-missing-accent',
+        'short-phrase-already-correct',
+        'sentence-grammar-agreement',
+        'sentence-punctuation-question',
+        'sentence-correct-voseo',
+        'sentence-regional-word-choice',
+        'paragraph-calcs-natural',
+        'paragraph-mixed-errors',
+        'two-paragraph-already-correct',
+        'two-paragraph-mixed-errors',
+        'near-limit-full-text',
+      ]);
+    });
+  });
+
+  group('secondPassFixtures', () {
+    test('is non-empty and every fixture has a unique id', () {
+      expect(secondPassFixtures, isNotEmpty);
+      final ids = secondPassFixtures.map((fixture) => fixture.id).toList();
+      expect(
+        ids.toSet().length,
+        ids.length,
+        reason: 'Second-pass fixture ids must be unique.',
+      );
+    });
+
+    test('ids do not collide with the first-pass benchmark fixtures', () {
+      final firstPassIds = benchmarkFixtures
+          .map((fixture) => fixture.id)
+          .toSet();
+      final secondPassIds = secondPassFixtures
+          .map((fixture) => fixture.id)
+          .toSet();
+      expect(firstPassIds.intersection(secondPassIds), isEmpty);
+    });
+
+    test('every fixture has required metadata', () {
+      for (final fixture in secondPassFixtures) {
+        expect(fixture.id.trim(), isNotEmpty);
+        expect(fixture.inputText.trim(), isNotEmpty, reason: fixture.id);
+        expect(
+          fixture.expectedCorrectedText.trim(),
+          isNotEmpty,
+          reason: fixture.id,
+        );
+        expect(fixture.cefrLevel.trim(), isNotEmpty, reason: fixture.id);
+        expect(fixture.errorFamilies, isNotEmpty, reason: fixture.id);
+        expect(fixture.errorCount, greaterThan(0), reason: fixture.id);
+        expect(fixture.note.trim(), isNotEmpty, reason: fixture.id);
+      }
+    });
+
+    test('expected corrected text differs from the input text', () {
+      for (final fixture in secondPassFixtures) {
+        expect(
+          fixture.expectedCorrectedText,
+          isNot(equals(fixture.inputText)),
+          reason: '${fixture.id} should have an objective correction',
+        );
+      }
+    });
+
+    test('paragraph fixtures have at least two intended corrections', () {
+      for (final fixture in secondPassFixtures) {
+        if (fixture.shape == SecondPassFixtureShape.paragraph) {
+          expect(
+            fixture.errorCount,
+            greaterThanOrEqualTo(2),
+            reason: fixture.id,
+          );
+        }
+      }
+    });
+
+    test('the near-limit fixture has at least four intended corrections', () {
+      final nearLimitFixtures = secondPassFixtures
+          .where((fixture) => fixture.shape == SecondPassFixtureShape.nearLimit)
+          .toList();
+      expect(nearLimitFixtures, isNotEmpty);
+      for (final fixture in nearLimitFixtures) {
+        expect(fixture.errorCount, greaterThanOrEqualTo(4), reason: fixture.id);
+        expect(
+          fixture.inputText.length,
+          greaterThanOrEqualTo((appCharacterLimit * 0.8).round()),
+          reason: fixture.id,
+        );
+        expect(
+          fixture.inputText.length,
+          lessThanOrEqualTo(appCharacterLimit),
+          reason: fixture.id,
+        );
+      }
+    });
+  });
+
+  group('harderSecondPassFixtures', () {
+    test('exists and is a non-empty subset of secondPassFixtures', () {
+      final allIds = secondPassFixtures.map((fixture) => fixture.id).toSet();
+      final subsetIds = harderSecondPassFixtures
+          .map((fixture) => fixture.id)
+          .toList();
+
+      expect(harderSecondPassFixtures, isNotEmpty);
+      expect(subsetIds.toSet().length, subsetIds.length);
+      expect(allIds, containsAll(subsetIds));
+      for (final fixture in harderSecondPassFixtures) {
+        expect(fixture.isHarderSecondPassSubset, isTrue, reason: fixture.id);
+      }
+    });
+
+    test('covers every required objective error family', () {
+      final coveredFamilies = harderSecondPassFixtures
+          .expand((fixture) => fixture.errorFamilies)
+          .toSet();
+
+      expect(coveredFamilies, containsAll(SecondPassErrorFamily.values));
+    });
+  });
+
+  group('secondPassFixtureById', () {
+    test('returns the matching fixture', () {
+      final fixture = secondPassFixtureById('second-pass-accent-diacritics');
+      expect(fixture.id, 'second-pass-accent-diacritics');
+    });
+
+    test('throws for an unknown id', () {
+      expect(() => secondPassFixtureById('does-not-exist'), throwsStateError);
+    });
+  });
 }
