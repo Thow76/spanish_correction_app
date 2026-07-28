@@ -8,6 +8,12 @@
 // length-band coverage, CALCS-style/accent/correctness mix) rather than any
 // correction-quality claim about the texts themselves.
 //
+// Also covers the harder second-pass first-pass comparison fixture subset
+// (`secondPassFixtures`, closes spanish_correction_app#21): unique ids,
+// required CEFR B1-C1 error-family coverage, non-empty expected corrected
+// text/intended error counts, and that the first-pass subset above is left
+// unchanged.
+//
 // Run with: flutter test test/shared/benchmark_fixtures_test.dart
 
 import 'package:flutter_test/flutter_test.dart';
@@ -144,6 +150,151 @@ void main() {
       expect(results, isNotEmpty);
       for (final fixture in results) {
         expect(fixture.lengthBand, BenchmarkLengthBand.shortPhrase);
+      }
+    });
+  });
+
+  group('secondPassFixtures', () {
+    test('exists and contains exactly the required fifteen fixtures', () {
+      expect(secondPassFixtures, isNotEmpty);
+      expect(secondPassFixtures.length, 15);
+    });
+
+    test('every fixture id is unique', () {
+      final ids = secondPassFixtures.map((f) => f.id).toList();
+      expect(
+        ids.toSet().length,
+        ids.length,
+        reason: 'Second-pass fixture ids must be unique.',
+      );
+    });
+
+    test('fixture ids are unique across the first-pass and second-pass sets', () {
+      final firstPassIds = benchmarkFixtures.map((f) => f.id).toSet();
+      final secondPassIds = secondPassFixtures.map((f) => f.id).toSet();
+      expect(firstPassIds.intersection(secondPassIds), isEmpty);
+    });
+
+    test('covers every required objective error family', () {
+      final coveredFamilies = secondPassFixtures
+          .expand((fixture) => fixture.errorFamilies)
+          .toSet();
+      expect(coveredFamilies, containsAll(ErrorFamily.values));
+    });
+
+    test(
+      'every fixture has non-empty input, expected text, and note, and no '
+      'fixture exceeds the app character limit',
+      () {
+        for (final fixture in secondPassFixtures) {
+          expect(fixture.inputText.trim(), isNotEmpty, reason: fixture.id);
+          expect(
+            fixture.expectedCorrectedText.trim(),
+            isNotEmpty,
+            reason: fixture.id,
+          );
+          expect(fixture.note.trim(), isNotEmpty, reason: fixture.id);
+          expect(
+            fixture.inputText.length,
+            lessThanOrEqualTo(appCharacterLimit),
+            reason: '${fixture.id} is ${fixture.inputText.length} chars',
+          );
+        }
+      },
+    );
+
+    test('every fixture has at least one intended error and one family', () {
+      for (final fixture in secondPassFixtures) {
+        expect(
+          fixture.intendedErrorCount,
+          greaterThanOrEqualTo(1),
+          reason: fixture.id,
+        );
+        expect(fixture.errorFamilies, isNotEmpty, reason: fixture.id);
+      }
+    });
+
+    test(
+      'every fixture actually differs between input and expected text',
+      () {
+        for (final fixture in secondPassFixtures) {
+          expect(
+            fixture.inputText,
+            isNot(equals(fixture.expectedCorrectedText)),
+            reason:
+                '${fixture.id} should contain at least one intended error.',
+          );
+        }
+      },
+    );
+
+    test('paragraph-shaped mixed fixtures contain at least two errors', () {
+      const mixedIds = [
+        'second-pass-mixed-b1-b2-paragraph',
+        'second-pass-mixed-b2-c1-paragraph',
+      ];
+      for (final id in mixedIds) {
+        final fixture = secondPassFixtureById(id);
+        expect(fixture.intendedErrorCount, greaterThanOrEqualTo(2));
+      }
+    });
+
+    test('the near-limit mixed fixture contains at least four errors', () {
+      final fixture = secondPassFixtureById('second-pass-near-limit-mixed');
+      expect(fixture.intendedErrorCount, greaterThanOrEqualTo(4));
+    });
+
+    test('does not modify the original first-pass fixture subset', () {
+      // Guards against the second-pass work accidentally mutating the
+      // first-pass subset instead of adding to it (spanish_correction_app#21
+      // requires "The original first-pass fixture subset still exists
+      // unchanged").
+      expect(benchmarkFixtures.length, 9);
+      const firstPassIds = [
+        'short-phrase-correct-greeting',
+        'short-phrase-missing-accent',
+        'sentence-grammar-error',
+        'sentence-correct-voseo',
+        'paragraph-calcs-natural',
+        'paragraph-mixed-errors',
+        'two-paragraph-correct',
+        'two-paragraph-mixed-errors',
+        'near-limit-full-text',
+      ];
+      expect(
+        benchmarkFixtures.map((f) => f.id).toList(),
+        firstPassIds,
+      );
+    });
+  });
+
+  group('secondPassFixtureById', () {
+    test('returns the matching fixture', () {
+      final fixture = secondPassFixtureById(
+        'second-pass-accent-diacritics',
+      );
+      expect(fixture.id, 'second-pass-accent-diacritics');
+    });
+
+    test('throws for an unknown id', () {
+      expect(
+        () => secondPassFixtureById('does-not-exist'),
+        throwsStateError,
+      );
+    });
+  });
+
+  group('secondPassFixturesForFamily', () {
+    test('returns only fixtures exercising the requested family', () {
+      final results = secondPassFixturesForFamily(
+        ErrorFamily.accentDiacritics,
+      );
+      expect(results, isNotEmpty);
+      for (final fixture in results) {
+        expect(
+          fixture.errorFamilies,
+          contains(ErrorFamily.accentDiacritics),
+        );
       }
     });
   });

@@ -320,3 +320,387 @@ List<BenchmarkFixture> benchmarkFixturesForBand(
       .where((fixture) => fixture.lengthBand == lengthBand)
       .toList(growable: false);
 }
+
+// ---------------------------------------------------------------------------
+// Harder second-pass first-pass comparison fixtures.
+//
+// Issue: "Add harder second-pass first-pass comparison fixtures" (closes
+// spanish_correction_app#21). Purpose: a second, harder named fixture
+// subset for the SAME bare first-pass model comparison harness described
+// above — testing whether smaller/cheaper models stay restrained (no
+// word-choice/naturalness/style rewrites) once the objective grammar,
+// spelling, and punctuation errors get harder, systematically organized
+// around the CEFR B1-C1 learner-error families identified in the issue
+// (prepositions, verb morphology/agreement, past tense/aspect, gender/
+// number agreement, articles, mood selection, object pronouns/clitics,
+// ser/estar/haber, personal `a`, relative clauses, impersonal haber/se,
+// and accents/punctuation/sentence boundaries).
+//
+// Unlike [BenchmarkFixture] above (inputs only, no expected-output
+// assertion), each [SecondPassFixture] carries an `expectedCorrectedText`
+// because this subset needs deterministic scoring against a specific
+// grammar/spelling/punctuation fix, not just latency/cost measurement.
+// This is a distinct, additive fixture set — [benchmarkFixtures] above is
+// left completely unchanged.
+//
+// Fixture design deliberately avoids naturalness, word-choice, style,
+// tone, calque, collocation, and regional-preference traps: every
+// expected correction here is an objective grammar, spelling, or
+// punctuation fix from the error families below.
+
+/// One CEFR proficiency level a [SecondPassFixture] targets.
+enum CefrLevel {
+  /// Common European Framework of Reference level B1.
+  b1,
+
+  /// Common European Framework of Reference level B2.
+  b2,
+
+  /// Common European Framework of Reference level C1.
+  c1,
+}
+
+/// One objective Spanish grammar/spelling/punctuation error family a
+/// [SecondPassFixture] is designed to exercise. These are exactly the
+/// "Required Coverage" families from spanish_correction_app#21 (excluding
+/// the "mixed"/"near-limit" rows, which combine several of these rather
+/// than introducing a new family).
+enum ErrorFamily {
+  /// Missing or incorrect accent marks/diacritics.
+  accentDiacritics,
+
+  /// Article/noun/adjective gender or number agreement.
+  genderNumberAgreement,
+
+  /// A verb, adjective, or noun used with the wrong required preposition.
+  prepositionGovernment,
+
+  /// Verb morphology / subject-verb agreement.
+  verbMorphologySubjectAgreement,
+
+  /// Article/determiner selection.
+  articlesDeterminers,
+
+  /// Subjunctive, indicative, or conditional mood selection.
+  subjunctiveMood,
+
+  /// Object pronouns, clitic placement, or pronominal verbs.
+  objectPronounsClitics,
+
+  /// `ser`, `estar`, or `haber` selection.
+  serEstarHaber,
+
+  /// Missing personal `a` before an animate direct object.
+  personalA,
+
+  /// A relative clause missing its required preposition.
+  relativeClausePreposition,
+
+  /// Impersonal `haber`, or impersonal/passive `se`.
+  impersonalHaberOrSe,
+
+  /// Sentence boundaries, run-ons, commas, or missing question/exclamation
+  /// marks.
+  punctuationSentenceBoundaries,
+}
+
+/// One fixture in the harder second-pass first-pass comparison subset (see
+/// spanish_correction_app#21). Unlike [BenchmarkFixture], this always
+/// carries an [expectedCorrectedText] so a harness can score the model's
+/// `corrected_text` output deterministically.
+class SecondPassFixture {
+  const SecondPassFixture({
+    required this.id,
+    required this.inputText,
+    required this.expectedCorrectedText,
+    required this.cefrLevel,
+    required this.errorFamilies,
+    required this.intendedErrorCount,
+    required this.note,
+  });
+
+  /// Short, unique, kebab-case identifier.
+  final String id;
+
+  /// The Spanish input text containing the intended error(s). Never longer
+  /// than [appCharacterLimit].
+  final String inputText;
+
+  /// The single objectively-correct fix for [inputText] under the exact
+  /// first-pass prompt/contract (grammar, spelling, and punctuation only —
+  /// no word-choice, naturalness, style, tone, or regional rewrites).
+  final String expectedCorrectedText;
+
+  /// The CEFR level this fixture primarily targets.
+  final CefrLevel cefrLevel;
+
+  /// Which [ErrorFamily] value(s) this fixture exercises. A fixture may
+  /// cover more than one family (e.g. a paragraph combining an accent
+  /// error with an agreement error), in which case every family it
+  /// actually exercises must be listed here.
+  final List<ErrorFamily> errorFamilies;
+
+  /// How many distinct objective errors [inputText] contains relative to
+  /// [expectedCorrectedText].
+  final int intendedErrorCount;
+
+  /// Human-readable note describing the fixture's purpose and intended
+  /// fix(es), for report/debugging use.
+  final String note;
+}
+
+/// The harder second-pass first-pass comparison fixture subset (see
+/// spanish_correction_app#21). Selectable independently of
+/// [benchmarkFixtures] — a harness can run either set, or both, without
+/// editing source, by choosing which top-level list to iterate.
+const List<SecondPassFixture> secondPassFixtures = [
+  SecondPassFixture(
+    id: 'second-pass-accent-diacritics',
+    inputText: 'Mi hermano vive en Mexico y estudia alli.',
+    expectedCorrectedText: 'Mi hermano vive en México y estudia allí.',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [ErrorFamily.accentDiacritics],
+    intendedErrorCount: 2,
+    note:
+        'Missing accents only, no vocabulary rewrite required: '
+        '"Mexico" -> "México", "alli" -> "allí".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-gender-number-agreement',
+    inputText: 'Ella tiene dos perro pequeño que viven en su casa.',
+    expectedCorrectedText:
+        'Ella tiene dos perros pequeños que viven en su casa.',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [ErrorFamily.genderNumberAgreement],
+    intendedErrorCount: 2,
+    note:
+        'Clear noun/adjective number agreement: "perro" -> "perros", '
+        '"pequeño" -> "pequeños".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-preposition-government',
+    inputText: 'Ella depende en sus padres para pagar la universidad.',
+    expectedCorrectedText: 'Ella depende de sus padres para pagar la universidad.',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [ErrorFamily.prepositionGovernment],
+    intendedErrorCount: 1,
+    note:
+        'Unambiguous required preposition: "depender de" (not "depender '
+        'en"): "depende en" -> "depende de".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-verb-morphology-agreement',
+    inputText: 'Mis primos vive en Barcelona desde hace dos años.',
+    expectedCorrectedText: 'Mis primos viven en Barcelona desde hace dos años.',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [ErrorFamily.verbMorphologySubjectAgreement],
+    intendedErrorCount: 1,
+    note:
+        'Clear plural subject with a singular verb: "primos vive" -> '
+        '"primos viven".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-articles-determiners',
+    inputText: 'Tengo una problema grande con mi computadora nueva.',
+    expectedCorrectedText:
+        'Tengo un problema grande con mi computadora nueva.',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [ErrorFamily.articlesDeterminers],
+    intendedErrorCount: 1,
+    note:
+        '"problema" is masculine despite the -a ending, so the article '
+        'must agree regardless of context: "una problema" -> "un '
+        'problema".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-subjunctive-trigger',
+    inputText: 'Espero que tienes un buen día mañana.',
+    expectedCorrectedText: 'Espero que tengas un buen día mañana.',
+    cefrLevel: CefrLevel.b2,
+    errorFamilies: [ErrorFamily.subjunctiveMood],
+    intendedErrorCount: 1,
+    note:
+        'Unambiguous subjunctive trigger "Espero que...": "tienes" -> '
+        '"tengas".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-object-pronoun-agreement',
+    inputText: 'Vi a mis hermanas ayer y lo saludé en la calle.',
+    expectedCorrectedText: 'Vi a mis hermanas ayer y las saludé en la calle.',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [ErrorFamily.objectPronounsClitics],
+    intendedErrorCount: 1,
+    note:
+        'Direct object pronoun must agree in gender/number with '
+        '"hermanas" (standard lo/la usage, not a leísmo/laísmo/loísmo '
+        'case): "lo" -> "las".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-ser-estar-locative',
+    inputText: 'Mi oficina es en el tercer piso del edificio.',
+    expectedCorrectedText: 'Mi oficina está en el tercer piso del edificio.',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [ErrorFamily.serEstarHaber],
+    intendedErrorCount: 1,
+    note:
+        'Unambiguous locative contrast: location requires "estar", not '
+        '"ser": "es en" -> "está en".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-personal-a',
+    inputText: 'Vi Maria en el supermercado ayer por la tarde.',
+    expectedCorrectedText: 'Vi a María en el supermercado ayer por la tarde.',
+    cefrLevel: CefrLevel.b2,
+    errorFamilies: [ErrorFamily.personalA, ErrorFamily.accentDiacritics],
+    intendedErrorCount: 2,
+    note:
+        'Proper-name animate direct object requires personal "a": "Vi '
+        'Maria" -> "Vi a María" (also missing accent on the name).',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-relative-clause-preposition',
+    inputText: 'La empresa que trabajo está cerca de mi casa.',
+    expectedCorrectedText:
+        'La empresa en la que trabajo está cerca de mi casa.',
+    cefrLevel: CefrLevel.b2,
+    errorFamilies: [ErrorFamily.relativeClausePreposition],
+    intendedErrorCount: 1,
+    note:
+        '"the company where/in which I work" requires the preposition '
+        'inside the relative clause: "que trabajo" -> "en la que '
+        'trabajo".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-impersonal-haber',
+    inputText:
+        'En esta ciudad hay muchos museos, pero también habian demasiados '
+        'turistas en verano.',
+    expectedCorrectedText:
+        'En esta ciudad hay muchos museos, pero también había demasiados '
+        'turistas en verano.',
+    cefrLevel: CefrLevel.b2,
+    errorFamilies: [ErrorFamily.impersonalHaberOrSe],
+    intendedErrorCount: 1,
+    note:
+        'Impersonal "haber" stays singular regardless of the following '
+        'noun\'s number: "habian" -> "había".',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-sentence-boundaries',
+    inputText:
+        'No entendí bien la explicación del profesor era muy larga y '
+        'confusa como puedo estudiar para el examen sin entender la '
+        'materia',
+    expectedCorrectedText:
+        'No entendí bien la explicación del profesor; era muy larga y '
+        'confusa. ¿Cómo puedo estudiar para el examen sin entender la '
+        'materia?',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [ErrorFamily.punctuationSentenceBoundaries],
+    intendedErrorCount: 2,
+    note:
+        'Clear run-on requiring a sentence break, plus missing opening/'
+        'closing question marks around the embedded question.',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-mixed-b1-b2-paragraph',
+    inputText:
+        'El sabado fuimos a la playa con mis amigos, pero mi hermano no '
+        'vino porque estaba enfermo. Cuando llegamos, buscamos un '
+        'restaurante pero no habian mesas libres.',
+    expectedCorrectedText:
+        'El sábado fuimos a la playa con mis amigos, pero mi hermano no '
+        'vino porque estaba enfermo. Cuando llegamos, buscamos un '
+        'restaurante pero no había mesas libres.',
+    cefrLevel: CefrLevel.b1,
+    errorFamilies: [
+      ErrorFamily.accentDiacritics,
+      ErrorFamily.impersonalHaberOrSe,
+    ],
+    intendedErrorCount: 2,
+    note:
+        'Mixed B1-B2 paragraph with two independent objective errors: '
+        '"sabado" -> "sábado" (accent), "habian" -> "había" (impersonal '
+        'haber agreement).',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-mixed-b2-c1-paragraph',
+    inputText:
+        'El proyecto que trabajamos es muy interesante, y espero que lo '
+        'terminamos a tiempo.',
+    expectedCorrectedText:
+        'El proyecto en el que trabajamos es muy interesante, y espero '
+        'que lo terminemos a tiempo.',
+    cefrLevel: CefrLevel.b2,
+    errorFamilies: [
+      ErrorFamily.relativeClausePreposition,
+      ErrorFamily.subjunctiveMood,
+    ],
+    intendedErrorCount: 2,
+    note:
+        'Mixed B2-C1 paragraph involving subordination and mood: "que '
+        'trabajamos" -> "en el que trabajamos" (relative clause '
+        'preposition), "terminamos" -> "terminemos" (subjunctive after '
+        '"espero que").',
+  ),
+  SecondPassFixture(
+    id: 'second-pass-near-limit-mixed',
+    inputText:
+        'El sábado pasado fui a visitar Ana porque hacía mucho tiempo que '
+        'no la veía y quería saber cómo le iba con su nuevo trabajo. Su '
+        'apartamento es cerca del centro, en el quinto piso de un '
+        'edificio antiguo que ella vive desde hace tres años y que le '
+        'gusta mucho por la vista. Espero que ella consigue pronto un '
+        'trabajo mejor, porque en su oficina actual habian demasiados '
+        'problemas y ella depende en sus padres para pagar el alquiler '
+        'mientras busca otra oportunidad.',
+    expectedCorrectedText:
+        'El sábado pasado fui a visitar a Ana porque hacía mucho tiempo '
+        'que no la veía y quería saber cómo le iba con su nuevo trabajo. '
+        'Su apartamento está cerca del centro, en el quinto piso de un '
+        'edificio antiguo en el que ella vive desde hace tres años y que '
+        'le gusta mucho por la vista. Espero que ella consiga pronto un '
+        'trabajo mejor, porque en su oficina actual había demasiados '
+        'problemas y ella depende de sus padres para pagar el alquiler '
+        'mientras busca otra oportunidad.',
+    cefrLevel: CefrLevel.b2,
+    errorFamilies: [
+      ErrorFamily.personalA,
+      ErrorFamily.serEstarHaber,
+      ErrorFamily.relativeClausePreposition,
+      ErrorFamily.subjunctiveMood,
+      ErrorFamily.impersonalHaberOrSe,
+      ErrorFamily.prepositionGovernment,
+    ],
+    intendedErrorCount: 6,
+    note:
+        'Near-limit mixed text with six objective errors across six '
+        'families: missing personal "a" before "Ana", "es" -> "está" '
+        '(ser/estar), "que vive" -> "en el que vive" (relative clause '
+        'preposition), "consigue" -> "consiga" (subjunctive), "habian" '
+        '-> "había" (impersonal haber), "depende en" -> "depende de" '
+        '(preposition government).',
+  ),
+];
+
+/// Looks up a [SecondPassFixture] by its [SecondPassFixture.id].
+///
+/// Throws a [StateError] if [id] isn't present, so a typo in a harness
+/// fails loudly instead of silently skipping a case.
+SecondPassFixture secondPassFixtureById(String id) {
+  return secondPassFixtures.firstWhere(
+    (fixture) => fixture.id == id,
+    orElse: () => throw StateError(
+      'No second-pass fixture with id "$id". Available ids: '
+      '${secondPassFixtures.map((fixture) => fixture.id).join(', ')}.',
+    ),
+  );
+}
+
+/// Returns every [SecondPassFixture] in [secondPassFixtures] that exercises
+/// [family], in declaration order.
+List<SecondPassFixture> secondPassFixturesForFamily(ErrorFamily family) {
+  return secondPassFixtures
+      .where((fixture) => fixture.errorFamilies.contains(family))
+      .toList(growable: false);
+}
