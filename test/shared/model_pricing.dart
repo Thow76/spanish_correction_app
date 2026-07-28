@@ -73,6 +73,19 @@ class VerifiedModelPricing {
 
 /// Verified pricing, keyed by exact API model id.
 const Map<String, VerifiedModelPricing> verifiedPricingPerModel = {
+  'gpt-5.5': VerifiedModelPricing(
+    modelId: 'gpt-5.5',
+    inputPerMillionUsd: 5.00,
+    outputPerMillionUsd: 30.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-5.5',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown; long-context and data-residency '
+        'uplifts not applied',
+    dateChecked: '2026-07-28',
+  ),
   'gpt-5.4': VerifiedModelPricing(
     modelId: 'gpt-5.4',
     inputPerMillionUsd: 2.50,
@@ -97,6 +110,54 @@ const Map<String, VerifiedModelPricing> verifiedPricingPerModel = {
         'pricing effective date shown',
     dateChecked: '2026-07-28',
   ),
+  'gpt-5.2': VerifiedModelPricing(
+    modelId: 'gpt-5.2',
+    inputPerMillionUsd: 1.75,
+    outputPerMillionUsd: 14.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-5.2',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+  'gpt-5.1': VerifiedModelPricing(
+    modelId: 'gpt-5.1',
+    inputPerMillionUsd: 1.25,
+    outputPerMillionUsd: 10.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-5.1',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+  'gpt-5': VerifiedModelPricing(
+    modelId: 'gpt-5',
+    inputPerMillionUsd: 1.25,
+    outputPerMillionUsd: 10.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-5',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+  'gpt-5-mini': VerifiedModelPricing(
+    modelId: 'gpt-5-mini',
+    inputPerMillionUsd: 0.25,
+    outputPerMillionUsd: 2.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-5-mini',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
   'gpt-4.1': VerifiedModelPricing(
     modelId: 'gpt-4.1',
     inputPerMillionUsd: 2.00,
@@ -104,6 +165,42 @@ const Map<String, VerifiedModelPricing> verifiedPricingPerModel = {
     currency: 'USD',
     pricingUnit: 'per 1M text tokens',
     source: 'https://developers.openai.com/api/docs/models/gpt-4.1',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+  'gpt-4.1-mini': VerifiedModelPricing(
+    modelId: 'gpt-4.1-mini',
+    inputPerMillionUsd: 0.40,
+    outputPerMillionUsd: 1.60,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-4.1-mini',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+  'gpt-4o': VerifiedModelPricing(
+    modelId: 'gpt-4o',
+    inputPerMillionUsd: 2.50,
+    outputPerMillionUsd: 10.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-4o',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; no separate '
+        'pricing effective date shown',
+    dateChecked: '2026-07-28',
+  ),
+  'gpt-4o-mini': VerifiedModelPricing(
+    modelId: 'gpt-4o-mini',
+    inputPerMillionUsd: 0.15,
+    outputPerMillionUsd: 0.60,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-4o-mini',
     pricingVersionOrEffectiveDate:
         'OpenAI model page standard text-token pricing; no separate '
         'pricing effective date shown',

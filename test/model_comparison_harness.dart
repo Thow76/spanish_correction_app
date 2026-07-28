@@ -82,11 +82,10 @@
 // figure once a maintainer has verified its pricing against an explicit
 // source and added an entry to `verifiedPricingPerModel` there, with that
 // source, pricing version/effective date, and date-checked recorded
-// alongside the number. `verifiedPricingPerModel` starts empty, so every
-// cost estimate in this harness's reports currently shows as `unknown` —
-// intentionally, not as an omission — while token usage and latency are
-// still recorded either way. Do not reintroduce a local placeholder
-// pricing table here.
+// alongside the number. Models missing from `verifiedPricingPerModel` show
+// as `unknown` intentionally, not as an omission, while token usage and
+// latency are still recorded either way. Do not reintroduce a local
+// placeholder pricing table here.
 
 import 'dart:convert';
 import 'dart:io';
@@ -1305,9 +1304,16 @@ void main() {
   group('estimateCostUsd', () {
     test('returns a verified cost for verified first-pass model ids', () {
       final expectedCosts = {
-        'gpt-5.4': 17.50,
+        'gpt-5.5': 35.00,
         'gpt-5.3-chat-latest': 15.75,
+        'gpt-5.2': 15.75,
+        'gpt-5.1': 11.25,
+        'gpt-5': 11.25,
+        'gpt-5-mini': 2.25,
         'gpt-4.1': 10.00,
+        'gpt-4.1-mini': 2.00,
+        'gpt-4o': 12.50,
+        'gpt-4o-mini': 0.75,
       };
 
       for (final entry in expectedCosts.entries) {
@@ -1321,7 +1327,7 @@ void main() {
     });
 
     test('returns null for unverified model ids', () {
-      for (final model in ['gpt-5.5', 'gpt-5.6-sol', 'gpt-5.3']) {
+      for (final model in ['gpt-5.6-sol', 'gpt-5.4-mini', 'gpt-5.3']) {
         final cost = estimateCostUsd(
           model: model,
           inputTokens: 1000000,
@@ -1363,7 +1369,7 @@ void main() {
       '_successResult computes estimated cost (null — no verified pricing)',
       () {
         final result = _successResult(
-          model: 'gpt-5.5',
+          model: 'gpt-5.3',
           caseId: 'grammar-agreement',
           inputText: 'Los niño come.',
           rawResponse: '{"corrected_text": "Los niños comen."}',
@@ -1383,7 +1389,7 @@ void main() {
         expect(
           result.estimatedCostUsd,
           isNull,
-          reason: 'gpt-5.5 has no verified pricing entry',
+          reason: 'gpt-5.3 has no verified pricing entry',
         );
         expect(result.promptVersion, promptVersion);
       },
