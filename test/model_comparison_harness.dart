@@ -239,6 +239,7 @@ final Map<String, String> _firstPassExpectedCorrectedText = Map.unmodifiable({
       'de nuestros planes para el próximo año. Cuando volvimos al hotel, todos '
       'estábamos muy cansados pero contentos, y decidimos que teníamos que '
       'regresar pronto porque el lugar nos había gustado mucho a todos.',
+  ...harderSecondPassFirstPassExpectedCorrectedText,
 });
 
 List<String> _parseCommaSeparatedValues(String raw) {
@@ -1020,7 +1021,7 @@ void main() {
   test('first-pass expected outputs cover every harness fixture', () {
     expect(
       _firstPassExpectedCorrectedText.keys.toSet(),
-      _cases.map((testCase) => testCase.id).toSet(),
+      containsAll(_cases.map((testCase) => testCase.id)),
     );
 
     for (final testCase in _cases) {
@@ -1031,6 +1032,16 @@ void main() {
       } else {
         expect(expected, isNot(testCase.text), reason: testCase.id);
       }
+    }
+  });
+
+  test('harder scored expected outputs are available to the harness', () {
+    for (final fixture in harderSecondPassFirstPassFixtures) {
+      expect(
+        _firstPassExpectedCorrectedText[fixture.id],
+        fixture.expectedCorrectedText,
+        reason: fixture.id,
+      );
     }
   });
 

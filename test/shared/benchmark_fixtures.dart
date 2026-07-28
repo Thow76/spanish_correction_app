@@ -83,6 +83,53 @@ class BenchmarkFixture {
   bool get isControlCase => kind == BenchmarkFixtureKind.control;
 }
 
+/// CEFR target band the fixture is intended to approximate.
+enum BenchmarkCefrTargetLevel { b1, b2, c1 }
+
+/// Objective error families used by scored comparison fixtures.
+enum ObjectiveSpanishErrorFamily {
+  accentMarksDiacritics,
+  genderNumberAgreement,
+  prepositionGovernment,
+  verbMorphologySubjectVerbAgreement,
+  articlesDeterminers,
+  subjunctiveMood,
+  objectPronounsClitics,
+  serEstarHaber,
+  personalA,
+  relativeClauseRequiredPreposition,
+  impersonalHaberPassiveImpersonalSe,
+  sentenceBoundariesPunctuation,
+}
+
+/// A scored benchmark fixture for exact corrected-text comparison.
+class ScoredBenchmarkFixture extends BenchmarkFixture {
+  const ScoredBenchmarkFixture({
+    required super.id,
+    required super.text,
+    required super.note,
+    required super.lengthBand,
+    required this.expectedCorrectedText,
+    required this.cefrTargetLevel,
+    required this.errorFamilies,
+    required this.intendedErrorCount,
+    super.isAccentSensitive = false,
+  }) : assert(intendedErrorCount > 0),
+       super(kind: BenchmarkFixtureKind.correction);
+
+  /// Exact expected output for narrow grammar/spelling/punctuation scoring.
+  final String expectedCorrectedText;
+
+  /// Approximate CEFR level represented by the text.
+  final BenchmarkCefrTargetLevel cefrTargetLevel;
+
+  /// Objective error categories intentionally present in [text].
+  final Set<ObjectiveSpanishErrorFamily> errorFamilies;
+
+  /// Number of intended objective corrections in [expectedCorrectedText].
+  final int intendedErrorCount;
+}
+
 const BenchmarkFixture shortPhraseMissingAccent = BenchmarkFixture(
   id: 'short-phrase-missing-accent',
   text: 'Voy al parque manana por la tarde.',
@@ -233,6 +280,296 @@ const BenchmarkFixture nearLimitFullText = BenchmarkFixture(
   isAccentSensitive: true,
 );
 
+const ScoredBenchmarkFixture harderAccentMarksDiacritics =
+    ScoredBenchmarkFixture(
+      id: 'harder-accent-marks-diacritics',
+      text: 'El medico llego despues de la reunion.',
+      expectedCorrectedText: 'El médico llegó después de la reunión.',
+      note:
+          'Harder scored B1 sentence: missing written accents only, useful for '
+          'checking diacritic recovery without wording changes.',
+      lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+      cefrTargetLevel: BenchmarkCefrTargetLevel.b1,
+      errorFamilies: {ObjectiveSpanishErrorFamily.accentMarksDiacritics},
+      intendedErrorCount: 4,
+      isAccentSensitive: true,
+    );
+
+const ScoredBenchmarkFixture harderGenderNumberAgreement =
+    ScoredBenchmarkFixture(
+      id: 'harder-gender-number-agreement',
+      text: 'Las ventanas estaban abierto, pero una puerta estaba cerrado.',
+      expectedCorrectedText:
+          'Las ventanas estaban abiertas, pero una puerta estaba cerrada.',
+      note:
+          'Harder scored B1 sentence: adjective/participle agreement with '
+          'nearby feminine singular and plural nouns.',
+      lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+      cefrTargetLevel: BenchmarkCefrTargetLevel.b1,
+      errorFamilies: {ObjectiveSpanishErrorFamily.genderNumberAgreement},
+      intendedErrorCount: 2,
+    );
+
+const ScoredBenchmarkFixture harderPrepositionGovernment =
+    ScoredBenchmarkFixture(
+      id: 'harder-preposition-government',
+      text: 'Insisto que revises el contrato antes de firmarlo.',
+      expectedCorrectedText:
+          'Insisto en que revises el contrato antes de firmarlo.',
+      note:
+          'Harder scored B2 sentence: required preposition after "insistir" '
+          'without adding any style or word-choice target.',
+      lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+      cefrTargetLevel: BenchmarkCefrTargetLevel.b2,
+      errorFamilies: {ObjectiveSpanishErrorFamily.prepositionGovernment},
+      intendedErrorCount: 1,
+    );
+
+const ScoredBenchmarkFixture harderVerbAgreement = ScoredBenchmarkFixture(
+  id: 'harder-verb-morphology-agreement',
+  text: 'Mis compañeros y yo fue a la biblioteca después de clase.',
+  expectedCorrectedText:
+      'Mis compañeros y yo fuimos a la biblioteca después de clase.',
+  note:
+      'Harder scored B1 sentence: first-person plural subject requires '
+      'matching preterite verb morphology.',
+  lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.b1,
+  errorFamilies: {
+    ObjectiveSpanishErrorFamily.verbMorphologySubjectVerbAgreement,
+  },
+  intendedErrorCount: 1,
+  isAccentSensitive: true,
+);
+
+const ScoredBenchmarkFixture harderArticlesDeterminers = ScoredBenchmarkFixture(
+  id: 'harder-articles-determiners',
+  text: 'Abrió puerta principal porque hacía mucho calor.',
+  expectedCorrectedText: 'Abrió la puerta principal porque hacía mucho calor.',
+  note:
+      'Harder scored B1 sentence: missing definite article in an ordinary '
+      'specific noun phrase.',
+  lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.b1,
+  errorFamilies: {ObjectiveSpanishErrorFamily.articlesDeterminers},
+  intendedErrorCount: 1,
+  isAccentSensitive: true,
+);
+
+const ScoredBenchmarkFixture harderSubjunctiveMood = ScoredBenchmarkFixture(
+  id: 'harder-subjunctive-mood',
+  text: 'Es importante que estudias antes del examen final.',
+  expectedCorrectedText: 'Es importante que estudies antes del examen final.',
+  note:
+      'Harder scored B1-B2 sentence: impersonal expression requires present '
+      'subjunctive, with no lexical improvement target.',
+  lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.b2,
+  errorFamilies: {ObjectiveSpanishErrorFamily.subjunctiveMood},
+  intendedErrorCount: 1,
+);
+
+const ScoredBenchmarkFixture harderObjectPronounsClitics =
+    ScoredBenchmarkFixture(
+      id: 'harder-object-pronouns-clitics',
+      text: 'A los niños expliqué la regla con paciencia.',
+      expectedCorrectedText: 'A los niños les expliqué la regla con paciencia.',
+      note:
+          'Harder scored B2 sentence: preposed indirect object requires the '
+          'matching clitic pronoun.',
+      lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+      cefrTargetLevel: BenchmarkCefrTargetLevel.b2,
+      errorFamilies: {ObjectiveSpanishErrorFamily.objectPronounsClitics},
+      intendedErrorCount: 1,
+      isAccentSensitive: true,
+    );
+
+const ScoredBenchmarkFixture harderSerEstarHaber = ScoredBenchmarkFixture(
+  id: 'harder-ser-estar-haber',
+  text: 'En la sala son veinte personas esperando la reunión.',
+  expectedCorrectedText: 'En la sala hay veinte personas esperando la reunión.',
+  note:
+      'Harder scored B1 sentence: existential "haber" is required for a '
+      'there-is/there-are meaning.',
+  lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.b1,
+  errorFamilies: {ObjectiveSpanishErrorFamily.serEstarHaber},
+  intendedErrorCount: 1,
+  isAccentSensitive: true,
+);
+
+const ScoredBenchmarkFixture harderPersonalA = ScoredBenchmarkFixture(
+  id: 'harder-personal-a',
+  text: 'Vi mi profesor en la estación esta mañana.',
+  expectedCorrectedText: 'Vi a mi profesor en la estación esta mañana.',
+  note:
+      'Harder scored B1 sentence: direct object referring to a specific person '
+      'requires personal "a".',
+  lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.b1,
+  errorFamilies: {ObjectiveSpanishErrorFamily.personalA},
+  intendedErrorCount: 1,
+  isAccentSensitive: true,
+);
+
+const ScoredBenchmarkFixture harderRelativeClausePreposition =
+    ScoredBenchmarkFixture(
+      id: 'harder-relative-clause-preposition',
+      text: 'La empresa que trabajo está cerca de mi casa.',
+      expectedCorrectedText:
+          'La empresa en la que trabajo está cerca de mi casa.',
+      note:
+          'Harder scored B2 sentence: relative clause requires the preposition '
+          'governed by "trabajar en".',
+      lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+      cefrTargetLevel: BenchmarkCefrTargetLevel.b2,
+      errorFamilies: {
+        ObjectiveSpanishErrorFamily.relativeClauseRequiredPreposition,
+      },
+      intendedErrorCount: 1,
+      isAccentSensitive: true,
+    );
+
+const ScoredBenchmarkFixture harderImpersonalHaberSe = ScoredBenchmarkFixture(
+  id: 'harder-impersonal-haber-se',
+  text: 'Habían muchas personas en la entrada del museo.',
+  expectedCorrectedText: 'Había muchas personas en la entrada del museo.',
+  note:
+      'Harder scored B2 sentence: impersonal "haber" remains singular before '
+      'a plural noun phrase.',
+  lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.b2,
+  errorFamilies: {
+    ObjectiveSpanishErrorFamily.impersonalHaberPassiveImpersonalSe,
+  },
+  intendedErrorCount: 1,
+  isAccentSensitive: true,
+);
+
+const ScoredBenchmarkFixture harderSentenceBoundariesPunctuation =
+    ScoredBenchmarkFixture(
+      id: 'harder-sentence-boundaries-punctuation',
+      text: 'Terminé el informe llegué a casa muy tarde.',
+      expectedCorrectedText: 'Terminé el informe. Llegué a casa muy tarde.',
+      note:
+          'Harder scored B1-B2 sentence: run-on sentence needs a boundary '
+          'without changing the words.',
+      lengthBand: BenchmarkLengthBand.sentenceOrShortParagraph,
+      cefrTargetLevel: BenchmarkCefrTargetLevel.b2,
+      errorFamilies: {
+        ObjectiveSpanishErrorFamily.sentenceBoundariesPunctuation,
+      },
+      intendedErrorCount: 1,
+      isAccentSensitive: true,
+    );
+
+const ScoredBenchmarkFixture harderMixedB1B2Paragraph = ScoredBenchmarkFixture(
+  id: 'harder-mixed-b1-b2-paragraph',
+  text:
+      'El sabado visite a mi prima en Valencia. Ella me dijo que los '
+      'billetes estaban caro, pero al final los compramos antes de salir',
+  expectedCorrectedText:
+      'El sábado visité a mi prima en Valencia. Ella me dijo que los '
+      'billetes estaban caros, pero al final los compramos antes de salir.',
+  note:
+      'Harder scored mixed B1-B2 paragraph: accents, plural agreement, and '
+      'sentence-final punctuation in ordinary narrative language.',
+  lengthBand: BenchmarkLengthBand.paragraph,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.b2,
+  errorFamilies: {
+    ObjectiveSpanishErrorFamily.accentMarksDiacritics,
+    ObjectiveSpanishErrorFamily.genderNumberAgreement,
+    ObjectiveSpanishErrorFamily.sentenceBoundariesPunctuation,
+  },
+  intendedErrorCount: 4,
+  isAccentSensitive: true,
+);
+
+const ScoredBenchmarkFixture harderMixedB2C1Paragraph = ScoredBenchmarkFixture(
+  id: 'harder-mixed-b2-c1-paragraph',
+  text:
+      'Aunque el informe que hablábamos era complejo, era importante que '
+      'todos entendían las conclusiones antes de la votación.',
+  expectedCorrectedText:
+      'Aunque el informe del que hablábamos era complejo, era importante '
+      'que todos entendieran las conclusiones antes de la votación.',
+  note:
+      'Harder scored mixed B2-C1 paragraph: required relative preposition '
+      'and subjunctive mood in a formal but plain sentence.',
+  lengthBand: BenchmarkLengthBand.paragraph,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.c1,
+  errorFamilies: {
+    ObjectiveSpanishErrorFamily.relativeClauseRequiredPreposition,
+    ObjectiveSpanishErrorFamily.subjunctiveMood,
+  },
+  intendedErrorCount: 2,
+  isAccentSensitive: true,
+);
+
+const ScoredBenchmarkFixture harderNearLimitMixedText = ScoredBenchmarkFixture(
+  id: 'harder-near-limit-mixed-text',
+  text:
+      'Durante los últimos meses, el equipo ha preparado un informe para '
+      'la asociación local. Ayer revisamos los datos con la directora, '
+      'pero habían varias cifras que no coincidían con los documentos '
+      'originales. El resumen que dependíamos para tomar decisiones no '
+      'estaba completo, y era necesario que cada responsable enviaba su '
+      'parte antes del viernes. También detectamos que las fechas '
+      'principales estaban escrito sin tilde en algunos archivos. Por eso '
+      'acordamos corregirlas antes de entregar la versión final al comité.',
+  expectedCorrectedText:
+      'Durante los últimos meses, el equipo ha preparado un informe para '
+      'la asociación local. Ayer revisamos los datos con la directora, '
+      'pero había varias cifras que no coincidían con los documentos '
+      'originales. El resumen del que dependíamos para tomar decisiones no '
+      'estaba completo, y era necesario que cada responsable enviara su '
+      'parte antes del viernes. También detectamos que las fechas '
+      'principales estaban escritas sin tilde en algunos archivos. Por eso '
+      'acordamos corregirlas antes de entregar la versión final al comité.',
+  note:
+      'Harder scored near-limit mixed text: objective impersonal haber, '
+      'relative preposition, subjunctive mood, and agreement errors spread '
+      'across a long ordinary workplace paragraph.',
+  lengthBand: BenchmarkLengthBand.nearLimit,
+  cefrTargetLevel: BenchmarkCefrTargetLevel.c1,
+  errorFamilies: {
+    ObjectiveSpanishErrorFamily.impersonalHaberPassiveImpersonalSe,
+    ObjectiveSpanishErrorFamily.relativeClauseRequiredPreposition,
+    ObjectiveSpanishErrorFamily.subjunctiveMood,
+    ObjectiveSpanishErrorFamily.genderNumberAgreement,
+  },
+  intendedErrorCount: 4,
+  isAccentSensitive: true,
+);
+
+/// Harder scored fixture subset for second-pass runs of the bare first-pass
+/// model-comparison harness. These are correction cases only and stay scoped
+/// to objective grammar, spelling, and punctuation.
+const List<ScoredBenchmarkFixture> harderSecondPassFirstPassFixtures = [
+  harderAccentMarksDiacritics,
+  harderGenderNumberAgreement,
+  harderPrepositionGovernment,
+  harderVerbAgreement,
+  harderArticlesDeterminers,
+  harderSubjunctiveMood,
+  harderObjectPronounsClitics,
+  harderSerEstarHaber,
+  harderPersonalA,
+  harderRelativeClausePreposition,
+  harderImpersonalHaberSe,
+  harderSentenceBoundariesPunctuation,
+  harderMixedB1B2Paragraph,
+  harderMixedB2C1Paragraph,
+  harderNearLimitMixedText,
+];
+
+/// Exact expected outputs for the harder scored fixture subset.
+final Map<String, String> harderSecondPassFirstPassExpectedCorrectedText =
+    Map.unmodifiable({
+      for (final fixture in harderSecondPassFirstPassFixtures)
+        fixture.id: fixture.expectedCorrectedText,
+    });
+
 /// The shared fixture pool. Small and fixed on purpose: this is for routine
 /// live benchmark runs, not exhaustive language-quality regression testing.
 const List<BenchmarkFixture> benchmarkFixtures = [
@@ -247,6 +584,12 @@ const List<BenchmarkFixture> benchmarkFixtures = [
   twoParagraphAlreadyCorrect,
   twoParagraphMixedErrors,
   nearLimitFullText,
+];
+
+/// All fixture ids addressable by the model-comparison harness.
+const List<BenchmarkFixture> addressableBenchmarkFixtures = [
+  ...benchmarkFixtures,
+  ...harderSecondPassFirstPassFixtures,
 ];
 
 /// The deliberate first-pass subset used by `test/model_comparison_harness.dart`.
@@ -267,11 +610,11 @@ const List<BenchmarkFixture> firstPassModelComparisonFixtures = [
 ];
 
 BenchmarkFixture benchmarkFixtureById(String id) {
-  return benchmarkFixtures.firstWhere(
+  return addressableBenchmarkFixtures.firstWhere(
     (fixture) => fixture.id == id,
     orElse: () => throw StateError(
       'No benchmark fixture with id "$id". Available ids: '
-      '${benchmarkFixtures.map((fixture) => fixture.id).join(', ')}.',
+      '${addressableBenchmarkFixtures.map((fixture) => fixture.id).join(', ')}.',
     ),
   );
 }
