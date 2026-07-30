@@ -97,15 +97,19 @@ void main() {
         );
 
         final result = mergeNaturalnessReview(
-          // First pass already fixed "iso" -> "hizo" and
-          // "desicion" -> "decisión" (grammar/spelling only) before the
-          // naturalness pass ever ran — firstPassCorrectedText, not
-          // originalText, is what the naturalness span is matched against.
-          originalText: 'Ayer ella iso una desicion importante y fuimos a '
-              'tomar un café.',
+          // First pass already fixed "iso" -> "hizo", "desicion" ->
+          // "decisión", and "tambien" -> "también" (grammar/spelling only)
+          // before the naturalness pass ever ran — firstPassCorrectedText,
+          // not originalText, is what the naturalness span is matched
+          // against. "también" sits outside the naturalness span below, so
+          // it survives untouched — unlike "hizo"/"decisión", which are
+          // inside the span and get overwritten by naturalReplacement, so
+          // they don't independently prove anything survived.
+          originalText: 'Ayer ella iso una desicion importante y tambien '
+              'fuimos a tomar un café.',
           firstPassCorrectedText:
-              'Ayer ella hizo una decisión importante y fuimos a tomar un '
-              'café.',
+              'Ayer ella hizo una decisión importante y también fuimos a '
+              'tomar un café.',
           naturalnessReview: const NaturalnessReview(
             hasNaturalnessIssue: true,
             issues: [issue],
@@ -113,11 +117,12 @@ void main() {
         );
 
         // The naturalness fix ("hizo una decisión" -> "tomó una decisión")
-        // and the untouched first-pass grammar/spelling fixes ("hizo",
-        // "decisión") both appear together in one final text.
+        // and the untouched, spatially separate first-pass fix ("tambien"
+        // -> "también") both appear together in one final text.
         expect(
           result.finalCorrectedText,
-          'Ayer ella tomó una decisión importante y fuimos a tomar un café.',
+          'Ayer ella tomó una decisión importante y también fuimos a tomar '
+          'un café.',
         );
         expect(result.appliedEdits, hasLength(1));
         expect(result.appliedEdits.single.issue, same(issue));
