@@ -124,7 +124,18 @@ NaturalnessMergeResult mergeNaturalnessReview({
 
   // Leftmost-starting span wins a conflict, regardless of the issues'
   // order in the review — sorting by resolved position (not list order)
-  // is what makes that deterministic.
+  // is what makes that deterministic. `List.sort` is not guaranteed
+  // stable, so two candidates that start at the exact same position have
+  // no principled "leftmost" winner between them — applying either one
+  // would be an arbitrary guess, which this component exists specifically
+  // to avoid (issue #34). Every candidate in such a tied group is treated
+  // as conflicting and skipped instead, computed before sorting so tie
+  // membership never depends on sort order.
+  final startCounts = <int, int>{};
+  for (final range in resolvedByIssue.values) {
+    startCounts[range.$1] = (startCounts[range.$1] ?? 0) + 1;
+  }
+
   final orderedByPosition = resolvedByIssue.entries.toList()
     ..sort((a, b) => a.value.$1.compareTo(b.value.$1));
 
@@ -132,6 +143,11 @@ NaturalnessMergeResult mergeNaturalnessReview({
   int? lastAppliedEnd;
   for (final entry in orderedByPosition) {
     final (start, end) = entry.value;
+    if (startCounts[start]! > 1) {
+      skipReasonByIssue[entry.key] =
+          NaturalnessMergeSkipReason.overlapsAnotherEdit;
+      continue;
+    }
     if (lastAppliedEnd != null && start < lastAppliedEnd) {
       skipReasonByIssue[entry.key] =
           NaturalnessMergeSkipReason.overlapsAnotherEdit;
