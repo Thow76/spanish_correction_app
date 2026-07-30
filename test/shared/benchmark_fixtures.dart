@@ -149,6 +149,30 @@ enum LexicalCollocationFixtureRole {
   final String reportLabel;
 }
 
+/// Expected behavior for naturalness-only fixture runs.
+enum NaturalnessFixtureRole {
+  unchangedControl('unchanged control'),
+  expectedIssue('expected naturalness issue'),
+  grammarTrap('grammar trap');
+
+  const NaturalnessFixtureRole(this.reportLabel);
+
+  final String reportLabel;
+}
+
+/// Naturalness issue type intentionally present in a fixture.
+enum NaturalnessIssueType {
+  naturalness('naturalness'),
+  calque('calque'),
+  collocation('collocation'),
+  wordChoice('word choice'),
+  idiom('idiom');
+
+  const NaturalnessIssueType(this.reportLabel);
+
+  final String reportLabel;
+}
+
 /// A scored benchmark fixture for exact corrected-text comparison.
 class ScoredBenchmarkFixture extends BenchmarkFixture {
   const ScoredBenchmarkFixture({
@@ -265,6 +289,67 @@ class LexicalCollocationBenchmarkFixture extends BenchmarkFixture {
 
   /// Whether this fixture should remain unchanged or receive a correction.
   final LexicalCollocationFixtureRole role;
+}
+
+/// One expected naturalness issue in a fixture.
+class ExpectedNaturalnessIssue {
+  const ExpectedNaturalnessIssue({
+    required this.span,
+    required this.naturalReplacement,
+    required this.issueType,
+  });
+
+  /// Smallest problematic span expected to be identified.
+  final String span;
+
+  /// A natural replacement that represents the intended correction.
+  final String naturalReplacement;
+
+  /// Linguistic type represented by this issue.
+  final NaturalnessIssueType issueType;
+}
+
+/// A fixture for the naturalness-only model comparison harness.
+///
+/// These fixtures deliberately ask a model to identify wording that is
+/// grammatical and understandable but unlikely to be used naturally. Controls
+/// and grammar traps should return no naturalness issues.
+class NaturalnessBenchmarkFixture extends BenchmarkFixture {
+  const NaturalnessBenchmarkFixture({
+    required String id,
+    required String text,
+    required String note,
+    required this.role,
+    required this.expectedIssues,
+    this.ignoredSpans = const [],
+    BenchmarkLengthBand lengthBand =
+        BenchmarkLengthBand.sentenceOrShortParagraph,
+    bool isAccentSensitive = false,
+    bool isCalcsStyle = false,
+    bool isValidRegionalSpanish = false,
+  }) : super(
+         id: id,
+         text: text,
+         note: note,
+         lengthBand: lengthBand,
+         kind: role == NaturalnessFixtureRole.expectedIssue
+             ? BenchmarkFixtureKind.correction
+             : BenchmarkFixtureKind.control,
+         isAccentSensitive: isAccentSensitive,
+         isCalcsStyle: isCalcsStyle,
+         isValidRegionalSpanish: isValidRegionalSpanish,
+       );
+
+  /// Expected behavior for the naturalness-only prompt.
+  final NaturalnessFixtureRole role;
+
+  /// Naturalness issues that should be returned. Empty for controls and
+  /// grammar traps.
+  final List<ExpectedNaturalnessIssue> expectedIssues;
+
+  /// Spans that are deliberately present but should not be reported by a
+  /// naturalness-only prompt, such as spelling or grammar traps.
+  final List<String> ignoredSpans;
 }
 
 const BenchmarkFixture shortPhraseMissingAccent = BenchmarkFixture(
@@ -722,6 +807,227 @@ final Map<String, String> lexicalCollocationFirstPassExpectedCorrectedText =
         fixture.id: fixture.expectedCorrectedText,
     });
 
+const NaturalnessBenchmarkFixture naturalnessCalqueLlamarParaAtras =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-calque-llamar-para-atras',
+      text: 'Te llamo para atrás cuando termine la reunión.',
+      note:
+          'Naturalness/calque issue: literal English-influenced phrasing that '
+          'should be identified without treating it as grammar.',
+      role: NaturalnessFixtureRole.expectedIssue,
+      expectedIssues: [
+        ExpectedNaturalnessIssue(
+          span: 'llamo para atrás',
+          naturalReplacement: 'llamo después',
+          issueType: NaturalnessIssueType.calque,
+        ),
+      ],
+      isCalcsStyle: true,
+      isAccentSensitive: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessHacerDecisionLong =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-collocation-necesito-hacer-decision',
+      text: 'Necesito hacer una decisión importante antes del viernes.',
+      note:
+          'Collocation overlap case: tests whether the naturalness pass also '
+          'detects hacer una decisión as a lexical-selection issue.',
+      role: NaturalnessFixtureRole.expectedIssue,
+      expectedIssues: [
+        ExpectedNaturalnessIssue(
+          span: 'hacer una decisión',
+          naturalReplacement: 'tomar una decisión',
+          issueType: NaturalnessIssueType.collocation,
+        ),
+      ],
+      isAccentSensitive: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessHacerDecisionShort =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-collocation-quiero-hacer-decision',
+      text: 'Quiero hacer una decisión antes de mañana.',
+      note:
+          'Short collocation overlap case: hacer una decisión should be '
+          'identified as unnatural lexical selection.',
+      role: NaturalnessFixtureRole.expectedIssue,
+      expectedIssues: [
+        ExpectedNaturalnessIssue(
+          span: 'hacer una decisión',
+          naturalReplacement: 'tomar una decisión',
+          issueType: NaturalnessIssueType.collocation,
+        ),
+      ],
+      isAccentSensitive: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessHacerAtencion =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-collocation-hacer-atencion',
+      text: 'Tenemos que hacer atención a los detalles del contrato.',
+      note:
+          'Collocation overlap case: hacer atención should be identified as '
+          'unnatural lexical selection.',
+      role: NaturalnessFixtureRole.expectedIssue,
+      expectedIssues: [
+        ExpectedNaturalnessIssue(
+          span: 'hacer atención',
+          naturalReplacement: 'prestar atención',
+          issueType: NaturalnessIssueType.collocation,
+        ),
+      ],
+      isAccentSensitive: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessTomarReunion =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-collocation-tomar-reunion',
+      text: 'El equipo tomó una reunión para hablar del problema.',
+      note:
+          'Collocation overlap case: tomar una reunión should be identified '
+          'as unnatural lexical selection.',
+      role: NaturalnessFixtureRole.expectedIssue,
+      expectedIssues: [
+        ExpectedNaturalnessIssue(
+          span: 'tomó una reunión',
+          naturalReplacement: 'tuvo una reunión',
+          issueType: NaturalnessIssueType.collocation,
+        ),
+      ],
+      isAccentSensitive: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessHacerPaseo =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-collocation-hacer-paseo',
+      text: 'Ella hizo un paseo por el parque después del trabajo.',
+      note:
+          'Collocation overlap case: hacer un paseo should be identified as '
+          'unnatural lexical selection.',
+      role: NaturalnessFixtureRole.expectedIssue,
+      expectedIssues: [
+        ExpectedNaturalnessIssue(
+          span: 'hizo un paseo',
+          naturalReplacement: 'dio un paseo',
+          issueType: NaturalnessIssueType.collocation,
+        ),
+      ],
+      isAccentSensitive: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessControlHacerPregunta =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-control-hacer-pregunta',
+      text: 'Voy a hacer una pregunta al profesor después de clase.',
+      note:
+          'Valid collocation control: hacer una pregunta should not be '
+          'reported as a naturalness issue.',
+      role: NaturalnessFixtureRole.unchangedControl,
+      expectedIssues: [],
+      isAccentSensitive: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessControlTomarFoto =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-control-tomar-foto',
+      text: 'Necesito tomar una foto del documento antes de enviarlo.',
+      note:
+          'Valid collocation control: tomar una foto should not be reported '
+          'as a naturalness issue.',
+      role: NaturalnessFixtureRole.unchangedControl,
+      expectedIssues: [],
+    );
+
+const NaturalnessBenchmarkFixture naturalnessControlParaCasa =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-control-para-casa',
+      text: 'Está lloviendo, así que voy para casa ahora mismo.',
+      note:
+          'Valid regional/ordinary phrasing control: voy para casa should not '
+          'be normalized away.',
+      role: NaturalnessFixtureRole.unchangedControl,
+      expectedIssues: [],
+      isAccentSensitive: true,
+      isValidRegionalSpanish: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessGrammarTrapGustar =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-grammar-trap-gustar-agreement',
+      text: 'Me gusta las películas de acción los fines de semana.',
+      note:
+          'Grammar trap: the naturalness-only prompt should ignore ordinary '
+          'grammar errors such as gustar agreement.',
+      role: NaturalnessFixtureRole.grammarTrap,
+      expectedIssues: [],
+      ignoredSpans: ['Me gusta las películas'],
+      isAccentSensitive: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessEs3MultiCorrection =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-es3-multi-correction',
+      text:
+          'Ayer había mucho trafico y mis amigos llamaron para atrás para '
+          'confirmar la cena.',
+      note:
+          'ES-3 naturalness case with a spelling trap: report llamaron para '
+          'atrás, but ignore trafico without an accent.',
+      role: NaturalnessFixtureRole.expectedIssue,
+      expectedIssues: [
+        ExpectedNaturalnessIssue(
+          span: 'llamaron para atrás',
+          naturalReplacement: 'devolvieron la llamada',
+          issueType: NaturalnessIssueType.calque,
+        ),
+      ],
+      ignoredSpans: ['trafico'],
+      isCalcsStyle: true,
+    );
+
+const NaturalnessBenchmarkFixture naturalnessEs4CalquePair =
+    NaturalnessBenchmarkFixture(
+      id: 'naturalness-es4-calque-pair',
+      text:
+          '¿Puedo tener una cerveza? Quiero pasar un buen tiempo con mis '
+          'amigos esta noche.',
+      note:
+          'ES-4 naturalness case with two calque issues in one input: a '
+          'literal request form and pasar un buen tiempo.',
+      role: NaturalnessFixtureRole.expectedIssue,
+      expectedIssues: [
+        ExpectedNaturalnessIssue(
+          span: 'Puedo tener una cerveza',
+          naturalReplacement: 'Me pones una cerveza',
+          issueType: NaturalnessIssueType.calque,
+        ),
+        ExpectedNaturalnessIssue(
+          span: 'pasar un buen tiempo',
+          naturalReplacement: 'pasarlo bien',
+          issueType: NaturalnessIssueType.calque,
+        ),
+      ],
+      isCalcsStyle: true,
+      isAccentSensitive: true,
+    );
+
+/// Targeted naturalness-only fixture subset for model comparison runs.
+const List<NaturalnessBenchmarkFixture> naturalnessModelComparisonFixtures = [
+  naturalnessCalqueLlamarParaAtras,
+  naturalnessHacerDecisionLong,
+  naturalnessHacerDecisionShort,
+  naturalnessHacerAtencion,
+  naturalnessTomarReunion,
+  naturalnessHacerPaseo,
+  naturalnessControlHacerPregunta,
+  naturalnessControlTomarFoto,
+  naturalnessControlParaCasa,
+  naturalnessGrammarTrapGustar,
+  naturalnessEs3MultiCorrection,
+  naturalnessEs4CalquePair,
+];
+
 const ScoredBenchmarkFixture harderAccentMarksDiacritics =
     ScoredBenchmarkFixture(
       id: 'harder-accent-marks-diacritics',
@@ -1034,6 +1340,7 @@ const List<BenchmarkFixture> addressableBenchmarkFixtures = [
   ...harderSecondPassFirstPassFixtures,
   ...boundaryControlFirstPassFixtures,
   ...lexicalCollocationFirstPassFixtures,
+  ...naturalnessModelComparisonFixtures,
 ];
 
 /// The deliberate first-pass subset used by `test/model_comparison_harness.dart`.

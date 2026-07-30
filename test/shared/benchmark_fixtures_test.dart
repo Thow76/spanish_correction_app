@@ -504,6 +504,100 @@ void main() {
     });
   });
 
+  group('naturalnessModelComparisonFixtures', () {
+    test('exists with the required stable fixture ids', () {
+      expect(naturalnessModelComparisonFixtures, hasLength(12));
+      expect(naturalnessModelComparisonFixtures.map((fixture) => fixture.id), [
+        'naturalness-calque-llamar-para-atras',
+        'naturalness-collocation-necesito-hacer-decision',
+        'naturalness-collocation-quiero-hacer-decision',
+        'naturalness-collocation-hacer-atencion',
+        'naturalness-collocation-tomar-reunion',
+        'naturalness-collocation-hacer-paseo',
+        'naturalness-control-hacer-pregunta',
+        'naturalness-control-tomar-foto',
+        'naturalness-control-para-casa',
+        'naturalness-grammar-trap-gustar-agreement',
+        'naturalness-es3-multi-correction',
+        'naturalness-es4-calque-pair',
+      ]);
+    });
+
+    test('registers controls, expected issues, and traps correctly', () {
+      final byId = {
+        for (final fixture in naturalnessModelComparisonFixtures)
+          fixture.id: fixture,
+      };
+
+      expect(
+        byId['naturalness-calque-llamar-para-atras']!
+            .expectedIssues
+            .single
+            .span,
+        'llamo para atrás',
+      );
+      expect(
+        byId['naturalness-collocation-necesito-hacer-decision']!
+            .expectedIssues
+            .single
+            .naturalReplacement,
+        'tomar una decisión',
+      );
+      expect(
+        byId['naturalness-collocation-hacer-atencion']!
+            .expectedIssues
+            .single
+            .issueType,
+        NaturalnessIssueType.collocation,
+      );
+      expect(
+        byId['naturalness-control-hacer-pregunta']!.expectedIssues,
+        isEmpty,
+      );
+      expect(
+        byId['naturalness-control-tomar-foto']!.role,
+        NaturalnessFixtureRole.unchangedControl,
+      );
+      expect(
+        byId['naturalness-grammar-trap-gustar-agreement']!.ignoredSpans,
+        contains('Me gusta las películas'),
+      );
+      expect(
+        byId['naturalness-es3-multi-correction']!.text,
+        contains('trafico'),
+      );
+      expect(
+        byId['naturalness-es3-multi-correction']!.ignoredSpans,
+        contains('trafico'),
+      );
+      expect(
+        byId['naturalness-es4-calque-pair']!.expectedIssues.map(
+          (issue) => issue.span,
+        ),
+        ['Puedo tener una cerveza', 'pasar un buen tiempo'],
+      );
+    });
+
+    test('has unique ids across all addressable fixtures', () {
+      final ids = addressableBenchmarkFixtures
+          .map((fixture) => fixture.id)
+          .toList();
+      expect(
+        ids.toSet().length,
+        ids.length,
+        reason: 'All addressable fixture ids must be unique.',
+      );
+    });
+
+    test('controls and grammar traps expect no naturalness issues', () {
+      for (final fixture in naturalnessModelComparisonFixtures.where(
+        (fixture) => fixture.role != NaturalnessFixtureRole.expectedIssue,
+      )) {
+        expect(fixture.expectedIssues, isEmpty, reason: fixture.id);
+      }
+    });
+  });
+
   group('firstPassModelComparisonFixtures', () {
     test('is a small subset of the shared benchmark fixtures', () {
       final allIds = benchmarkFixtures.map((fixture) => fixture.id).toSet();
