@@ -83,6 +83,48 @@ void main() {
       expect(result.skippedEdits, isEmpty);
     });
 
+    test(
+      'applies an exact single-occurrence naturalness fix on top of an '
+      'unrelated first-pass grammar/spelling fix, and both appear in the '
+      'final text (issue #33)',
+      () {
+        const issue = NaturalnessIssue(
+          span: 'hizo una decisión',
+          naturalReplacement: 'tomó una decisión',
+          explanation:
+              '"Hacer una decisión" is a calque; native speakers say '
+              '"tomar una decisión".',
+        );
+
+        final result = mergeNaturalnessReview(
+          // First pass already fixed "iso" -> "hizo" and
+          // "desicion" -> "decisión" (grammar/spelling only) before the
+          // naturalness pass ever ran — firstPassCorrectedText, not
+          // originalText, is what the naturalness span is matched against.
+          originalText: 'Ayer ella iso una desicion importante y fuimos a '
+              'tomar un café.',
+          firstPassCorrectedText:
+              'Ayer ella hizo una decisión importante y fuimos a tomar un '
+              'café.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issue],
+          ),
+        );
+
+        // The naturalness fix ("hizo una decisión" -> "tomó una decisión")
+        // and the untouched first-pass grammar/spelling fixes ("hizo",
+        // "decisión") both appear together in one final text.
+        expect(
+          result.finalCorrectedText,
+          'Ayer ella tomó una decisión importante y fuimos a tomar un café.',
+        );
+        expect(result.appliedEdits, hasLength(1));
+        expect(result.appliedEdits.single.issue, same(issue));
+        expect(result.skippedEdits, isEmpty);
+      },
+    );
+
     test('skips a span that does not occur in the first-pass text', () {
       const issue = NaturalnessIssue(
         span: 'no existe en el texto',
