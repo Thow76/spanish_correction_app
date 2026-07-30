@@ -1,0 +1,213 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:spanish_correction_app/features/corrections/domain/naturalness_issue.dart';
+import 'package:spanish_correction_app/features/corrections/domain/naturalness_merge.dart';
+import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
+
+void main() {
+  group('mergeNaturalnessReview', () {
+    test('returns the first-pass text unchanged when there are no issues', () {
+      final result = mergeNaturalnessReview(
+        originalText: 'Necesito hacer una decision importante.',
+        firstPassCorrectedText: 'Necesito hacer una decisión importante.',
+        naturalnessReview: const NaturalnessReview(
+          hasNaturalnessIssue: false,
+          issues: [],
+        ),
+      );
+
+      expect(
+        result.finalCorrectedText,
+        'Necesito hacer una decisión importante.',
+      );
+      expect(result.appliedEdits, isEmpty);
+      expect(result.skippedEdits, isEmpty);
+      expect(result.originalText, 'Necesito hacer una decision importante.');
+      expect(
+        result.firstPassCorrectedText,
+        'Necesito hacer una decisión importante.',
+      );
+    });
+
+    test('applies a single unambiguous issue', () {
+      const issue = NaturalnessIssue(
+        span: 'hacer una decisión',
+        naturalReplacement: 'tomar una decisión',
+        explanation: 'Wrong collocation for "decisión".',
+      );
+
+      final result = mergeNaturalnessReview(
+        originalText: 'Necesito hacer una decision importante.',
+        firstPassCorrectedText: 'Necesito hacer una decisión importante.',
+        naturalnessReview: const NaturalnessReview(
+          hasNaturalnessIssue: true,
+          issues: [issue],
+        ),
+      );
+
+      expect(
+        result.finalCorrectedText,
+        'Necesito tomar una decisión importante.',
+      );
+      expect(result.appliedEdits, hasLength(1));
+      expect(result.appliedEdits.single.issue, same(issue));
+      expect(result.skippedEdits, isEmpty);
+    });
+
+    test('applies multiple non-overlapping issues', () {
+      const issue1 = NaturalnessIssue(
+        span: 'hacer una decisión',
+        naturalReplacement: 'tomar una decisión',
+        explanation: 'Wrong collocation for "decisión".',
+      );
+      const issue2 = NaturalnessIssue(
+        span: 'hacer un paseo',
+        naturalReplacement: 'dar un paseo',
+        explanation: 'Wrong collocation for "paseo".',
+      );
+
+      final result = mergeNaturalnessReview(
+        originalText: 'placeholder',
+        firstPassCorrectedText:
+            'Voy a hacer una decisión y también voy a hacer un paseo.',
+        naturalnessReview: const NaturalnessReview(
+          hasNaturalnessIssue: true,
+          issues: [issue1, issue2],
+        ),
+      );
+
+      expect(
+        result.finalCorrectedText,
+        'Voy a tomar una decisión y también voy a dar un paseo.',
+      );
+      expect(result.appliedEdits, hasLength(2));
+      expect(result.skippedEdits, isEmpty);
+    });
+
+    test('skips a span that does not occur in the first-pass text', () {
+      const issue = NaturalnessIssue(
+        span: 'no existe en el texto',
+        naturalReplacement: 'reemplazo',
+        explanation: 'Never actually present.',
+      );
+
+      final result = mergeNaturalnessReview(
+        originalText: 'placeholder',
+        firstPassCorrectedText: 'Todo está bien.',
+        naturalnessReview: const NaturalnessReview(
+          hasNaturalnessIssue: true,
+          issues: [issue],
+        ),
+      );
+
+      expect(result.finalCorrectedText, 'Todo está bien.');
+      expect(result.appliedEdits, isEmpty);
+      expect(result.skippedEdits, hasLength(1));
+      expect(result.skippedEdits.single.issue, same(issue));
+      expect(
+        result.skippedEdits.single.reason,
+        NaturalnessMergeSkipReason.spanNotFound,
+      );
+    });
+
+    test('skips a span that occurs more than once, without guessing', () {
+      const issue = NaturalnessIssue(
+        span: 'tráfico',
+        naturalReplacement: 'tránsito',
+        explanation: 'Anglicism.',
+      );
+
+      final result = mergeNaturalnessReview(
+        originalText: 'placeholder',
+        firstPassCorrectedText: 'Vi mucho tráfico y luego más tráfico.',
+        naturalnessReview: const NaturalnessReview(
+          hasNaturalnessIssue: true,
+          issues: [issue],
+        ),
+      );
+
+      expect(
+        result.finalCorrectedText,
+        'Vi mucho tráfico y luego más tráfico.',
+      );
+      expect(result.appliedEdits, isEmpty);
+      expect(result.skippedEdits, hasLength(1));
+      expect(
+        result.skippedEdits.single.reason,
+        NaturalnessMergeSkipReason.ambiguousSpan,
+      );
+    });
+
+    test(
+      'applies the leftmost-starting issue and skips an overlapping one, '
+      'regardless of which order they appear in the review',
+      () {
+        const issueLate = NaturalnessIssue(
+          span: 'una decisión importante',
+          naturalReplacement: 'una decisión clave',
+          explanation: 'Overlaps the other candidate.',
+        );
+        const issueEarly = NaturalnessIssue(
+          span: 'hacer una decisión',
+          naturalReplacement: 'tomar una decisión',
+          explanation: 'Wrong collocation for "decisión".',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'placeholder',
+          // issueLate is listed FIRST in the review, but issueEarly starts
+          // earlier in the text — leftmost-by-position must still win.
+          firstPassCorrectedText: 'Voy a hacer una decisión importante hoy.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issueLate, issueEarly],
+          ),
+        );
+
+        expect(
+          result.finalCorrectedText,
+          'Voy a tomar una decisión importante hoy.',
+        );
+        expect(result.appliedEdits, hasLength(1));
+        expect(result.appliedEdits.single.issue, same(issueEarly));
+        expect(result.skippedEdits, hasLength(1));
+        expect(result.skippedEdits.single.issue, same(issueLate));
+        expect(
+          result.skippedEdits.single.reason,
+          NaturalnessMergeSkipReason.overlapsAnotherEdit,
+        );
+      },
+    );
+
+    test('preserves the review\'s issue order in skippedEdits even when '
+        'reasons come from different resolution phases', () {
+      const issueNotFound = NaturalnessIssue(
+        span: 'nunca aparece',
+        naturalReplacement: 'x',
+        explanation: 'Not present at all.',
+      );
+      const issueLate = NaturalnessIssue(
+        span: 'una decisión importante',
+        naturalReplacement: 'una decisión clave',
+        explanation: 'Overlaps the other candidate.',
+      );
+      const issueEarly = NaturalnessIssue(
+        span: 'hacer una decisión',
+        naturalReplacement: 'tomar una decisión',
+        explanation: 'Wrong collocation for "decisión".',
+      );
+
+      final result = mergeNaturalnessReview(
+        originalText: 'placeholder',
+        firstPassCorrectedText: 'Voy a hacer una decisión importante hoy.',
+        naturalnessReview: const NaturalnessReview(
+          hasNaturalnessIssue: true,
+          issues: [issueNotFound, issueLate, issueEarly],
+        ),
+      );
+
+      expect(result.skippedEdits, hasLength(2));
+      expect(result.skippedEdits[0].issue, same(issueNotFound));
+      expect(result.skippedEdits[1].issue, same(issueLate));
+    });
+  });
+}
