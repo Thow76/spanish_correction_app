@@ -225,6 +225,60 @@ void main() {
       },
     );
 
+    test(
+      'resolves a three-issue overlap chain: applies the two edits that '
+      'don\'t overlap each other, and skips only the middle one that '
+      'bridges both (issue #34)',
+      () {
+        // A = "hacer una decisión" (words 3-5), B = "una decisión
+        // importante" (words 4-6, overlaps A), C = "importante hoy mismo"
+        // (words 6-8, overlaps B but NOT A — A and C are adjacent, not
+        // overlapping). B must not silently block C just because B itself
+        // was skipped.
+        const issueA = NaturalnessIssue(
+          span: 'hacer una decisión',
+          naturalReplacement: 'tomar una decisión',
+          explanation: 'Wrong collocation for "decisión".',
+        );
+        const issueB = NaturalnessIssue(
+          span: 'una decisión importante',
+          naturalReplacement: 'una decisión crucial',
+          explanation: 'Bridges A and C — must not be applied.',
+        );
+        const issueC = NaturalnessIssue(
+          span: 'importante hoy mismo',
+          naturalReplacement: 'clave desde mañana',
+          explanation: 'Unrelated to A once B is out of the way.',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'placeholder',
+          firstPassCorrectedText:
+              'Voy a hacer una decisión importante hoy mismo.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issueA, issueB, issueC],
+          ),
+        );
+
+        expect(
+          result.finalCorrectedText,
+          'Voy a tomar una decisión clave desde mañana.',
+        );
+        expect(result.appliedEdits, hasLength(2));
+        expect(
+          result.appliedEdits.map((edit) => edit.issue),
+          [same(issueA), same(issueC)],
+        );
+        expect(result.skippedEdits, hasLength(1));
+        expect(result.skippedEdits.single.issue, same(issueB));
+        expect(
+          result.skippedEdits.single.reason,
+          NaturalnessMergeSkipReason.overlapsAnotherEdit,
+        );
+      },
+    );
+
     test('preserves the review\'s issue order in skippedEdits even when '
         'reasons come from different resolution phases', () {
       const issueNotFound = NaturalnessIssue(
