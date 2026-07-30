@@ -226,6 +226,47 @@ void main() {
     );
 
     test(
+      'skips both candidates when two spans start at the exact same '
+      'position, since neither is a principled "leftmost" winner over '
+      'the other (issue #34 review fix)',
+      () {
+        const issueShort = NaturalnessIssue(
+          span: 'hacer una decisión',
+          naturalReplacement: 'tomar una decisión',
+          explanation: 'Wrong collocation for "decisión".',
+        );
+        const issueLong = NaturalnessIssue(
+          span: 'hacer una decisión importante',
+          naturalReplacement: 'tomar una decisión importante',
+          explanation: 'Same collocation, wider span, same start.',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'placeholder',
+          firstPassCorrectedText: 'Voy a hacer una decisión importante hoy.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issueShort, issueLong],
+          ),
+        );
+
+        expect(
+          result.finalCorrectedText,
+          'Voy a hacer una decisión importante hoy.',
+        );
+        expect(result.appliedEdits, isEmpty);
+        expect(result.skippedEdits, hasLength(2));
+        expect(
+          result.skippedEdits.map((edit) => edit.issue),
+          [same(issueShort), same(issueLong)],
+        );
+        for (final skipped in result.skippedEdits) {
+          expect(skipped.reason, NaturalnessMergeSkipReason.overlapsAnotherEdit);
+        }
+      },
+    );
+
+    test(
       'resolves a three-issue overlap chain: applies the two edits that '
       'don\'t overlap each other, and skips only the middle one that '
       'bridges both (issue #34)',
