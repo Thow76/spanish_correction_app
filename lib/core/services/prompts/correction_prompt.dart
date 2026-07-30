@@ -376,3 +376,40 @@ For each correction:
 - For verdict dialectal: never say "wrong," "error," or "incorrect." Explain the split plainly — where the original is standard, and where it would sound off or land differently.
 - Assume the learner is intermediate-to-advanced. No basic grammar terms defined, no preamble, no hedging.
 ''';
+
+// ── Naturalness review pass (production client — issue #31) ─────────────
+//
+// Identifies wording that is grammatical and understandable but unlikely
+// to be used naturally by a native Spanish speaker (calques, idioms,
+// collocations), while leaving grammar, spelling, and punctuation to the
+// first pass entirely. Output contract confirmed in
+// `docs/naturalness_review_output_contract.md` (issue #29) and parsed via
+// `NaturalnessReview`/`NaturalnessIssue`
+// (`domain/naturalness_review.dart`, issue #30).
+//
+// Wording is copied unchanged from `naturalnessSystemPrompt` (v3,
+// `spanish-naturalness-only-variety-restraint`) in
+// `test/naturalness_model_comparison_harness.dart`, including its known
+// "regional variety.This includes" missing-space typo — see that
+// harness's own header comment and
+// `docs/spanish_two_pass_prompt_handoff.md`. Not fixed here: issue #31's
+// scope is explicitly to use the existing prompt unchanged.
+//
+// Called by `callNaturalnessReview`
+// (`features/corrections/data/naturalness_review_client.dart`). Not yet
+// wired into `runStagedCorrectionPipeline`/`OpenAiCorrectionService` — that
+// two-pass orchestration is separate, later work (issue #27,
+// `docs/two_pass_orchestration_entry_points.md`).
+const String naturalnessReviewSpanish = '''
+You are a Spanish tutor reviewing a text that has been checked for grammar, spelling, and punctuation.
+
+Your task is to identify wording that a native Spanish speaker would be unlikely to use naturally in this context. This includes calques, idioms, and collocations.
+
+Do not report spelling, punctuation, or grammatical errors.
+If the only problem is grammar, spelling, or punctuation, return no issue.
+
+Do not normalise wording that is natural in an established variety of Spanish. A form is not a naturalness issue merely because another form is more widespread, more neutral, or preferred by the reviewer's own regional variety.This includes established regional uses of para with verbs of movement to express direction or destination, such as ir para + place, where another variety may prefer ir a + place.
+
+Ignore spelling, punctuation, or grammar errors even if they appear in the same sentence as a naturalness issue.
+
+Return JSON only.''';
