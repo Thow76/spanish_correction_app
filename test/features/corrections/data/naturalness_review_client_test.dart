@@ -23,6 +23,20 @@ void main() {
     },
   );
 
+  test(
+    'naturalnessReviewResponseFormat matches the harness-validated schema',
+    () {
+      // Same pinning precedent as the prompt-text check above: the
+      // harness's own response_format already ran live successfully
+      // (issue #41, 12/12 fixtures) — this keeps the production copy
+      // identical to it rather than letting the two schemas drift apart.
+      expect(
+        naturalnessReviewResponseFormat,
+        harness.naturalnessResponseFormat,
+      );
+    },
+  );
+
   group('buildNaturalnessUserContent', () {
     test('includes the review instruction and the text', () {
       final content = buildNaturalnessUserContent(
@@ -118,6 +132,7 @@ void main() {
           messages[1]['content'],
           buildNaturalnessUserContent('Ayer llamé para atrás a mi amigo.'),
         );
+        expect(sent['response_format'], naturalnessReviewResponseFormat);
       },
     );
   });

@@ -14,13 +14,61 @@ String buildNaturalnessUserContent(String text) {
       '$text';
 }
 
+/// The exact JSON shape `parseNaturalnessReviewResponse`/
+/// `NaturalnessReview.fromJson` require, sent as `response_format` so the
+/// API constrains the model's own output to it — copied by value from
+/// `naturalnessResponseFormat` in
+/// `test/naturalness_model_comparison_harness.dart` (issue #41), which
+/// already validated this exact schema live.
+///
+/// Required: unlike Stage 1/1B/1C/2/3's prompts, `naturalnessReviewSpanish`
+/// never states its required field names anywhere in its own text — it
+/// only says "Return JSON only." Confirmed live (issue #42's integration
+/// harness, `docs/two_pass_integration_harness_summary.md`): without this
+/// schema constraining the response, gpt-5.1 reliably invents its own
+/// differently-shaped JSON instead (observed:
+/// `{"issues":[{"original":..., "suggestions":[...], "explanation":...}]}`,
+/// missing `has_naturalness_issue` entirely) — every one of 5 live test
+/// fixtures failed to parse without this, reproduced twice.
+const Map<String, Object?> naturalnessReviewResponseFormat = {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'spanish_naturalness_response',
+    'strict': true,
+    'schema': {
+      'type': 'object',
+      'additionalProperties': false,
+      'required': ['has_naturalness_issue', 'issues'],
+      'properties': {
+        'has_naturalness_issue': {'type': 'boolean'},
+        'issues': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'additionalProperties': false,
+            'required': ['span', 'natural_replacement', 'explanation'],
+            'properties': {
+              'span': {'type': 'string'},
+              'natural_replacement': {'type': 'string'},
+              'explanation': {'type': 'string'},
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 /// Calls the naturalness review pass (`naturalnessReviewSpanish`) against
 /// [text] and parses the reply into a [NaturalnessReview].
 ///
 /// Uses the same shared transport ([OpenAiChatCompletionsClient.complete])
-/// and prompt-only JSON contract as every other stage client in this
-/// pipeline — no `response_format`; the model is asked for JSON via the
-/// prompt text itself, same as Stage 1/1B/1C/2/3.
+/// as every other stage client in this pipeline, but — unlike Stage
+/// 1/1B/1C/2/3 — also sends [naturalnessReviewResponseFormat] as
+/// `response_format`, so the API itself constrains the model's output to
+/// the required shape rather than relying solely on the prompt's own
+/// wording. See that constant's doc comment for why this one call needs
+/// it when the others don't.
 Future<NaturalnessReview> callNaturalnessReview({
   required OpenAiChatCompletionsClient client,
   required String model,
@@ -31,6 +79,7 @@ Future<NaturalnessReview> callNaturalnessReview({
     systemPrompt: naturalnessReviewSpanish,
     userText: buildNaturalnessUserContent(text),
     stageLabel: 'naturalness_review',
+    responseFormat: naturalnessReviewResponseFormat,
   );
   return parseNaturalnessReviewResponse(replyText);
 }
