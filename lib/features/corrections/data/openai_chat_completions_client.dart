@@ -133,11 +133,21 @@ class OpenAiChatCompletionsClient {
   /// successfully.
   final void Function(ChatCompletionsUsage usage)? _onUsage;
 
+  /// [responseFormat], when supplied, is sent verbatim as the request's
+  /// `response_format` — e.g. a `json_schema` object with `strict: true` —
+  /// to constrain the model's own output to an exact shape at the API
+  /// level, rather than relying solely on [systemPrompt] asking for JSON
+  /// in its own text. Omitted (`null`) by default, which keeps every
+  /// existing caller's request body byte-for-byte unchanged; Stage
+  /// 1/1B/1C/2/3 all still rely on prompt-only JSON, since those prompts
+  /// already spell out their exact expected shape in their own text. See
+  /// `callNaturalnessReview` for a caller that does supply one, and why.
   Future<String> complete({
     required String model,
     required String systemPrompt,
     required String userText,
     String stageLabel = 'unspecified',
+    Map<String, Object?>? responseFormat,
   }) async {
     final stopwatch = Stopwatch()..start();
     try {
@@ -157,6 +167,7 @@ class OpenAiChatCompletionsClient {
               {'role': 'system', 'content': systemPrompt},
               {'role': 'user', 'content': userText},
             ],
+            'response_format': ?responseFormat,
             if (model.startsWith('gpt-5.6')) 'reasoning_effort': 'high',
           }),
         ),

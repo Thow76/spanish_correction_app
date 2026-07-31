@@ -34,6 +34,53 @@ void main() {
     );
   });
 
+  group('responseFormat', () {
+    test('omits response_format from the request body when not supplied — '
+        'every existing caller\'s request body stays byte-for-byte '
+        'unchanged', () async {
+      final client = _CapturingHttpClient(_chatCompletionsEnvelope('Hola'));
+
+      await OpenAiChatCompletionsClient(
+        apiKey: 'test-key',
+        httpClient: client,
+      ).complete(model: 'gpt-5.5', systemPrompt: 'sys', userText: 'user');
+
+      final sent = jsonDecode(client.lastRequest!.bodyAsString) as Map;
+      expect(sent.containsKey('response_format'), isFalse);
+    });
+
+    test('sends responseFormat verbatim as response_format when supplied', () async {
+      final client = _CapturingHttpClient(_chatCompletionsEnvelope('Hola'));
+      const schema = {
+        'type': 'json_schema',
+        'json_schema': {
+          'name': 'example',
+          'strict': true,
+          'schema': {
+            'type': 'object',
+            'required': ['field'],
+            'properties': {
+              'field': {'type': 'string'},
+            },
+          },
+        },
+      };
+
+      await OpenAiChatCompletionsClient(
+        apiKey: 'test-key',
+        httpClient: client,
+      ).complete(
+        model: 'gpt-5.5',
+        systemPrompt: 'sys',
+        userText: 'user',
+        responseFormat: schema,
+      );
+
+      final sent = jsonDecode(client.lastRequest!.bodyAsString) as Map;
+      expect(sent['response_format'], schema);
+    });
+  });
+
   test('returns the trimmed assistant reply text', () async {
     final client = _CapturingHttpClient(
       _chatCompletionsEnvelope('  ¡Hola! ¿Qué tal?  '),
