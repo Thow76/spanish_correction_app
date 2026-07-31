@@ -141,6 +141,82 @@ void main() {
         expect(client.naturalnessCallCount, 2);
       },
     );
+
+    test(
+      'falls back to a sequential naturalness rerun when the parallel '
+      'naturalness pass flags an ambiguous span (occurs more than once)',
+      () async {
+        // "tráfico" occurs twice in both originalText and
+        // firstPassCorrectedText — the ambiguity is untouched by the first
+        // pass, which only fixes the unrelated "iso" -> "hizo". That
+        // unrelated fix is what makes firstPassCorrectedText differ from
+        // originalText, so the parallel and fallback naturalness calls
+        // have distinct user text (otherwise they'd be indistinguishable
+        // to this fake, since it routes the naturalness prompt by exact
+        // user text).
+        const originalText = 'Vi mucho tráfico, y luego iso más tráfico.';
+        const firstPassCorrectedText =
+            'Vi mucho tráfico, y luego hizo más tráfico.';
+        final isoIndex = resolveOccurrenceCorrections(originalText, [
+          const OccurrenceCorrection(originalPhrase: 'iso', occurrence: 1),
+        ]).single.startIndex!;
+
+        final client = _RoutingHttpClient(
+          repliesBySystemPrompt: {
+            stage1DetectionDialectSpanish: _arrayEnvelope(['"iso"']),
+            stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+            stage2CategorizationSpanish: _arrayEnvelope([
+              '{"original_phrase": "iso", "corrected_phrase": "hizo", '
+                  '"occurrence": 1, "category": "Grammar", "verdict": "error"}',
+            ]),
+            stage3FeedbackSpanish: _arrayEnvelope([
+              '{"start_index": $isoIndex, "short_explanation": '
+                  '"Iso should be hizo."}',
+            ]),
+          },
+          naturalnessRepliesByUserText: {
+            // Parallel call: flags "tráfico", which occurs twice in
+            // originalText — ambiguousSpan, not spanNotFound.
+            buildNaturalnessUserContent(originalText): _naturalnessEnvelope(
+              '{"has_naturalness_issue": true, "issues": ['
+                  '{"span": "tráfico", '
+                  '"natural_replacement": "tránsito", '
+                  '"explanation": "Tráfico as traffic is an anglicism."}'
+                  ']}',
+            ),
+            // Fallback call: reviews firstPassCorrectedText and this time
+            // flags a more specific, unambiguous span.
+            buildNaturalnessUserContent(firstPassCorrectedText):
+                _naturalnessEnvelope(
+              '{"has_naturalness_issue": true, "issues": ['
+                  '{"span": "más tráfico", '
+                  '"natural_replacement": "más tránsito", '
+                  '"explanation": "Tráfico as traffic is an anglicism."}'
+                  ']}',
+            ),
+          },
+        );
+
+        final result = await runTwoPassCorrectionPipeline(
+          client: OpenAiChatCompletionsClient(
+            apiKey: 'test-key',
+            httpClient: client,
+          ),
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          submittedText: originalText,
+        );
+
+        expect(
+          result.finalCorrectedText,
+          'Vi mucho tráfico, y luego hizo más tránsito.',
+        );
+        expect(result.appliedEdits, hasLength(1));
+        expect(result.skippedEdits, isEmpty);
+        expect(client.naturalnessCallCount, 2);
+      },
+    );
   });
 }
 
