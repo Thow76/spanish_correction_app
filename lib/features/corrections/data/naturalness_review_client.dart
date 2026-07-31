@@ -23,13 +23,16 @@ String buildNaturalnessUserContent(String text) {
 ///
 /// Required: unlike Stage 1/1B/1C/2/3's prompts, `naturalnessReviewSpanish`
 /// never states its required field names anywhere in its own text — it
-/// only says "Return JSON only." Confirmed live (issue #42's integration
-/// harness, `docs/two_pass_integration_harness_summary.md`): without this
-/// schema constraining the response, gpt-5.1 reliably invents its own
-/// differently-shaped JSON instead (observed:
+/// only says "Return JSON only." Confirmed live against gpt-5.1 (issue
+/// #42's live two-pass integration harness, PR #62; this fix, PR #63):
+/// without this schema constraining the response, the model reliably
+/// invents its own differently-shaped JSON instead (observed:
 /// `{"issues":[{"original":..., "suggestions":[...], "explanation":...}]}`,
 /// missing `has_naturalness_issue` entirely) — every one of 5 live test
-/// fixtures failed to parse without this, reproduced twice.
+/// fixtures failed to parse without this, reproduced twice; 0 of 5 failed
+/// once this schema was added. See PR #62/#63 on GitHub for the full
+/// investigation — not referenced by file path here, since this fix can
+/// land before or after #62's own doc commits merge.
 const Map<String, Object?> naturalnessReviewResponseFormat = {
   'type': 'json_schema',
   'json_schema': {

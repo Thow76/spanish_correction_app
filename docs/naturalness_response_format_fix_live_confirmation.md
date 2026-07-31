@@ -38,9 +38,10 @@ producing `Ayer tomó una decisión importante.`
 
 4 of 5 fixtures hit a conflict (triggering the fallback), more than the
 per-fixture notes in the harness predicted (only 1 of 5 was designed to
-conflict). Looking at the per-fixture detail
-(`docs/two_pass_integration_harness.md`), this is model non-determinism,
-not a code defect: gpt-5.1's phrasing of a flagged span isn't always
+conflict). Looking at the per-fixture detail from this run (regenerated
+locally; see #62's `docs/two_pass_integration_harness.md` once that
+branch merges), this is model non-determinism, not a code defect:
+gpt-5.1's phrasing of a flagged span isn't always
 byte-identical between two separate calls on the same input (e.g. it
 independently chose `Había mucho tráfico ayer.` as a more natural
 rewording on both the original and first-pass-corrected text for the
