@@ -4,7 +4,6 @@ import 'correction_item.dart';
 import 'correction_overlap_resolver.dart';
 import 'correction_response.dart';
 import 'error_category.dart';
-import 'naturalness_issue.dart';
 import 'naturalness_merge.dart';
 
 /// Combines the first pass's own [CorrectionResponse] with a
@@ -50,12 +49,25 @@ import 'naturalness_merge.dart';
 ///   app's existing substring-search highlight fallback already handles a
 ///   [CorrectionItem] with no precomputed range, the same as any other
 ///   unanchored correction; see `CorrectionItem.fromGradingJson`).
-/// - `correctedStartIndex`/`correctedEndIndex` are left null. Computing
-///   them correctly would mean re-deriving offsets across two edit sets
-///   anchored to two different base texts (the first pass's corrections
-///   against the original text, naturalness edits against the first
-///   pass's own corrected text) — deferred rather than risking a subtly
-///   wrong position; the highlight fallback covers this the same way.
+/// - `correctedStartIndex`/`correctedEndIndex` are always computable and
+///   always computed: unlike the original-side lookup above, this one can
+///   never fail to find anything — every entry in
+///   [NaturalnessMergeResult.appliedEdits] already carries its own
+///   verified `startIndex`/`endIndex` *within `firstPassCorrectedText`*,
+///   the exact same coordinate space the first pass's own
+///   `correctedStartIndex`/`correctedEndIndex` were computed in. Shifting
+///   both edit sets into `finalCorrectedText`'s coordinate space is pure
+///   arithmetic (see [_cumulativeNaturalnessDeltaBefore]), the same
+///   cumulative-delta technique `computeCorrectedRanges` already uses for
+///   the original-to-corrected shift, just applied a second time here for
+///   the corrected-to-final shift.
+///
+/// The first pass's own corrections keep their `correctedStartIndex`/
+/// `correctedEndIndex` too, but shifted by that same cumulative delta —
+/// left unshifted, they would silently point at the wrong offsets in
+/// `finalCorrectedText` the moment any naturalness edit lands earlier in
+/// the text and changes length, since `firstPassCorrectedText` and
+/// `finalCorrectedText` are no longer the same string.
 ///
 /// The combined list (the first pass's own corrections, then the
 /// naturalness ones just described) is deduplicated with
@@ -74,14 +86,21 @@ CorrectionResponse mapNaturalnessEditsIntoCorrectionResponse({
 }) {
   final originalGraphemes = firstPassResponse.originalText.characters
       .toList();
+  final sortedEdits = [...naturalnessMerge.appliedEdits]
+    ..sort((left, right) => left.startIndex.compareTo(right.startIndex));
 
   final naturalnessItems = [
-    for (final edit in naturalnessMerge.appliedEdits)
-      _naturalnessEditToCorrectionItem(edit.issue, originalGraphemes),
+    for (final edit in sortedEdits)
+      _naturalnessEditToCorrectionItem(edit, sortedEdits, originalGraphemes),
+  ];
+
+  final shiftedFirstPassCorrections = [
+    for (final item in firstPassResponse.corrections)
+      _shiftCorrectedRange(item, sortedEdits),
   ];
 
   final combined = resolveOverlappingCorrections([
-    ...firstPassResponse.corrections,
+    ...shiftedFirstPassCorrections,
     ...naturalnessItems,
   ]);
 
@@ -94,18 +113,85 @@ CorrectionResponse mapNaturalnessEditsIntoCorrectionResponse({
 }
 
 CorrectionItem _naturalnessEditToCorrectionItem(
-  NaturalnessIssue issue,
+  AppliedNaturalnessEdit edit,
+  List<AppliedNaturalnessEdit> sortedEdits,
   List<String> originalGraphemes,
 ) {
-  final range = _resolveUniqueSpan(originalGraphemes, issue.span);
+  final range = _resolveUniqueSpan(originalGraphemes, edit.issue.span);
+  final correctedStart =
+      edit.startIndex +
+      _cumulativeNaturalnessDeltaBefore(sortedEdits, edit.startIndex);
+  final correctedEnd =
+      correctedStart + edit.issue.naturalReplacement.characters.length;
+
   return CorrectionItem(
-    originalPhrase: issue.span,
-    correctedPhrase: issue.naturalReplacement,
+    originalPhrase: edit.issue.span,
+    correctedPhrase: edit.issue.naturalReplacement,
     category: ErrorCategory.naturalLanguage,
-    shortExplanation: issue.explanation,
+    shortExplanation: edit.issue.explanation,
     startIndex: range?.$1,
     endIndex: range?.$2,
+    correctedStartIndex: correctedStart,
+    correctedEndIndex: correctedEnd,
   );
+}
+
+/// [item] with its `correctedStartIndex`/`correctedEndIndex` shifted by
+/// every naturalness edit in [sortedEdits] that starts before it — both
+/// live in `firstPassCorrectedText`'s coordinate space, so the shift moves
+/// [item]'s existing corrected-side position into
+/// `finalCorrectedText`'s coordinate space instead. Left unchanged (still
+/// null) when [item] has no corrected-side position to shift.
+CorrectionItem _shiftCorrectedRange(
+  CorrectionItem item,
+  List<AppliedNaturalnessEdit> sortedEdits,
+) {
+  final correctedStartIndex = item.correctedStartIndex;
+  final correctedEndIndex = item.correctedEndIndex;
+  if (correctedStartIndex == null || correctedEndIndex == null) {
+    return item;
+  }
+
+  final shift = _cumulativeNaturalnessDeltaBefore(
+    sortedEdits,
+    correctedStartIndex,
+  );
+  if (shift == 0) {
+    return item;
+  }
+
+  return CorrectionItem(
+    originalPhrase: item.originalPhrase,
+    correctedPhrase: item.correctedPhrase,
+    category: item.category,
+    shortExplanation: item.shortExplanation,
+    startIndex: item.startIndex,
+    endIndex: item.endIndex,
+    correctedStartIndex: correctedStartIndex + shift,
+    correctedEndIndex: correctedEndIndex + shift,
+  );
+}
+
+/// Cumulative grapheme-length delta (`naturalReplacement.length -
+/// (endIndex - startIndex)`) of every edit in [sortedEdits] — sorted
+/// ascending by `startIndex`, both within `firstPassCorrectedText` — that
+/// starts strictly before [position]. The same cumulative-shift technique
+/// `computeCorrectedRanges` uses for the original-to-corrected shift,
+/// applied here to the corrected-to-final shift instead.
+int _cumulativeNaturalnessDeltaBefore(
+  List<AppliedNaturalnessEdit> sortedEdits,
+  int position,
+) {
+  var delta = 0;
+  for (final edit in sortedEdits) {
+    if (edit.startIndex >= position) {
+      break;
+    }
+    delta +=
+        edit.issue.naturalReplacement.characters.length -
+        (edit.endIndex - edit.startIndex);
+  }
+  return delta;
 }
 
 /// [needle]'s `(start, end)` grapheme-cluster range in [haystack] when it
