@@ -9,6 +9,7 @@ import 'package:spanish_correction_app/features/corrections/data/naturalness_rev
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/two_pass_correction_pipeline.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_original_range_resolver.dart';
+import 'package:spanish_correction_app/features/corrections/domain/naturalness_merge.dart';
 
 void main() {
   group('runTwoPassCorrectionPipeline', () {
@@ -215,6 +216,81 @@ void main() {
         expect(result.appliedEdits, hasLength(1));
         expect(result.skippedEdits, isEmpty);
         expect(client.naturalnessCallCount, 2);
+      },
+    );
+
+    test(
+      'never applies an edit that is still unsafe after the fallback '
+      'rerun — a rerun earns another chance to become safe, not a bypass '
+      'of safety itself (issue #37)',
+      () async {
+        // Same setup as the ambiguous-span fallback test above, except
+        // the fallback call's own reply is STILL ambiguous ("tráfico"
+        // again, not narrowed to "más tráfico"). The fallback must still
+        // be attempted, but its edit must still not be applied.
+        const originalText = 'Vi mucho tráfico, y luego iso más tráfico.';
+        const firstPassCorrectedText =
+            'Vi mucho tráfico, y luego hizo más tráfico.';
+        final isoIndex = resolveOccurrenceCorrections(originalText, [
+          const OccurrenceCorrection(originalPhrase: 'iso', occurrence: 1),
+        ]).single.startIndex!;
+
+        final client = _RoutingHttpClient(
+          repliesBySystemPrompt: {
+            stage1DetectionDialectSpanish: _arrayEnvelope(['"iso"']),
+            stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+            stage2CategorizationSpanish: _arrayEnvelope([
+              '{"original_phrase": "iso", "corrected_phrase": "hizo", '
+                  '"occurrence": 1, "category": "Grammar", "verdict": "error"}',
+            ]),
+            stage3FeedbackSpanish: _arrayEnvelope([
+              '{"start_index": $isoIndex, "short_explanation": '
+                  '"Iso should be hizo."}',
+            ]),
+          },
+          naturalnessRepliesByUserText: {
+            buildNaturalnessUserContent(originalText): _naturalnessEnvelope(
+              '{"has_naturalness_issue": true, "issues": ['
+                  '{"span": "tráfico", '
+                  '"natural_replacement": "tránsito", '
+                  '"explanation": "Tráfico as traffic is an anglicism."}'
+                  ']}',
+            ),
+            // Fallback call: still flags the bare, still-ambiguous
+            // "tráfico" — the model didn't narrow it down this time.
+            buildNaturalnessUserContent(firstPassCorrectedText):
+                _naturalnessEnvelope(
+              '{"has_naturalness_issue": true, "issues": ['
+                  '{"span": "tráfico", '
+                  '"natural_replacement": "tránsito", '
+                  '"explanation": "Tráfico as traffic is an anglicism."}'
+                  ']}',
+            ),
+          },
+        );
+
+        final result = await runTwoPassCorrectionPipeline(
+          client: OpenAiChatCompletionsClient(
+            apiKey: 'test-key',
+            httpClient: client,
+          ),
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          submittedText: originalText,
+        );
+
+        // The fallback was attempted...
+        expect(client.naturalnessCallCount, 2);
+        // ...but since it was STILL unsafe, the base is untouched: the
+        // final text is exactly the first pass's own output, nothing more.
+        expect(result.finalCorrectedText, firstPassCorrectedText);
+        expect(result.appliedEdits, isEmpty);
+        expect(result.skippedEdits, hasLength(1));
+        expect(
+          result.skippedEdits.single.reason,
+          NaturalnessMergeSkipReason.ambiguousSpan,
+        );
       },
     );
   });

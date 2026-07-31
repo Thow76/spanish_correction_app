@@ -351,5 +351,52 @@ void main() {
       expect(result.skippedEdits[0].issue, same(issueNotFound));
       expect(result.skippedEdits[1].issue, same(issueLate));
     });
+
+    test(
+      'finalCorrectedText is firstPassCorrectedText with only the safe '
+      'edit spliced in — the unsafe (ambiguous) edit never touches the '
+      'base at all (issue #37: first-pass text is the foundation; '
+      'naturalness only ever modifies it when safe)',
+      () {
+        const firstPassCorrectedText =
+            'Voy a hacer una decisión importante hoy, y vi tráfico y luego '
+            'más tráfico.';
+
+        const safeIssue = NaturalnessIssue(
+          span: 'hacer una decisión',
+          naturalReplacement: 'tomar una decisión',
+          explanation: 'Wrong collocation for "decisión".',
+        );
+        const unsafeIssue = NaturalnessIssue(
+          span: 'tráfico',
+          naturalReplacement: 'tránsito',
+          explanation: 'Tráfico as traffic is an anglicism.',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'placeholder',
+          firstPassCorrectedText: firstPassCorrectedText,
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [safeIssue, unsafeIssue],
+          ),
+        );
+
+        // The safe edit built on top of the first-pass base.
+        expect(result.finalCorrectedText, contains('tomar una decisión'));
+        // The unsafe (ambiguous) edit never touched the base — the exact
+        // first-pass wording survives untouched at that location.
+        expect(
+          result.finalCorrectedText,
+          contains('vi tráfico y luego más tráfico'),
+        );
+        expect(result.skippedEdits, hasLength(1));
+        expect(result.skippedEdits.single.issue, same(unsafeIssue));
+        expect(
+          result.skippedEdits.single.reason,
+          NaturalnessMergeSkipReason.ambiguousSpan,
+        );
+      },
+    );
   });
 }
