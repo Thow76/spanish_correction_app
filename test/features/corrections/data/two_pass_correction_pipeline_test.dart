@@ -9,7 +9,7 @@ import 'package:spanish_correction_app/features/corrections/data/naturalness_rev
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/two_pass_correction_pipeline.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_original_range_resolver.dart';
-import 'package:spanish_correction_app/features/corrections/domain/naturalness_merge.dart';
+import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 
 void main() {
   group('runTwoPassCorrectionPipeline', () {
@@ -51,9 +51,13 @@ void main() {
           submittedText: text,
         );
 
-        expect(result.finalCorrectedText, 'Vi mucho tráfico ayer.');
-        expect(result.appliedEdits, isEmpty);
-        expect(result.skippedEdits, isEmpty);
+        // One unified CorrectionResponse — the same shape correctText()
+        // returns for every other path — with just the first-pass fix,
+        // since the naturalness pass found nothing to flag.
+        expect(result.correctedText, 'Vi mucho tráfico ayer.');
+        expect(result.corrections, hasLength(1));
+        expect(result.corrections.single.category, ErrorCategory.spelling);
+        expect(result.corrections.single.correctedPhrase, 'tráfico');
         // Exactly one naturalness call — the fallback was never triggered.
         expect(client.naturalnessCallCount, 1);
       },
@@ -133,11 +137,22 @@ void main() {
         );
 
         expect(
-          result.finalCorrectedText,
+          result.correctedText,
           'Ayer tomó una decisión importante.',
         );
-        expect(result.appliedEdits, hasLength(1));
-        expect(result.skippedEdits, isEmpty);
+        // Both first-pass fixes plus the (fallback-resolved) naturalness
+        // edit, all in one unified corrections list.
+        expect(result.corrections, hasLength(3));
+        expect(
+          result.corrections.where(
+            (item) => item.category == ErrorCategory.spelling,
+          ),
+          hasLength(2),
+        );
+        final naturalnessItem = result.corrections.firstWhere(
+          (item) => item.category == ErrorCategory.naturalLanguage,
+        );
+        expect(naturalnessItem.correctedPhrase, 'tomó una decisión');
         // The parallel call, then the sequential fallback.
         expect(client.naturalnessCallCount, 2);
       },
@@ -210,11 +225,14 @@ void main() {
         );
 
         expect(
-          result.finalCorrectedText,
+          result.correctedText,
           'Vi mucho tráfico, y luego hizo más tránsito.',
         );
-        expect(result.appliedEdits, hasLength(1));
-        expect(result.skippedEdits, isEmpty);
+        expect(result.corrections, hasLength(2));
+        final naturalnessItem = result.corrections.firstWhere(
+          (item) => item.category == ErrorCategory.naturalLanguage,
+        );
+        expect(naturalnessItem.correctedPhrase, 'más tránsito');
         expect(client.naturalnessCallCount, 2);
       },
     );
@@ -283,14 +301,12 @@ void main() {
         // The fallback was attempted...
         expect(client.naturalnessCallCount, 2);
         // ...but since it was STILL unsafe, the base is untouched: the
-        // final text is exactly the first pass's own output, nothing more.
-        expect(result.finalCorrectedText, firstPassCorrectedText);
-        expect(result.appliedEdits, isEmpty);
-        expect(result.skippedEdits, hasLength(1));
-        expect(
-          result.skippedEdits.single.reason,
-          NaturalnessMergeSkipReason.ambiguousSpan,
-        );
+        // final text is exactly the first pass's own output, nothing more,
+        // and the unified response has no naturalness-derived correction
+        // at all — only the first pass's own "iso" -> "hizo" fix.
+        expect(result.correctedText, firstPassCorrectedText);
+        expect(result.corrections, hasLength(1));
+        expect(result.corrections.single.category, ErrorCategory.grammar);
       },
     );
   });
