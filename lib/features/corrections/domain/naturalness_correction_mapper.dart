@@ -67,7 +67,12 @@ import 'naturalness_merge.dart';
 /// left unshifted, they would silently point at the wrong offsets in
 /// `finalCorrectedText` the moment any naturalness edit lands earlier in
 /// the text and changes length, since `firstPassCorrectedText` and
-/// `finalCorrectedText` are no longer the same string.
+/// `finalCorrectedText` are no longer the same string. When a naturalness
+/// edit instead *overlaps* a first-pass item's corrected range outright
+/// (the naturalness pass rewrote the exact text the first pass just
+/// produced — see [_shiftCorrectedRange]), no shift is meaningful: that
+/// substring no longer exists in `finalCorrectedText` at all, so
+/// `correctedStartIndex`/`correctedEndIndex` are demoted to null there too.
 ///
 /// If a naturalness item's independently-resolved original-text position
 /// overlaps a first-pass correction's, the naturalness item's
@@ -153,6 +158,17 @@ CorrectionItem _naturalnessEditToCorrectionItem(
 /// [item]'s existing corrected-side position into
 /// `finalCorrectedText`'s coordinate space instead. Left unchanged (still
 /// null) when [item] has no corrected-side position to shift.
+///
+/// When [item]'s corrected-side range instead *overlaps* a naturalness
+/// edit's range — the naturalness pass rewrote some or all of the exact
+/// text [item] itself produced (e.g. a first-pass "iso" -> "hizo" fix,
+/// followed by a naturalness "hizo una decisión" -> "tomó una decisión"
+/// edit that starts on that same "hizo") — no shift is meaningful: that
+/// substring no longer exists at all in `finalCorrectedText`, replaced by
+/// unrelated text. `correctedStartIndex`/`correctedEndIndex` are demoted
+/// to null in that case rather than left pointing at the wrong substring;
+/// `startIndex`/`endIndex` (still valid against the original text) are
+/// untouched.
 CorrectionItem _shiftCorrectedRange(
   CorrectionItem item,
   List<AppliedNaturalnessEdit> sortedEdits,
@@ -161,6 +177,25 @@ CorrectionItem _shiftCorrectedRange(
   final correctedEndIndex = item.correctedEndIndex;
   if (correctedStartIndex == null || correctedEndIndex == null) {
     return item;
+  }
+
+  final overlapsNaturalnessEdit = sortedEdits.any(
+    (edit) => _rangesOverlap(
+      correctedStartIndex,
+      correctedEndIndex,
+      edit.startIndex,
+      edit.endIndex,
+    ),
+  );
+  if (overlapsNaturalnessEdit) {
+    return CorrectionItem(
+      originalPhrase: item.originalPhrase,
+      correctedPhrase: item.correctedPhrase,
+      category: item.category,
+      shortExplanation: item.shortExplanation,
+      startIndex: item.startIndex,
+      endIndex: item.endIndex,
+    );
   }
 
   final shift = _cumulativeNaturalnessDeltaBefore(

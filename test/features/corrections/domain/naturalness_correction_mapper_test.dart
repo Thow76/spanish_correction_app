@@ -288,6 +288,94 @@ void main() {
     );
 
     test(
+      'demotes a first-pass item\'s corrected-side range to null when a '
+      'naturalness edit overwrites that exact text, instead of leaving it '
+      'pointing at the wrong substring',
+      () {
+        // First pass fixes "iso" -> "hizo". The naturalness pass then
+        // rewrites "hizo una decisión" -> "tomó una decisión" — a span
+        // that starts exactly on the "hizo" the first pass just produced.
+        // "hizo" no longer exists anywhere in finalCorrectedText, so the
+        // first-pass item's old corrected-side position (shifted or not)
+        // can never be valid again.
+        const originalText = 'Ayer iso una decisión importante.';
+        const firstPassCorrectedText =
+            'Ayer hizo una decisión importante.';
+        const finalCorrectedText = 'Ayer tomó una decisión importante.';
+        final isoIndex = originalText.indexOf('iso');
+        final hizoCorrectedIndex = firstPassCorrectedText.indexOf('hizo');
+
+        final firstPassResponse = CorrectionResponse(
+          originalText: originalText,
+          correctedText: firstPassCorrectedText,
+          corrections: [
+            CorrectionItem(
+              originalPhrase: 'iso',
+              correctedPhrase: 'hizo',
+              category: ErrorCategory.spelling,
+              shortExplanation: 'Iso should be hizo.',
+              startIndex: isoIndex,
+              endIndex: isoIndex + 'iso'.length,
+              correctedStartIndex: hizoCorrectedIndex,
+              correctedEndIndex: hizoCorrectedIndex + 'hizo'.length,
+            ),
+          ],
+        );
+
+        const span = 'hizo una decisión';
+        const replacement = 'tomó una decisión';
+        final spanFirstPassIndex = firstPassCorrectedText.indexOf(span);
+        const issue = NaturalnessIssue(
+          span: span,
+          naturalReplacement: replacement,
+          explanation: '"Hacer una decisión" is a calque.',
+        );
+        final naturalnessMerge = NaturalnessMergeResult(
+          originalText: originalText,
+          firstPassCorrectedText: firstPassCorrectedText,
+          finalCorrectedText: finalCorrectedText,
+          appliedEdits: [
+            AppliedNaturalnessEdit(
+              issue: issue,
+              startIndex: spanFirstPassIndex,
+              endIndex: spanFirstPassIndex + span.characters.length,
+            ),
+          ],
+          skippedEdits: const [],
+        );
+
+        final result = mapNaturalnessEditsIntoCorrectionResponse(
+          firstPassResponse: firstPassResponse,
+          naturalnessMerge: naturalnessMerge,
+        );
+
+        expect(result.corrections, hasLength(2));
+
+        final spellingItem = result.corrections.firstWhere(
+          (item) => item.originalPhrase == 'iso',
+        );
+        // Original-side anchoring (into originalText) is completely
+        // unaffected by any of this and must stay exactly as-is.
+        expect(spellingItem.startIndex, isoIndex);
+        expect(spellingItem.endIndex, isoIndex + 'iso'.length);
+        // Corrected-side is demoted — "hizo" no longer exists in
+        // finalCorrectedText, so no position can honestly describe it.
+        expect(spellingItem.correctedStartIndex, isNull);
+        expect(spellingItem.correctedEndIndex, isNull);
+
+        final naturalnessItem = result.corrections.firstWhere(
+          (item) => item.originalPhrase == span,
+        );
+        _expectSlice(
+          result.correctedText,
+          naturalnessItem.correctedStartIndex,
+          naturalnessItem.correctedEndIndex,
+          replacement,
+        );
+      },
+    );
+
+    test(
       'leaves startIndex/endIndex null when the naturalness span cannot be '
       'found in the original text (the first pass already changed the '
       'wording there)',
