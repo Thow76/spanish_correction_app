@@ -129,10 +129,20 @@ const bool _liveRunOptInFromDefine = bool.fromEnvironment(
   defaultValue: false,
 );
 
-const int callDelayMs = int.fromEnvironment(
-  'TWO_PASS_CALL_DELAY_MS',
-  defaultValue: 750,
-);
+/// Parses `TWO_PASS_CALL_DELAY_MS` from [environment] (a real environment
+/// variable, e.g. `TWO_PASS_CALL_DELAY_MS=2000 flutter test ...`) — not
+/// `int.fromEnvironment`, which only ever reads a compile-time
+/// `--dart-define` value and would silently ignore the environment
+/// variable this file's own header comment documents. Falls back to `750`
+/// when unset or unparsable, same default as before.
+int callDelayMsFrom(Map<String, String> environment) {
+  final raw = _runtimeString(
+    environment: environment,
+    key: 'TWO_PASS_CALL_DELAY_MS',
+    defaultValue: '750',
+  );
+  return int.tryParse(raw) ?? 750;
+}
 
 String _runtimeString({
   required Map<String, String> environment,
@@ -301,11 +311,17 @@ class FixtureResult {
 /// naturalness-on-first-pass result already fetched above.
 ///
 /// If any call fails partway through (a malformed model response, a
-/// network error), whatever latency/tokens/cost the calls that *did*
-/// succeed before the failure already spent is preserved — see
-/// [FixtureResult.error]'s `partialStats` — rather than silently
-/// discarded, so the report's totals still reflect real money spent even
-/// on a fixture that ultimately failed.
+/// network error), whatever latency/tokens/cost was spent before the
+/// failure is preserved — see [FixtureResult.error]'s `partialStats` —
+/// rather than silently discarded, so the report's totals still reflect
+/// real money spent even on a fixture that ultimately failed. Critically,
+/// this includes the *failing* call's own spend, not just earlier calls
+/// that fully succeeded: a naturalness call can get a valid, billed HTTP
+/// response (recorded in [usageLog] the moment it arrives) and only then
+/// throw while parsing that response's JSON — see [_trackedCall], which
+/// records a phase's stats in a `finally` block so that always happens,
+/// on success or failure alike, rather than only after an `await`
+/// expression that might never finish normally.
 Future<FixtureResult> runFixture({
   required OpenAiChatCompletionsClient client,
   required List<ChatCompletionsUsage> usageLog,
@@ -313,49 +329,40 @@ Future<FixtureResult> runFixture({
   required String naturalnessModel,
   required TwoPassFixture fixture,
 }) async {
-  var spentSoFar = CallStats.zero;
+  var firstPassStats = CallStats.zero;
+  var naturalOriginalStats = CallStats.zero;
+  var naturalFirstPassStats = CallStats.zero;
+
   try {
-    final firstPassStopwatch = Stopwatch()..start();
-    final firstPassStart = usageLog.length;
-    final firstPassResponse = await runStagedCorrectionPipeline(
-      client: client,
-      model: firstPassModel,
-      submittedText: fixture.text,
+    final firstPassResponse = await _trackedCall(
+      usageLog,
+      () => runStagedCorrectionPipeline(
+        client: client,
+        model: firstPassModel,
+        submittedText: fixture.text,
+      ),
+      onStats: (stats) => firstPassStats = stats,
     );
-    firstPassStopwatch.stop();
-    final firstPassStats = statsFor(
-      usageLog.sublist(firstPassStart),
-      wallClockMs: firstPassStopwatch.elapsedMilliseconds,
-    );
-    spentSoFar += firstPassStats;
 
-    final naturalOriginalStopwatch = Stopwatch()..start();
-    final naturalOriginalStart = usageLog.length;
-    final naturalnessOnOriginal = await callNaturalnessReview(
-      client: client,
-      model: naturalnessModel,
-      text: fixture.text,
+    final naturalnessOnOriginal = await _trackedCall(
+      usageLog,
+      () => callNaturalnessReview(
+        client: client,
+        model: naturalnessModel,
+        text: fixture.text,
+      ),
+      onStats: (stats) => naturalOriginalStats = stats,
     );
-    naturalOriginalStopwatch.stop();
-    final naturalOriginalStats = statsFor(
-      usageLog.sublist(naturalOriginalStart),
-      wallClockMs: naturalOriginalStopwatch.elapsedMilliseconds,
-    );
-    spentSoFar += naturalOriginalStats;
 
-    final naturalFirstPassStopwatch = Stopwatch()..start();
-    final naturalFirstPassStart = usageLog.length;
-    final naturalnessOnFirstPass = await callNaturalnessReview(
-      client: client,
-      model: naturalnessModel,
-      text: firstPassResponse.correctedText,
+    final naturalnessOnFirstPass = await _trackedCall(
+      usageLog,
+      () => callNaturalnessReview(
+        client: client,
+        model: naturalnessModel,
+        text: firstPassResponse.correctedText,
+      ),
+      onStats: (stats) => naturalFirstPassStats = stats,
     );
-    naturalFirstPassStopwatch.stop();
-    final naturalFirstPassStats = statsFor(
-      usageLog.sublist(naturalFirstPassStart),
-      wallClockMs: naturalFirstPassStopwatch.elapsedMilliseconds,
-    );
-    spentSoFar += naturalFirstPassStats;
 
     final parallelMerge = mergeNaturalnessReview(
       originalText: fixture.text,
@@ -394,7 +401,34 @@ Future<FixtureResult> runFixture({
     return FixtureResult.error(
       fixture,
       error.toString(),
-      partialStats: spentSoFar,
+      partialStats: firstPassStats + naturalOriginalStats + naturalFirstPassStats,
+    );
+  }
+}
+
+/// Runs [call], recording its [CallStats] (wall-clock latency plus every
+/// [ChatCompletionsUsage] logged to [usageLog] during the call) via
+/// [onStats] — always, whether [call] completes normally or throws. Using
+/// `finally` rather than only recording stats after a successful `await`
+/// is what lets a phase that gets a valid, billed API response and then
+/// throws while parsing it (the exact failure mode this harness's live
+/// runs hit before issue #63's fix) still have its spend accounted for.
+Future<T> _trackedCall<T>(
+  List<ChatCompletionsUsage> usageLog,
+  Future<T> Function() call, {
+  required void Function(CallStats stats) onStats,
+}) async {
+  final stopwatch = Stopwatch()..start();
+  final start = usageLog.length;
+  try {
+    return await call();
+  } finally {
+    stopwatch.stop();
+    onStats(
+      statsFor(
+        usageLog.sublist(start),
+        wallClockMs: stopwatch.elapsedMilliseconds,
+      ),
     );
   }
 }
@@ -544,6 +578,91 @@ void main() {
       final ids = twoPassIntegrationFixtures.map((f) => f.id).toSet();
       expect(ids.length, twoPassIntegrationFixtures.length);
     });
+
+    test(
+      'callDelayMsFrom reads a real environment variable, not just '
+      '--dart-define',
+      () {
+        expect(
+          callDelayMsFrom(const {'TWO_PASS_CALL_DELAY_MS': '2000'}),
+          2000,
+        );
+        expect(callDelayMsFrom(const {}), 750);
+        expect(
+          callDelayMsFrom(const {'TWO_PASS_CALL_DELAY_MS': 'not-a-number'}),
+          750,
+        );
+      },
+    );
+
+    test(
+      '_trackedCall records stats via onStats even when the call throws '
+      'after usage was already logged — the exact failure mode this '
+      'harness\'s live runs hit: a valid, billed API response that only '
+      'fails to parse afterward',
+      () async {
+        final usageLog = <ChatCompletionsUsage>[];
+        CallStats? captured;
+
+        await expectLater(
+          () => _trackedCall(
+            usageLog,
+            () async {
+              usageLog.add(
+                const ChatCompletionsUsage(
+                  stageLabel: 'naturalness_review',
+                  model: 'gpt-5.1',
+                  latencyMs: 500,
+                  promptTokens: 200,
+                  completionTokens: 100,
+                  totalTokens: 300,
+                ),
+              );
+              throw const FormatException(
+                'Naturalness review is missing "has_naturalness_issue".',
+              );
+            },
+            onStats: (stats) => captured = stats,
+          ),
+          throwsFormatException,
+        );
+
+        expect(captured, isNotNull);
+        expect(captured!.totalTokens, 300);
+        expect(captured!.costUsd, isNotNull);
+      },
+    );
+
+    test(
+      '_trackedCall records stats on success too, unaffected by adding '
+      'failure-path support',
+      () async {
+        final usageLog = <ChatCompletionsUsage>[];
+        CallStats? captured;
+
+        final result = await _trackedCall(
+          usageLog,
+          () async {
+            usageLog.add(
+              const ChatCompletionsUsage(
+                stageLabel: 'naturalness_review',
+                model: 'gpt-5.1',
+                latencyMs: 500,
+                promptTokens: 10,
+                completionTokens: 5,
+                totalTokens: 15,
+              ),
+            );
+            return 'ok';
+          },
+          onStats: (stats) => captured = stats,
+        );
+
+        expect(result, 'ok');
+        expect(captured, isNotNull);
+        expect(captured!.totalTokens, 15);
+      },
+    );
 
     test('statsFor sums tokens and computes verified cost from the '
         'phase\'s own model', () {
@@ -732,6 +851,7 @@ void main() {
       key: 'TWO_PASS_OUTPUT',
       defaultValue: defaultTwoPassOutputPath,
     );
+    final callDelayMs = callDelayMsFrom(environment);
 
     final usageLog = <ChatCompletionsUsage>[];
     final client = OpenAiChatCompletionsClient(

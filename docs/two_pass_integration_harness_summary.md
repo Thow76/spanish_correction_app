@@ -69,23 +69,30 @@ measure the real integration, and this is what that measurement found.
 
 - Reproduced twice independently (a full 5-fixture run, then confirmed via
   one isolated diagnostic call) — not a one-off flake.
-- The harness's own error handling was hardened as part of this work: it
-  originally let one fixture's failure crash the whole run and silently
-  reported $0 spent; it now catches failures per fixture, keeps data for
-  every other fixture, and reports whatever latency/tokens/cost were
-  actually spent before the failure (see the file's `FixtureResult.error`
-  and the offline tests covering it).
+- The harness's own error handling was hardened twice as part of this
+  work. First pass: it originally let one fixture's failure crash the
+  whole run and silently reported $0 spent; it was changed to catch
+  failures per fixture and keep data for every other fixture. Second
+  pass, after review: that first fix still under-reported spend for the
+  *failing* call itself — `naturalOriginalStats`/etc. were only folded
+  into the running total *after* their `await` succeeded, so a call that
+  got a valid, billed HTTP response and only then threw while *parsing*
+  it (exactly what every failure in this run was) never had its own
+  tokens counted. Fixed by recording each phase's stats in a `finally`
+  block (`_trackedCall`) instead, so that happens on success or failure
+  alike. See the file's `FixtureResult.error` and the `_trackedCall`
+  offline tests covering both paths.
 
 ### Cost Note
 
 The generated `docs/two_pass_integration_harness.md` (from the run made
-with the pre-fix harness) shows `$0.000000` in its totals — a known,
-now-fixed reporting gap (see above), not a claim that nothing was spent.
-Based on the visible token usage during both live attempts plus the one
-diagnostic call, actual spend was on the order of **$0.05-0.08** (mostly
-gpt-4.1 first-pass Stage 2 calls, which are the most token-heavy part of
-each fixture). A future run with the fixed harness will report this
-accurately.
+with the original, doubly-unfixed harness) shows `$0.000000` in its
+totals — a known reporting gap from that point in time, now fixed (see
+above), not a claim that nothing was spent. Based on the visible token
+usage during both live attempts plus the one diagnostic call, actual
+spend was on the order of **$0.05-0.08** (mostly gpt-4.1 first-pass
+Stage 2 calls, which are the most token-heavy part of each fixture). A
+future run with the now-fully-fixed harness will report this accurately.
 
 ## Recommendation
 
