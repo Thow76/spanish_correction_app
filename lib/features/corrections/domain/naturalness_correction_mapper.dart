@@ -69,12 +69,20 @@ import 'naturalness_merge.dart';
 /// the text and changes length, since `firstPassCorrectedText` and
 /// `finalCorrectedText` are no longer the same string.
 ///
-/// The combined list (the first pass's own corrections, then the
-/// naturalness ones just described) is deduplicated with
-/// [resolveOverlappingCorrections] before being returned, in case a
-/// naturalness span's independently-resolved original-text position
-/// overlaps a first-pass correction's — first-pass corrections are listed
-/// first, so they win any such tie.
+/// If a naturalness item's independently-resolved original-text position
+/// overlaps a first-pass correction's, the naturalness item's
+/// `startIndex`/`endIndex` are demoted to null (see
+/// [_demoteIfOverlappingFirstPass]) rather than the item being dropped —
+/// it was genuinely applied to `finalCorrectedText`, so removing it from
+/// the list entirely would leave a real text change with no correction
+/// item describing it at all, which is worse than an item whose
+/// original-side highlight can't be shown. `correctedStartIndex`/
+/// `correctedEndIndex` are untouched by this, since that computation
+/// never depended on the original-side anchor. Demoted (now-unranged)
+/// items are never dropped by the subsequent
+/// [resolveOverlappingCorrections] dedup pass — that function always
+/// keeps unranged items — so every applied naturalness edit is guaranteed
+/// to appear somewhere in the final list.
 ///
 /// Skipped naturalness edits ([NaturalnessMergeResult.skippedEdits]) are
 /// not represented here at all — they were never applied to the text, so
@@ -89,14 +97,17 @@ CorrectionResponse mapNaturalnessEditsIntoCorrectionResponse({
   final sortedEdits = [...naturalnessMerge.appliedEdits]
     ..sort((left, right) => left.startIndex.compareTo(right.startIndex));
 
-  final naturalnessItems = [
-    for (final edit in sortedEdits)
-      _naturalnessEditToCorrectionItem(edit, sortedEdits, originalGraphemes),
-  ];
-
   final shiftedFirstPassCorrections = [
     for (final item in firstPassResponse.corrections)
       _shiftCorrectedRange(item, sortedEdits),
+  ];
+
+  final naturalnessItems = [
+    for (final edit in sortedEdits)
+      _demoteIfOverlappingFirstPass(
+        _naturalnessEditToCorrectionItem(edit, sortedEdits, originalGraphemes),
+        shiftedFirstPassCorrections,
+      ),
   ];
 
   final combined = resolveOverlappingCorrections([
@@ -170,6 +181,65 @@ CorrectionItem _shiftCorrectedRange(
     correctedStartIndex: correctedStartIndex + shift,
     correctedEndIndex: correctedEndIndex + shift,
   );
+}
+
+/// [item] as-is when its `startIndex`/`endIndex` don't overlap any
+/// correction in [firstPassCorrections], or a copy with `startIndex`/
+/// `endIndex` set to null when they do — see the "demoted rather than
+/// dropped" note on [mapNaturalnessEditsIntoCorrectionResponse].
+/// `correctedStartIndex`/`correctedEndIndex` are always preserved
+/// unchanged, since they're independent of the original-side anchor.
+CorrectionItem _demoteIfOverlappingFirstPass(
+  CorrectionItem item,
+  List<CorrectionItem> firstPassCorrections,
+) {
+  final start = item.startIndex;
+  final end = item.endIndex;
+  if (start == null || end == null) {
+    return item;
+  }
+
+  final overlapsFirstPass = firstPassCorrections.any((firstPassItem) {
+    final otherStart = firstPassItem.startIndex;
+    final otherEnd = firstPassItem.endIndex;
+    if (otherStart == null || otherEnd == null) {
+      return false;
+    }
+    return _rangesOverlap(start, end, otherStart, otherEnd);
+  });
+  if (!overlapsFirstPass) {
+    return item;
+  }
+
+  return CorrectionItem(
+    originalPhrase: item.originalPhrase,
+    correctedPhrase: item.correctedPhrase,
+    category: item.category,
+    shortExplanation: item.shortExplanation,
+    correctedStartIndex: item.correctedStartIndex,
+    correctedEndIndex: item.correctedEndIndex,
+  );
+}
+
+/// Whether half-open ranges `[aStart, aEnd)` and `[bStart, bEnd)` overlap.
+///
+/// Copied by value from `correction_overlap_resolver.dart`'s private
+/// `_rangesOverlap` — same established precedent as this file's own
+/// `_findGraphemeMatches` copy.
+bool _rangesOverlap(int aStart, int aEnd, int bStart, int bEnd) {
+  final aIsInsertion = aStart == aEnd;
+  final bIsInsertion = bStart == bEnd;
+
+  if (aIsInsertion && bIsInsertion) {
+    return aStart == bStart;
+  }
+  if (aIsInsertion) {
+    return aStart >= bStart && aStart < bEnd;
+  }
+  if (bIsInsertion) {
+    return bStart >= aStart && bStart < aEnd;
+  }
+  return aStart < bEnd && bStart < aEnd;
 }
 
 /// Cumulative grapheme-length delta (`naturalReplacement.length -

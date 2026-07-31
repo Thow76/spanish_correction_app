@@ -429,10 +429,14 @@ void main() {
     });
 
     test(
-      'keeps the first-pass correction when its range overlaps a '
-      'naturalness item\'s independently-resolved range',
+      'demotes, rather than drops, a naturalness item whose '
+      'independently-resolved original-side range overlaps a first-pass '
+      'correction\'s — the applied edit is still real, so it must still '
+      'appear as a correction item alongside the first-pass one',
       () {
         const originalText = 'Voy a hacer una decisión importante hoy.';
+        const finalCorrectedText =
+            'Voy a tomar una decisión importante hoy.';
         final spanIndex = originalText.indexOf('hacer una decisión');
 
         final firstPassResponse = CorrectionResponse(
@@ -458,7 +462,7 @@ void main() {
         final naturalnessMerge = NaturalnessMergeResult(
           originalText: originalText,
           firstPassCorrectedText: originalText,
-          finalCorrectedText: 'Voy a tomar una decisión importante hoy.',
+          finalCorrectedText: finalCorrectedText,
           appliedEdits: [
             AppliedNaturalnessEdit(
               issue: issue,
@@ -474,11 +478,35 @@ void main() {
           naturalnessMerge: naturalnessMerge,
         );
 
-        expect(result.corrections, hasLength(1));
-        expect(result.corrections.single.category, ErrorCategory.other);
+        // Both items present — the naturalness edit genuinely changed
+        // finalCorrectedText, so it must still be represented.
+        expect(result.corrections, hasLength(2));
+
+        final firstPassItem = result.corrections.firstWhere(
+          (item) => item.category == ErrorCategory.other,
+        );
         expect(
-          result.corrections.single.shortExplanation,
+          firstPassItem.shortExplanation,
           'Placeholder first-pass correction.',
+        );
+
+        final naturalnessItem = result.corrections.firstWhere(
+          (item) => item.category == ErrorCategory.naturalLanguage,
+        );
+        expect(naturalnessItem.correctedPhrase, 'tomar una decisión');
+        expect(naturalnessItem.shortExplanation, isNotEmpty);
+        // Demoted: its original-side range collided with the first-pass
+        // item's, so it can't be highlighted on the original side.
+        expect(naturalnessItem.startIndex, isNull);
+        expect(naturalnessItem.endIndex, isNull);
+        // But its corrected-side range is untouched by that demotion, and
+        // must still correctly point at its replacement in the actual
+        // final text.
+        _expectSlice(
+          result.correctedText,
+          naturalnessItem.correctedStartIndex,
+          naturalnessItem.correctedEndIndex,
+          'tomar una decisión',
         );
       },
     );
