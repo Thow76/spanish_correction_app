@@ -1,11 +1,13 @@
 // Live two-pass integration harness (issue #42).
 //
 // Purpose: measure the REAL, already-built two-pass pipeline's combined
-// live behavior — first pass (runStagedCorrectionPipeline), naturalness
-// review (callNaturalnessReview), the merge (mergeNaturalnessReview), and
-// the fallback rerun — across a small, deliberately chosen fixture set,
-// and compare naturalness run on the original text against naturalness
-// run on the first pass's own corrected text for the same input.
+// live behavior — first pass (callFirstPassCorrection, issue #68/#67/#65 —
+// the narrow grammar/spelling/accents/punctuation-only client, no longer
+// the old broad runStagedCorrectionPipeline), naturalness review
+// (callNaturalnessReview), the merge (mergeNaturalnessReview), and the
+// fallback rerun — across a small, deliberately chosen fixture set, and
+// compare naturalness run on the original text against naturalness run on
+// the first pass's own corrected text for the same input.
 //
 // Unlike the earlier prototyping harnesses in this repo
 // (model_comparison_harness.dart, naturalness_model_comparison_harness.dart),
@@ -31,8 +33,8 @@
 //   flutter test test/two_pass_integration_harness.dart --exclude-tags live
 //
 // Run live deliberately (costs real API calls — 5 fixtures, first pass
-// (3-5 calls each) + 2 naturalness calls each; expect on the order of
-// 25-35 total API calls):
+// (1 call each, issue #68) + 2 naturalness calls each; expect on the order
+// of 15 total API calls):
 //   OPENAI_API_KEY=sk-... \
 //   TWO_PASS_LIVE=true \
 //   flutter test test/two_pass_integration_harness.dart --tags live --timeout none
@@ -49,7 +51,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/features/corrections/data/naturalness_review_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
-import 'package:spanish_correction_app/features/corrections/data/staged_correction_pipeline.dart';
+import 'package:spanish_correction_app/features/corrections/data/first_pass_correction_client.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_correction_mapper.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_merge.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
@@ -171,9 +173,8 @@ class CallStats {
   });
 
   /// Wall-clock time for the whole phase, not the sum of individual API
-  /// call latencies — the first pass runs some of its own calls
-  /// concurrently, so summing their latencies would overstate the phase's
-  /// real duration.
+  /// call latencies — kept distinct from a simple token/call sum since a
+  /// phase can in general span more than one API call.
   final int wallClockMs;
   final int totalTokens;
 
@@ -303,9 +304,11 @@ class FixtureResult {
       firstPassStats + naturalnessOnOriginalStats + naturalnessOnFirstPassStats;
 }
 
-/// Runs the full comparison for one fixture: first pass, naturalness on
-/// the original text, naturalness on the first pass's own corrected text,
-/// the parallel merge (to determine whether a conflict exists), and —
+/// Runs the full comparison for one fixture: first pass
+/// (`callFirstPassCorrection`, the narrow simple first-pass client — issue
+/// #68), naturalness on the original text, naturalness on the first
+/// pass's own corrected text, the parallel merge (to determine whether a
+/// conflict exists), and —
 /// only when a conflict exists, matching runTwoPassCorrectionPipeline's
 /// own fallback-trigger condition — the fallback merge using the
 /// naturalness-on-first-pass result already fetched above.
@@ -336,7 +339,7 @@ Future<FixtureResult> runFixture({
   try {
     final firstPassResponse = await _trackedCall(
       usageLog,
-      () => runStagedCorrectionPipeline(
+      () => callFirstPassCorrection(
         client: client,
         model: firstPassModel,
         submittedText: fixture.text,
@@ -458,6 +461,11 @@ String buildReport({
     ..writeln()
     ..writeln('## Run configuration')
     ..writeln()
+    ..writeln(
+      '- Pass 1: `callFirstPassCorrection` — the simple, narrow '
+      '`corrected_text`-only first-pass client (issue #68/#65), not the '
+      'old broad `runStagedCorrectionPipeline`.',
+    )
     ..writeln('- First-pass model: `$firstPassModel`')
     ..writeln('- Naturalness model: `$naturalnessModel`')
     ..writeln('- Fixture count: `${results.length}`')
