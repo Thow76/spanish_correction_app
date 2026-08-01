@@ -413,3 +413,77 @@ Do not normalise wording that is natural in an established variety of Spanish. A
 Ignore spelling, punctuation, or grammar errors even if they appear in the same sentence as a naturalness issue.
 
 Return JSON only.''';
+
+// ── Narrow first-pass correction prompt (POC — issue #64) ────────────────
+//
+// The intended two-pass first pass: objective Spanish grammar, spelling,
+// accents, and punctuation only — leaving word choice, naturalness, style,
+// register, and valid regional Spanish entirely to the naturalness pass.
+// Recommended models: `gpt-4.1` / `gpt-4.1-mini`
+// (`docs/spanish_two_pass_prompt_handoff.md`).
+//
+// Wording is copied unchanged from `systemPrompt` in
+// `test/model_comparison_harness.dart` (prompt label
+// `simple-spanish-grammar-spelling-punctuation-only`, `promptVersion`
+// `v1`), the harness that benchmarked this exact contract across models.
+// Not reworded here: issue #64's scope is explicitly to move this
+// contract into production-accessible constants, byte-for-byte, not to
+// improve it.
+//
+// This issue adds the constants only — no production client calls them
+// yet, and `runTwoPassCorrectionPipeline`
+// (`features/corrections/data/two_pass_correction_pipeline.dart`) still
+// uses the full staged pipeline (`runStagedCorrectionPipeline`) as its
+// first pass, untouched by this issue. Wiring a client built on these
+// constants into that orchestrator is separate, later work.
+const String firstPassCorrectionSpanish = '''
+You are a Spanish correction engine.
+
+Correct only objective Spanish grammar, spelling, and punctuation errors.
+
+Do not correct word choice.
+Do not improve naturalness.
+Do not rewrite for style, fluency, tone, or elegance.
+Do not change valid regional Spanish.
+Do not treat awkward but grammatically valid Spanish as an error.
+
+Return JSON only. Do not include Markdown or commentary.''';
+
+/// Builds the first-pass user message for [text], in the same shape
+/// `buildUserPrompt` in `test/model_comparison_harness.dart` already
+/// validated.
+String buildFirstPassCorrectionUserContent(String text) {
+  return 'Correct the following Spanish text for grammar, spelling, and '
+      'punctuation only.\n'
+      '\n'
+      'Text:\n'
+      '$text';
+}
+
+/// The exact JSON shape the first-pass prompt's contract requires —
+/// `{"corrected_text": "string"}`, nothing else — sent as `response_format`
+/// so the API constrains the model's own output to it rather than relying
+/// solely on the prompt's own "Return JSON only" wording. Copied by value
+/// from `correctedTextResponseFormat` in
+/// `test/model_comparison_harness.dart`, which already validated this
+/// exact schema across models. See `naturalnessReviewResponseFormat`
+/// (`features/corrections/data/naturalness_review_client.dart`, issue
+/// #42/#63 follow-up) for why a production client built on this prompt
+/// should use this rather than prompt-only JSON: without
+/// `response_format` enforcement, a live model is not guaranteed to
+/// return the exact contract the prompt asks for.
+const Map<String, Object?> firstPassCorrectionResponseFormat = {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'spanish_correction_response',
+    'strict': true,
+    'schema': {
+      'type': 'object',
+      'additionalProperties': false,
+      'required': ['corrected_text'],
+      'properties': {
+        'corrected_text': {'type': 'string'},
+      },
+    },
+  },
+};
