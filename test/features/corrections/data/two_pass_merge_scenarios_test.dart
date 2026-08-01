@@ -1,20 +1,24 @@
 // Issue #38: proves the two-pass merge behavior against a fixed matrix of
 // deterministic scenarios, with no live OpenAI API access — every scenario
-// here either drives the real staged pipeline against a fake HTTP client
-// (same fake-client pattern as staged_correction_pipeline_test.dart) or
-// calls the merge/mapper domain functions directly against hand-built
-// inputs. Each test below corresponds to exactly one bullet in the issue's
-// "Test cases" list.
-
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
+// here either calls the merge/mapper domain functions directly against
+// hand-built inputs, or builds a first-pass `CorrectionResponse` fixture
+// directly (via `computeCorrectedRanges`/`resolveOccurrenceCorrections`,
+// the same domain arithmetic any first-pass client's own corrections would
+// go through) rather than driving a real client. Each test below
+// corresponds to exactly one bullet in issue #38's "Test cases" list.
+//
+// Deliberately does NOT drive `runStagedCorrectionPipeline` (or any other
+// first-pass client) via a fake HTTP client to produce these fixtures
+// (issue #70): this file tests merge-domain behavior — how a first pass's
+// own `CorrectionResponse` combines with a naturalness review — which is
+// orthogonal to which client production actually uses for pass 1. Building
+// fixtures directly means this file can never accidentally validate the
+// old staged pipeline as the two-pass first pass, and can never drift out
+// of sync when pass 1's real source changes again.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:spanish_correction_app/core/services/prompts/correction_prompt.dart';
-import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
-import 'package:spanish_correction_app/features/corrections/data/staged_correction_pipeline.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_corrected_range_calculator.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_original_range_resolver.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
@@ -24,29 +28,25 @@ import 'package:spanish_correction_app/features/corrections/domain/naturalness_m
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
 
 void main() {
-  test('grammar-only correction: no naturalness issue at all', () async {
+  test('grammar-only correction: no naturalness issue at all', () {
     const submittedText = 'Vi mucho trafico ayer.';
     final traficoIndex = submittedText.indexOf('trafico');
 
-    final firstPassResponse = await runStagedCorrectionPipeline(
-      client: OpenAiChatCompletionsClient(
-        apiKey: 'test-key',
-        httpClient: _RoutingHttpClient({
-          stage1DetectionDialectSpanish: _arrayEnvelope(['"trafico"']),
-          stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-          stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-          stage2CategorizationSpanish: _arrayEnvelope([
-            '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
-                '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
-          ]),
-          stage3FeedbackSpanish: _arrayEnvelope([
-            '{"start_index": $traficoIndex, "short_explanation": '
-                '"Trafico needs an accent on the a: tráfico."}',
-          ]),
-        }),
+    final firstPassCorrections = computeCorrectedRanges([
+      CorrectionItem(
+        originalPhrase: 'trafico',
+        correctedPhrase: 'tráfico',
+        category: ErrorCategory.spelling,
+        shortExplanation: 'Trafico needs an accent on the a: tráfico.',
+        startIndex: traficoIndex,
+        endIndex: traficoIndex + 'trafico'.length,
       ),
-      model: 'gpt-5.5',
-      submittedText: submittedText,
+    ], submittedText: submittedText);
+
+    final firstPassResponse = CorrectionResponse(
+      originalText: submittedText,
+      correctedText: 'Vi mucho tráfico ayer.',
+      corrections: firstPassCorrections,
     );
 
     final merge = mergeNaturalnessReview(
@@ -70,20 +70,13 @@ void main() {
 
   test(
     'naturalness-only correction: the first pass flags nothing at all',
-    () async {
+    () {
       const submittedText = 'Voy a hacer una decisión importante.';
 
-      final firstPassResponse = await runStagedCorrectionPipeline(
-        client: OpenAiChatCompletionsClient(
-          apiKey: 'test-key',
-          httpClient: _RoutingHttpClient({
-            stage1DetectionDialectSpanish: _arrayEnvelope(const []),
-            stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-          }),
-        ),
-        model: 'gpt-5.5',
-        submittedText: submittedText,
+      final firstPassResponse = CorrectionResponse(
+        originalText: submittedText,
+        correctedText: submittedText,
+        corrections: const [],
       );
       expect(firstPassResponse.correctedText, submittedText);
       expect(firstPassResponse.corrections, isEmpty);
@@ -116,31 +109,29 @@ void main() {
   test(
     'grammar and naturalness corrections in different (non-overlapping) '
     'spans',
-    () async {
+    () {
       const submittedText =
           'El profesor dijo que devia estudiar más, y ella hizo una '
           'decisión importante.';
       final deviaIndex = submittedText.indexOf('devia');
 
-      final firstPassResponse = await runStagedCorrectionPipeline(
-        client: OpenAiChatCompletionsClient(
-          apiKey: 'test-key',
-          httpClient: _RoutingHttpClient({
-            stage1DetectionDialectSpanish: _arrayEnvelope(['"devia"']),
-            stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-            stage2CategorizationSpanish: _arrayEnvelope([
-              '{"original_phrase": "devia", "corrected_phrase": "debía", '
-                  '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
-            ]),
-            stage3FeedbackSpanish: _arrayEnvelope([
-              '{"start_index": $deviaIndex, "short_explanation": '
-                  '"Devia is missing its accent: debía."}',
-            ]),
-          }),
+      final firstPassCorrections = computeCorrectedRanges([
+        CorrectionItem(
+          originalPhrase: 'devia',
+          correctedPhrase: 'debía',
+          category: ErrorCategory.spelling,
+          shortExplanation: 'Devia is missing its accent: debía.',
+          startIndex: deviaIndex,
+          endIndex: deviaIndex + 'devia'.length,
         ),
-        model: 'gpt-5.5',
-        submittedText: submittedText,
+      ], submittedText: submittedText);
+
+      final firstPassResponse = CorrectionResponse(
+        originalText: submittedText,
+        correctedText:
+            'El profesor dijo que debía estudiar más, y ella hizo una '
+            'decisión importante.',
+        corrections: firstPassCorrections,
       );
 
       const issue = NaturalnessIssue(
@@ -189,7 +180,7 @@ void main() {
   test(
     'pronoun deletion (empty corrected_phrase, whitespace-absorbing) plus '
     'a naturalness edit later in the text',
-    () async {
+    () {
       const submittedText =
           'Yo fui a casa, y yo hice una decisión importante.';
       // Case-sensitive match: "Yo" (capitalized, sentence-initial) is a
@@ -198,34 +189,28 @@ void main() {
       final resolvedDeletion = resolveOccurrenceCorrections(submittedText, [
         const OccurrenceCorrection(originalPhrase: 'yo', occurrence: 1),
       ]).single;
+      final deletionStart = resolvedDeletion.startIndex!;
+      final deletionEnd = deletionStart + 'yo'.length;
 
-      final firstPassResponse = await runStagedCorrectionPipeline(
-        client: OpenAiChatCompletionsClient(
-          apiKey: 'test-key',
-          httpClient: _RoutingHttpClient({
-            stage1DetectionDialectSpanish: _arrayEnvelope(const []),
-            stage1RedundancyDetectionSpanish: _arrayEnvelope(['"yo"']),
-            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-            stage2CategorizationSpanish: _arrayEnvelope([
-              '{"original_phrase": "yo", "corrected_phrase": "", '
-                  '"occurrence": 1, "category": "Grammar", "verdict": "error"}',
-            ]),
-            stage3FeedbackSpanish: _arrayEnvelope([
-              '{"start_index": ${resolvedDeletion.startIndex}, '
-                  '"short_explanation": "Redundant subject pronoun."}',
-            ]),
-          }),
+      final firstPassCorrections = computeCorrectedRanges([
+        CorrectionItem(
+          originalPhrase: 'yo',
+          correctedPhrase: '',
+          category: ErrorCategory.grammar,
+          shortExplanation: 'Redundant subject pronoun.',
+          startIndex: deletionStart,
+          endIndex: deletionEnd,
         ),
-        model: 'gpt-5.5',
-        submittedText: submittedText,
+      ], submittedText: submittedText);
+
+      final firstPassResponse = CorrectionResponse(
+        originalText: submittedText,
+        correctedText: 'Yo fui a casa, y hice una decisión importante.',
+        corrections: firstPassCorrections,
       );
       // Confirms the fixture is genuinely a pronoun deletion (empty
       // correctedPhrase) before layering naturalness on top of it.
       expect(firstPassResponse.corrections.single.correctedPhrase, isEmpty);
-      expect(
-        firstPassResponse.correctedText,
-        'Yo fui a casa, y hice una decisión importante.',
-      );
 
       const issue = NaturalnessIssue(
         span: 'hice una decisión',
@@ -387,109 +372,4 @@ void main() {
       );
     });
   });
-}
-
-/// Wraps a hand-written list of already-JSON-encoded array element strings
-/// in a `/v1/chat/completions` reply envelope, e.g.
-/// `_arrayEnvelope(['"trafico"'])` -> a reply whose content is `["trafico"]`.
-String _arrayEnvelope(List<String> elements) => jsonEncode({
-  'choices': [
-    {
-      'message': {
-        'role': 'assistant',
-        'content': '[${elements.join(', ')}]',
-      },
-    },
-  ],
-});
-
-// ── Minimal dart:io HttpClient fake that routes a reply by the outgoing
-// request's system prompt — same hand-rolled approach as
-// staged_correction_pipeline_test.dart.
-
-class _RoutingHttpClient implements HttpClient {
-  _RoutingHttpClient(this._repliesBySystemPrompt);
-
-  final Map<String, String> _repliesBySystemPrompt;
-
-  @override
-  Future<HttpClientRequest> postUrl(Uri url) async {
-    return _RoutingRequest(repliesBySystemPrompt: _repliesBySystemPrompt);
-  }
-
-  @override
-  Object? noSuchMethod(Invocation invocation) => null;
-}
-
-class _RoutingRequest implements HttpClientRequest {
-  _RoutingRequest({required this.repliesBySystemPrompt});
-
-  final Map<String, String> repliesBySystemPrompt;
-  final BytesBuilder _bytes = BytesBuilder();
-
-  @override
-  final HttpHeaders headers = _FakeHttpHeaders();
-
-  @override
-  void add(List<int> data) => _bytes.add(data);
-
-  @override
-  Future<HttpClientResponse> close() async {
-    final body = utf8.decode(_bytes.toBytes());
-    final sent = jsonDecode(body) as Map<String, Object?>;
-    final messages = sent['messages'] as List;
-    final systemPrompt = (messages[0] as Map)['content'] as String;
-    final reply = repliesBySystemPrompt[systemPrompt];
-    if (reply == null) {
-      throw StateError(
-        'No fake reply registered for system prompt: $systemPrompt',
-      );
-    }
-
-    return _FakeHttpClientResponse(responseBody: reply);
-  }
-
-  @override
-  Object? noSuchMethod(Invocation invocation) => null;
-}
-
-class _FakeHttpHeaders implements HttpHeaders {
-  @override
-  void set(String name, Object value, {bool preserveHeaderCase = false}) {}
-
-  @override
-  Object? noSuchMethod(Invocation invocation) => null;
-}
-
-class _FakeHttpClientResponse extends Stream<List<int>>
-    implements HttpClientResponse {
-  _FakeHttpClientResponse({required String responseBody})
-    : _body = responseBody;
-
-  final String _body;
-
-  @override
-  final int statusCode = 200;
-
-  late final Stream<List<int>> _inner = Stream.fromIterable([
-    utf8.encode(_body),
-  ]);
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int> event)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) {
-    return _inner.listen(
-      onData,
-      onError: onError,
-      onDone: onDone,
-      cancelOnError: cancelOnError,
-    );
-  }
-
-  @override
-  Object? noSuchMethod(Invocation invocation) => null;
 }
