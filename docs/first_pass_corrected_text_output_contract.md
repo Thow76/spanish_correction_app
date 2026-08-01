@@ -7,6 +7,15 @@ Branch base: `correction_pipeline_refactor`
 Scope: confirm the existing contract and how it's handled today. Prompt
 wording unchanged; no behavior changes.
 
+**Status update (issue #71)**: the "no `lib/` production code implementing
+this narrow first-pass call yet" note below is now stale. Issues #64-#70
+added a production client for this exact contract
+(`callFirstPassCorrection`, `lib/features/corrections/data/first_pass_correction_client.dart`)
+and wired it into `runTwoPassCorrectionPipeline` as a proof of concept. See
+`docs/first_pass_correction_poc_scope.md` for what that POC is and isn't
+measuring, and why an empty `corrections` list from that client is expected,
+not a bug.
+
 ## The Contract
 
 The narrow gpt-4.1-family first pass (grammar/spelling/punctuation only —

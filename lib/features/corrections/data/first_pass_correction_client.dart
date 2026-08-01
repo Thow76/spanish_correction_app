@@ -14,7 +14,9 @@ import 'openai_chat_completions_client.dart';
 /// Deriving first-pass highlights or explanations from this contract is
 /// explicitly out of scope here; this POC is measuring final text
 /// quality, reliability, latency, fallback rate, token use, and cost, not
-/// per-correction UI data.
+/// per-correction UI data. See `docs/first_pass_correction_poc_scope.md`
+/// (issue #71) for the full POC boundary and success criteria — an empty
+/// `corrections` list here is expected, not an accidental omission.
 ///
 /// Uses [firstPassCorrectionResponseFormat] as `response_format`, same
 /// reasoning as `callNaturalnessReview`'s own use of `response_format`
