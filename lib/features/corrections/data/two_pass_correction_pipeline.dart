@@ -21,7 +21,9 @@ import 'openai_chat_completions_client.dart';
 /// returns no first-pass `CorrectionItem`s at all (see its own doc
 /// comment) — the unified response's `corrections` list only ever
 /// contains naturalness-derived items now. This is unchanged from #65's
-/// own scope, not something this issue's swap introduces.
+/// own scope, not something this issue's swap introduces. See
+/// `docs/first_pass_correction_poc_scope.md` (issue #71) for the full POC
+/// boundary and success criteria.
 ///
 /// The parallel naturalness review's spans are resolved against
 /// [submittedText] itself, since it runs before the first pass's own
