@@ -1,19 +1,27 @@
 import '../domain/correction_response.dart';
 import '../domain/naturalness_correction_mapper.dart';
 import '../domain/naturalness_merge.dart';
+import 'first_pass_correction_client.dart';
 import 'naturalness_review_client.dart';
 import 'openai_chat_completions_client.dart';
-import 'staged_correction_pipeline.dart';
 
 /// Runs the two-pass correction pipeline: the first pass
-/// (`runStagedCorrectionPipeline`) and the naturalness review
-/// (`callNaturalnessReview`) concurrently against [submittedText] — the
-/// fast parallel path — merges the naturalness review into the first
-/// pass's corrected text via `mergeNaturalnessReview` (issue #32), and maps
-/// the result into a single unified [CorrectionResponse] via
-/// `mapNaturalnessEditsIntoCorrectionResponse` (issue #36) — the same
-/// shape `CorrectionService.correctText()` already returns for every other
-/// path, so a caller never needs to special-case a two-pass result.
+/// (`callFirstPassCorrection`, issue #65/#67 — the narrow grammar/
+/// spelling/accents/punctuation-only prompt, issue #64) and the
+/// naturalness review (`callNaturalnessReview`) concurrently against
+/// [submittedText] — the fast parallel path — merges the naturalness
+/// review into the first pass's corrected text via `mergeNaturalnessReview`
+/// (issue #32), and maps the result into a single unified
+/// [CorrectionResponse] via `mapNaturalnessEditsIntoCorrectionResponse`
+/// (issue #36) — the same shape `CorrectionService.correctText()` already
+/// returns for every other path, so a caller never needs to special-case a
+/// two-pass result.
+///
+/// POC note (issue #67): `callFirstPassCorrection`'s narrow contract
+/// returns no first-pass `CorrectionItem`s at all (see its own doc
+/// comment) — the unified response's `corrections` list only ever
+/// contains naturalness-derived items now. This is unchanged from #65's
+/// own scope, not something this issue's swap introduces.
 ///
 /// The parallel naturalness review's spans are resolved against
 /// [submittedText] itself, since it runs before the first pass's own
@@ -35,7 +43,7 @@ Future<CorrectionResponse> runTwoPassCorrectionPipeline({
   required String submittedText,
 }) async {
   // Both started before either is awaited — the "fast parallel path".
-  final firstPassFuture = runStagedCorrectionPipeline(
+  final firstPassFuture = callFirstPassCorrection(
     client: client,
     model: firstPassModel,
     submittedText: submittedText,

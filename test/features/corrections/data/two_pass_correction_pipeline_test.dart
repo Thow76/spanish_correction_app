@@ -8,7 +8,6 @@ import 'package:spanish_correction_app/core/services/prompts/correction_prompt.d
 import 'package:spanish_correction_app/features/corrections/data/naturalness_review_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/two_pass_correction_pipeline.dart';
-import 'package:spanish_correction_app/features/corrections/domain/correction_original_range_resolver.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 
 void main() {
@@ -18,22 +17,9 @@ void main() {
       'already clean (no naturalness issue at all)',
       () async {
         const text = 'Vi mucho trafico ayer.';
-        final traficoIndex = text.indexOf('trafico');
 
         final client = _RoutingHttpClient(
-          repliesBySystemPrompt: {
-            stage1DetectionDialectSpanish: _arrayEnvelope(['"trafico"']),
-            stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-            stage2CategorizationSpanish: _arrayEnvelope([
-              '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
-                  '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
-            ]),
-            stage3FeedbackSpanish: _arrayEnvelope([
-              '{"start_index": $traficoIndex, "short_explanation": '
-                  '"Trafico needs an accent on the a: tráfico."}',
-            ]),
-          },
+          firstPassReply: _firstPassEnvelope('Vi mucho tráfico ayer.'),
           naturalnessRepliesByUserText: {
             buildNaturalnessUserContent(text): _naturalnessEnvelope(
               '{"has_naturalness_issue": false, "issues": []}',
@@ -52,12 +38,12 @@ void main() {
         );
 
         // One unified CorrectionResponse — the same shape correctText()
-        // returns for every other path — with just the first-pass fix,
-        // since the naturalness pass found nothing to flag.
+        // returns for every other path. The simple first-pass contract
+        // returns no CorrectionItems of its own (issue #65), so with no
+        // naturalness issue either, corrections is empty even though the
+        // text itself was corrected.
         expect(result.correctedText, 'Vi mucho tráfico ayer.');
-        expect(result.corrections, hasLength(1));
-        expect(result.corrections.single.category, ErrorCategory.spelling);
-        expect(result.corrections.single.correctedPhrase, 'tráfico');
+        expect(result.corrections, isEmpty);
         // Exactly one naturalness call — the fallback was never triggered.
         expect(client.naturalnessCallCount, 1);
       },
@@ -68,40 +54,10 @@ void main() {
       'changes the exact wording the parallel naturalness pass flagged',
       () async {
         const originalText = 'Ayer iso una desicion importante.';
-        final isoIndex = resolveOccurrenceCorrections(originalText, [
-          const OccurrenceCorrection(originalPhrase: 'iso', occurrence: 1),
-        ]).single.startIndex!;
-        final desicionIndex = resolveOccurrenceCorrections(originalText, [
-          const OccurrenceCorrection(
-            originalPhrase: 'desicion',
-            occurrence: 1,
-          ),
-        ]).single.startIndex!;
-        const firstPassCorrectedText =
-            'Ayer hizo una decisión importante.';
+        const firstPassCorrectedText = 'Ayer hizo una decisión importante.';
 
         final client = _RoutingHttpClient(
-          repliesBySystemPrompt: {
-            stage1DetectionDialectSpanish: _arrayEnvelope([
-              '"iso"',
-              '"desicion"',
-            ]),
-            stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-            stage2CategorizationSpanish: _arrayEnvelope([
-              '{"original_phrase": "iso", "corrected_phrase": "hizo", '
-                  '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
-              '{"original_phrase": "desicion", "corrected_phrase": '
-                  '"decisión", "occurrence": 1, "category": "Spelling", '
-                  '"verdict": "error"}',
-            ]),
-            stage3FeedbackSpanish: _arrayEnvelope([
-              '{"start_index": $isoIndex, "short_explanation": '
-                  '"Iso should be hizo."}',
-              '{"start_index": $desicionIndex, "short_explanation": '
-                  '"Desicion is missing its accent: decisión."}',
-            ]),
-          },
+          firstPassReply: _firstPassEnvelope(firstPassCorrectedText),
           naturalnessRepliesByUserText: {
             // Parallel call: reviews the raw, uncorrected originalText —
             // its flagged span still carries the typos the first pass will
@@ -140,19 +96,11 @@ void main() {
           result.correctedText,
           'Ayer tomó una decisión importante.',
         );
-        // Both first-pass fixes plus the (fallback-resolved) naturalness
-        // edit, all in one unified corrections list.
-        expect(result.corrections, hasLength(3));
-        expect(
-          result.corrections.where(
-            (item) => item.category == ErrorCategory.spelling,
-          ),
-          hasLength(2),
-        );
-        final naturalnessItem = result.corrections.firstWhere(
-          (item) => item.category == ErrorCategory.naturalLanguage,
-        );
-        expect(naturalnessItem.correctedPhrase, 'tomó una decisión');
+        // Only the naturalness item — the first pass returns no
+        // CorrectionItems of its own (issue #65).
+        expect(result.corrections, hasLength(1));
+        expect(result.corrections.single.category, ErrorCategory.naturalLanguage);
+        expect(result.corrections.single.correctedPhrase, 'tomó una decisión');
         // The parallel call, then the sequential fallback.
         expect(client.naturalnessCallCount, 2);
       },
@@ -173,24 +121,9 @@ void main() {
         const originalText = 'Vi mucho tráfico, y luego iso más tráfico.';
         const firstPassCorrectedText =
             'Vi mucho tráfico, y luego hizo más tráfico.';
-        final isoIndex = resolveOccurrenceCorrections(originalText, [
-          const OccurrenceCorrection(originalPhrase: 'iso', occurrence: 1),
-        ]).single.startIndex!;
 
         final client = _RoutingHttpClient(
-          repliesBySystemPrompt: {
-            stage1DetectionDialectSpanish: _arrayEnvelope(['"iso"']),
-            stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-            stage2CategorizationSpanish: _arrayEnvelope([
-              '{"original_phrase": "iso", "corrected_phrase": "hizo", '
-                  '"occurrence": 1, "category": "Grammar", "verdict": "error"}',
-            ]),
-            stage3FeedbackSpanish: _arrayEnvelope([
-              '{"start_index": $isoIndex, "short_explanation": '
-                  '"Iso should be hizo."}',
-            ]),
-          },
+          firstPassReply: _firstPassEnvelope(firstPassCorrectedText),
           naturalnessRepliesByUserText: {
             // Parallel call: flags "tráfico", which occurs twice in
             // originalText — ambiguousSpan, not spanNotFound.
@@ -228,10 +161,9 @@ void main() {
           result.correctedText,
           'Vi mucho tráfico, y luego hizo más tránsito.',
         );
-        expect(result.corrections, hasLength(2));
-        final naturalnessItem = result.corrections.firstWhere(
-          (item) => item.category == ErrorCategory.naturalLanguage,
-        );
+        expect(result.corrections, hasLength(1));
+        final naturalnessItem = result.corrections.single;
+        expect(naturalnessItem.category, ErrorCategory.naturalLanguage);
         expect(naturalnessItem.correctedPhrase, 'más tránsito');
         expect(client.naturalnessCallCount, 2);
       },
@@ -249,24 +181,9 @@ void main() {
         const originalText = 'Vi mucho tráfico, y luego iso más tráfico.';
         const firstPassCorrectedText =
             'Vi mucho tráfico, y luego hizo más tráfico.';
-        final isoIndex = resolveOccurrenceCorrections(originalText, [
-          const OccurrenceCorrection(originalPhrase: 'iso', occurrence: 1),
-        ]).single.startIndex!;
 
         final client = _RoutingHttpClient(
-          repliesBySystemPrompt: {
-            stage1DetectionDialectSpanish: _arrayEnvelope(['"iso"']),
-            stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-            stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-            stage2CategorizationSpanish: _arrayEnvelope([
-              '{"original_phrase": "iso", "corrected_phrase": "hizo", '
-                  '"occurrence": 1, "category": "Grammar", "verdict": "error"}',
-            ]),
-            stage3FeedbackSpanish: _arrayEnvelope([
-              '{"start_index": $isoIndex, "short_explanation": '
-                  '"Iso should be hizo."}',
-            ]),
-          },
+          firstPassReply: _firstPassEnvelope(firstPassCorrectedText),
           naturalnessRepliesByUserText: {
             buildNaturalnessUserContent(originalText): _naturalnessEnvelope(
               '{"has_naturalness_issue": true, "issues": ['
@@ -302,15 +219,29 @@ void main() {
         expect(client.naturalnessCallCount, 2);
         // ...but since it was STILL unsafe, the base is untouched: the
         // final text is exactly the first pass's own output, nothing more,
-        // and the unified response has no naturalness-derived correction
-        // at all — only the first pass's own "iso" -> "hizo" fix.
+        // and the unified response has no correction items at all — the
+        // first pass returns none of its own, and no naturalness edit was
+        // safe to apply.
         expect(result.correctedText, firstPassCorrectedText);
-        expect(result.corrections, hasLength(1));
-        expect(result.corrections.single.category, ErrorCategory.grammar);
+        expect(result.corrections, isEmpty);
       },
     );
   });
 }
+
+/// Wraps [correctedText] in a minimal `/v1/chat/completions` response
+/// envelope shaped like the simple first-pass contract's
+/// `{"corrected_text": "..."}` reply.
+String _firstPassEnvelope(String correctedText) => jsonEncode({
+  'choices': [
+    {
+      'message': {
+        'role': 'assistant',
+        'content': jsonEncode({'corrected_text': correctedText}),
+      },
+    },
+  ],
+});
 
 /// Wraps [replyContent] (the JSON-object-shaped naturalness reply text) in
 /// a minimal `/v1/chat/completions` response envelope.
@@ -322,40 +253,26 @@ String _naturalnessEnvelope(String replyContent) => jsonEncode({
   ],
 });
 
-/// Wraps a hand-written list of already-JSON-encoded array element strings
-/// in a `/v1/chat/completions` reply envelope, e.g.
-/// `_arrayEnvelope(['"trafico"'])` -> a reply whose content is `["trafico"]`.
-String _arrayEnvelope(List<String> elements) => jsonEncode({
-  'choices': [
-    {
-      'message': {
-        'role': 'assistant',
-        'content': '[${elements.join(', ')}]',
-      },
-    },
-  ],
-});
-
 // ── Minimal dart:io HttpClient fake that routes a reply by the outgoing
-// request's system prompt — except for the naturalness system prompt,
-// which this pipeline can call twice (parallel, then fallback) with the
-// exact same system prompt but different user text, so that one is routed
-// by user text instead.
+// request's system prompt — the first-pass prompt always gets the same
+// single reply, while the naturalness prompt (which this pipeline can
+// call twice — parallel, then fallback — with the exact same system
+// prompt but different user text) is routed by user text instead.
 
 class _RoutingHttpClient implements HttpClient {
   _RoutingHttpClient({
-    required this.repliesBySystemPrompt,
+    required this.firstPassReply,
     required this.naturalnessRepliesByUserText,
   });
 
-  final Map<String, String> repliesBySystemPrompt;
+  final String firstPassReply;
   final Map<String, String> naturalnessRepliesByUserText;
   int naturalnessCallCount = 0;
 
   @override
   Future<HttpClientRequest> postUrl(Uri url) async {
     return _RoutingRequest(
-      repliesBySystemPrompt: repliesBySystemPrompt,
+      firstPassReply: firstPassReply,
       naturalnessRepliesByUserText: naturalnessRepliesByUserText,
       onNaturalnessCall: () => naturalnessCallCount++,
     );
@@ -367,12 +284,12 @@ class _RoutingHttpClient implements HttpClient {
 
 class _RoutingRequest implements HttpClientRequest {
   _RoutingRequest({
-    required this.repliesBySystemPrompt,
+    required this.firstPassReply,
     required this.naturalnessRepliesByUserText,
     required this.onNaturalnessCall,
   });
 
-  final Map<String, String> repliesBySystemPrompt;
+  final String firstPassReply;
   final Map<String, String> naturalnessRepliesByUserText;
   final void Function() onNaturalnessCall;
   final BytesBuilder _bytes = BytesBuilder();
@@ -402,13 +319,13 @@ class _RoutingRequest implements HttpClientRequest {
       return _FakeHttpClientResponse(responseBody: reply);
     }
 
-    final reply = repliesBySystemPrompt[systemPrompt];
-    if (reply == null) {
-      throw StateError(
-        'No fake reply registered for system prompt: $systemPrompt',
-      );
+    if (systemPrompt == firstPassCorrectionSpanish) {
+      return _FakeHttpClientResponse(responseBody: firstPassReply);
     }
-    return _FakeHttpClientResponse(responseBody: reply);
+
+    throw StateError(
+      'No fake reply registered for system prompt: $systemPrompt',
+    );
   }
 
   @override
