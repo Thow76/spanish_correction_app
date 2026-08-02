@@ -53,7 +53,9 @@
 // - TWO_PASS_CALL_DELAY_MS: delay between fixtures, defaults to 750.
 
 import 'dart:io';
+import 'dart:math' show min;
 
+import 'package:characters/characters.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/features/corrections/data/naturalness_review_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
@@ -1189,6 +1191,151 @@ class FixtureResult {
       firstPassStats + naturalnessOnOriginalStats + naturalnessOnFirstPassStats;
 }
 
+/// Benchmark outcome labels for one fixture's result (issue #83), matching
+/// `docs/two_pass_language_point_test_map.md`'s "Scoring Labels" table —
+/// see that doc for each label's intended meaning; [scoreFixtureResult]
+/// below computes them mechanically where that's honest to do, and falls
+/// back to [ambiguous] rather than guessing where it isn't.
+enum TwoPassScoreLabel {
+  correctFix,
+  partialFix,
+  missedIssue,
+  overcorrection,
+  acceptableNoChange,
+  ambiguous,
+  error,
+}
+
+extension TwoPassScoreLabelReportName on TwoPassScoreLabel {
+  /// The external benchmark label this score maps to — issue #83's own
+  /// "Required labels" list and `docs/two_pass_language_point_test_map.md`'s
+  /// "Scoring Labels" table, both snake_case (`correct_fix`, not this
+  /// enum's own Dart identifier name, which `.name` would render as
+  /// `correctFix`). Reports must use this, not `.name`, so a generated
+  /// report actually matches the documented taxonomy.
+  String get reportLabel {
+    switch (this) {
+      case TwoPassScoreLabel.correctFix:
+        return 'correct_fix';
+      case TwoPassScoreLabel.partialFix:
+        return 'partial_fix';
+      case TwoPassScoreLabel.missedIssue:
+        return 'missed_issue';
+      case TwoPassScoreLabel.overcorrection:
+        return 'overcorrection';
+      case TwoPassScoreLabel.acceptableNoChange:
+        return 'acceptable_no_change';
+      case TwoPassScoreLabel.ambiguous:
+        return 'ambiguous';
+      case TwoPassScoreLabel.error:
+        return 'error';
+    }
+  }
+}
+
+/// Scores [result] against its own fixture's expected output.
+///
+/// Deliberately mechanical, not semantic — this is a "small" scoring
+/// model (per issue #83's own scope), not a second correction engine:
+///
+/// - [TwoPassScoreLabel.error]: [result] itself failed
+///   ([FixtureResult.isError]) — reported as a benchmark outcome, not a
+///   crash (a fixture's failure never prevents scoring every other one;
+///   see [runFixture]'s own per-fixture try/catch).
+/// - For a [TwoPassOperationType.noChange] fixture (no fix expected):
+///   [TwoPassScoreLabel.acceptableNoChange] when the final text matches
+///   the input verbatim, else [TwoPassScoreLabel.overcorrection] — this
+///   is the one case this scorer labels overcorrection with full
+///   confidence, matching the label's own definition ("changed acceptable
+///   Spanish unnecessarily") exactly.
+/// - Otherwise (a real fix is expected):
+///   - [TwoPassScoreLabel.correctFix] when the final text matches
+///     [TwoPassFixture.expectedCorrectedText] exactly, or any of
+///     [TwoPassFixture.acceptableAlternatives] exactly — no partial
+///     credit is required where an alternative is supplied (per this
+///     issue's own out-of-scope note).
+///   - [TwoPassScoreLabel.missedIssue] when the final text is identical
+///     to the original input — a fix was expected and nothing happened.
+///   - Otherwise, something changed but didn't match the expected output
+///     or any alternative. This scorer does not attempt to distinguish a
+///     genuine partial fix from a wrong-direction change by semantic
+///     judgment — that would force false precision a string comparison
+///     can't honestly back up. It uses one cheap, defensible signal
+///     instead: grapheme-level Levenshtein distance from the final text
+///     to the expected text, compared against the same distance from the
+///     *original* text to the expected text.
+///     - Strictly closer than the original was ->
+///       [TwoPassScoreLabel.partialFix] — measurable, if incomplete,
+///       progress toward the expected fix.
+///     - Not strictly closer (same distance, or farther) ->
+///       [TwoPassScoreLabel.ambiguous] — the model changed something, but
+///       this scorer has no honest basis to call that progress, a wrong
+///       fix, or a valid alternative nobody has listed yet. A human
+///       reviewer (or a specific [acceptableAlternatives] addition) is
+///       the right way to resolve one of these, not a guessed label.
+TwoPassScoreLabel scoreFixtureResult(FixtureResult result) {
+  if (result.isError) {
+    return TwoPassScoreLabel.error;
+  }
+
+  final fixture = result.fixture;
+  final actual = result.finalCorrectedText;
+
+  if (fixture.operationType == TwoPassOperationType.noChange) {
+    return actual == fixture.text
+        ? TwoPassScoreLabel.acceptableNoChange
+        : TwoPassScoreLabel.overcorrection;
+  }
+
+  if (actual == fixture.expectedCorrectedText ||
+      fixture.acceptableAlternatives.contains(actual)) {
+    return TwoPassScoreLabel.correctFix;
+  }
+
+  if (actual == fixture.text) {
+    return TwoPassScoreLabel.missedIssue;
+  }
+
+  final distanceFromActual = _levenshteinDistance(
+    actual,
+    fixture.expectedCorrectedText,
+  );
+  final distanceFromOriginal = _levenshteinDistance(
+    fixture.text,
+    fixture.expectedCorrectedText,
+  );
+  return distanceFromActual < distanceFromOriginal
+      ? TwoPassScoreLabel.partialFix
+      : TwoPassScoreLabel.ambiguous;
+}
+
+/// Grapheme-cluster-safe Levenshtein (edit) distance between [a] and [b] —
+/// operates on `characters`, not UTF-16 code units, so combining accents
+/// and other multi-code-unit Spanish characters each count as one edit
+/// position, consistent with how the rest of this codebase treats
+/// user-perceived characters (see e.g. `correction_item.dart`).
+int _levenshteinDistance(String a, String b) {
+  final aChars = a.characters.toList();
+  final bChars = b.characters.toList();
+
+  var previousRow = List<int>.generate(bChars.length + 1, (j) => j);
+  for (var i = 1; i <= aChars.length; i++) {
+    final currentRow = List<int>.filled(bChars.length + 1, 0);
+    currentRow[0] = i;
+    for (var j = 1; j <= bChars.length; j++) {
+      if (aChars[i - 1] == bChars[j - 1]) {
+        currentRow[j] = previousRow[j - 1];
+      } else {
+        currentRow[j] =
+            1 +
+            min(previousRow[j], min(currentRow[j - 1], previousRow[j - 1]));
+      }
+    }
+    previousRow = currentRow;
+  }
+  return previousRow[bChars.length];
+}
+
 /// Runs the full comparison for one fixture: first pass
 /// (`callFirstPassCorrection`, the narrow simple first-pass client — issue
 /// #68), naturalness on the original text, naturalness on the first
@@ -1374,6 +1521,7 @@ String buildReport({
           '- Expected corrected text: '
           '`${result.fixture.expectedCorrectedText}`',
         )
+        ..writeln('- Score: ${scoreFixtureResult(result).reportLabel}')
         ..writeln('- **ERROR**: ${result.errorMessage}');
       if (result.totalStats.totalTokens > 0) {
         buffer.writeln(
@@ -1422,6 +1570,7 @@ String buildReport({
       ..writeln('- Fallback used: ${result.usedFallback}')
       ..writeln('- Final merged output: `${result.finalCorrectedText}`')
       ..writeln('- Final correction count: ${result.finalCorrectionCount}')
+      ..writeln('- Score: ${scoreFixtureResult(result).reportLabel}')
       ..writeln()
       ..writeln(
         '| Phase | Latency (ms) | Total tokens | Est. cost (USD) |',
@@ -1483,9 +1632,50 @@ String buildReport({
     ..writeln(
       '| ${results.length} | $errorCount | $conflictCount | $fallbackCount | '
       '$totalLatencyMs | $totalTokens | ${_formatCost(totalCostUsd)} |',
-    );
+    )
+    ..writeln()
+    ..writeln('### Score summary')
+    ..writeln()
+    ..writeln('| Score | Count |')
+    ..writeln('| --- | --- |');
+
+  final scoreCounts = <TwoPassScoreLabel, int>{};
+  for (final result in results) {
+    final label = scoreFixtureResult(result);
+    scoreCounts[label] = (scoreCounts[label] ?? 0) + 1;
+  }
+  for (final label in TwoPassScoreLabel.values) {
+    final count = scoreCounts[label] ?? 0;
+    if (count > 0) {
+      buffer.writeln('| ${label.reportLabel} | $count |');
+    }
+  }
 
   return buffer.toString();
+}
+
+/// Builds a minimal, all-zero-stats [FixtureResult] for [fixture] whose
+/// only fixture-scoring-relevant field is [finalCorrectedText] — a test
+/// helper for [scoreFixtureResult], not a stand-in for [runFixture]'s own
+/// real behavior.
+FixtureResult _fakeResult(
+  TwoPassFixture fixture, {
+  required String finalCorrectedText,
+}) {
+  const emptyReview = NaturalnessReview(hasNaturalnessIssue: false, issues: []);
+  return FixtureResult(
+    fixture: fixture,
+    firstPassCorrectedText: finalCorrectedText,
+    firstPassStats: CallStats.zero,
+    naturalnessOnOriginal: emptyReview,
+    naturalnessOnOriginalStats: CallStats.zero,
+    naturalnessOnFirstPass: emptyReview,
+    naturalnessOnFirstPassStats: CallStats.zero,
+    hadConflict: false,
+    usedFallback: false,
+    finalCorrectedText: finalCorrectedText,
+    finalCorrectionCount: 0,
+  );
 }
 
 void main() {
@@ -1592,6 +1782,135 @@ void main() {
         });
       },
     );
+
+    group('scoreFixtureResult (issue #83)', () {
+      test('correctFix: final text matches expectedCorrectedText exactly', () {
+        final fixture = languagePointBenchmarkFixtures.firstWhere(
+          (f) => f.id == 'accent-manana',
+        );
+        final result = _fakeResult(
+          fixture,
+          finalCorrectedText: fixture.expectedCorrectedText,
+        );
+        expect(scoreFixtureResult(result), TwoPassScoreLabel.correctFix);
+      });
+
+      test(
+        'correctFix: final text matches an acceptable alternative, not '
+        'the primary expected text',
+        () {
+          const fixture = TwoPassFixture(
+            id: 'score-test-alternative',
+            text: 'Ella tomó una reunión.',
+            note: 'Synthetic fixture for scorer unit test.',
+            languagePoint: 'Test',
+            operationType: TwoPassOperationType.replacement,
+            expectedOwner: TwoPassExpectedOwner.either,
+            expectedCorrectedText: 'Ella tuvo una reunión.',
+            acceptableAlternatives: ['Ella se reunió.'],
+          );
+          final result = _fakeResult(
+            fixture,
+            finalCorrectedText: 'Ella se reunió.',
+          );
+          expect(scoreFixtureResult(result), TwoPassScoreLabel.correctFix);
+        },
+      );
+
+      test(
+        'missedIssue: a fix was expected but the final text is identical '
+        'to the input',
+        () {
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'accent-manana',
+          );
+          final result = _fakeResult(fixture, finalCorrectedText: fixture.text);
+          expect(scoreFixtureResult(result), TwoPassScoreLabel.missedIssue);
+        },
+      );
+
+      test(
+        'acceptableNoChange: no fix was expected and the final text is '
+        'unchanged',
+        () {
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'estar-contento',
+          );
+          final result = _fakeResult(fixture, finalCorrectedText: fixture.text);
+          expect(
+            scoreFixtureResult(result),
+            TwoPassScoreLabel.acceptableNoChange,
+          );
+        },
+      );
+
+      test(
+        'overcorrection: no fix was expected but the final text changed '
+        'anyway',
+        () {
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'estar-contento',
+          );
+          final result = _fakeResult(
+            fixture,
+            finalCorrectedText: 'Estoy contentísimo con el resultado.',
+          );
+          expect(scoreFixtureResult(result), TwoPassScoreLabel.overcorrection);
+        },
+      );
+
+      test(
+        'partialFix: the final text is strictly closer to the expected '
+        'text than the original input was',
+        () {
+          // Expected fixes both "niño" -> "niños" and "manzana" ->
+          // "manzanas" (and "come" -> "comen"); this final text only
+          // fixes the noun/article agreement, leaving the verb
+          // unfixed — a real but incomplete improvement, strictly closer
+          // to expectedCorrectedText than the original input was.
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'agreement-ninos-manzanas',
+          );
+          final result = _fakeResult(
+            fixture,
+            finalCorrectedText: 'Los niños come muchas manzanas.',
+          );
+          expect(scoreFixtureResult(result), TwoPassScoreLabel.partialFix);
+        },
+      );
+
+      test(
+        'ambiguous: the final text changed but is not measurably closer '
+        'to the expected text than the original input was',
+        () {
+          // Synthetic short strings, chosen so the edit distance is exact
+          // and easy to verify by hand: 'abc' -> expected 'xyz' is
+          // distance 3 (all three positions differ); 'qqc' -> 'xyz' is
+          // also distance 3 (three substitutions) — not strictly closer.
+          const fixture = TwoPassFixture(
+            id: 'score-test-ambiguous',
+            text: 'abc',
+            note: 'Synthetic fixture for scorer unit test.',
+            languagePoint: 'Test',
+            operationType: TwoPassOperationType.replacement,
+            expectedOwner: TwoPassExpectedOwner.firstPass,
+            expectedCorrectedText: 'xyz',
+          );
+          final result = _fakeResult(fixture, finalCorrectedText: 'qqc');
+          expect(scoreFixtureResult(result), TwoPassScoreLabel.ambiguous);
+        },
+      );
+
+      test(
+        'error: a failed fixture is scored as a benchmark outcome, not a '
+        'crash',
+        () {
+          final fixture = languagePointBenchmarkFixtures.first;
+          final result = FixtureResult.error(fixture, 'boom');
+          expect(scoreFixtureResult(result), TwoPassScoreLabel.error);
+        },
+      );
+    });
 
     test(
       'callDelayMsFrom reads a real environment variable, not just '
@@ -1767,6 +2086,13 @@ void main() {
       expect(report, contains('## clean-grammar-only'));
       expect(report, contains('## Overall summary'));
       expect(report, contains('| 1 | 0 | 0 | 0 |'));
+      // Score labels must render as the documented snake_case benchmark
+      // vocabulary (issue #83's "Required labels" / the language-point
+      // test map's "Scoring Labels" table), not this enum's own Dart
+      // identifier casing.
+      expect(report, contains('Score: correct_fix'));
+      expect(report, contains('| correct_fix | 1 |'));
+      expect(report, isNot(contains('correctFix')));
     });
 
     test(
