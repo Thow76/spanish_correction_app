@@ -58,6 +58,24 @@ import 'package:spanish_correction_app/features/corrections/domain/naturalness_r
 
 import 'shared/model_pricing.dart' as pricing;
 
+/// Which edit shape a fixture is expected to exercise (issue #81) — lets a
+/// benchmark reader tell a replacement case from an insertion, deletion,
+/// mixed (more than one operation type in the same input), or
+/// deliberately-unchanged one without re-deriving it from the input/
+/// expected-output diff by eye. See
+/// `docs/two_pass_language_point_test_map.md` for the full language-point
+/// matrix this taxonomy is drawn from.
+enum TwoPassOperationType { replacement, insertion, deletion, mixed, noChange }
+
+/// Which pass a fixture expects to be responsible for its fix, or that no
+/// fix is expected at all (issue #81). [either] covers both "either pass
+/// alone would be an acceptable source of the fix" (e.g. a collocation
+/// either pass might catch) and "both passes contribute independently, in
+/// separate spans" (a fixture combining two language points) — the
+/// distinction that matters for reading a report is that no single pass
+/// is the sole expected owner, not which of those two shapes applies.
+enum TwoPassExpectedOwner { firstPass, naturalness, either, noChange }
+
 /// One fixture for this harness, chosen to exercise a distinct point on
 /// the comparison this issue asks for.
 class TwoPassFixture {
@@ -65,11 +83,38 @@ class TwoPassFixture {
     required this.id,
     required this.text,
     required this.note,
+    required this.languagePoint,
+    required this.operationType,
+    required this.expectedOwner,
+    required this.expectedCorrectedText,
+    this.acceptableAlternatives = const [],
   });
 
   final String id;
   final String text;
   final String note;
+
+  /// The Spanish language point this fixture targets (e.g. "Accents /
+  /// Diacritics", "Collocations / Strong Calques") — see
+  /// `docs/two_pass_language_point_test_map.md` for the full matrix.
+  final String languagePoint;
+
+  /// The edit shape this fixture exercises.
+  final TwoPassOperationType operationType;
+
+  /// Which pass is expected to own this fixture's fix.
+  final TwoPassExpectedOwner expectedOwner;
+
+  /// The corrected text this fixture expects the two-pass pipeline to
+  /// produce. For [TwoPassOperationType.noChange] fixtures, this equals
+  /// [text] itself — no edit is expected.
+  final String expectedCorrectedText;
+
+  /// Other outputs that would also be an acceptable fix, alongside (not
+  /// instead of) [expectedCorrectedText] — e.g. a synonym replacement
+  /// naturalness sometimes proposes. Empty when only one output is
+  /// considered correct.
+  final List<String> acceptableAlternatives;
 }
 
 const List<TwoPassFixture> twoPassIntegrationFixtures = [
@@ -79,6 +124,10 @@ const List<TwoPassFixture> twoPassIntegrationFixtures = [
     note:
         'First-pass-only fixable error (missing accent); no naturalness '
         'issue anywhere. Expect: no conflict, no fallback.',
+    languagePoint: 'Accents / Diacritics',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Vi mucho tráfico ayer.',
   ),
   TwoPassFixture(
     id: 'naturalness-only',
@@ -87,6 +136,10 @@ const List<TwoPassFixture> twoPassIntegrationFixtures = [
         'No first-pass-fixable error; a naturalness calque only. Expect: '
         'naturalness-on-original and naturalness-on-corrected agree '
         '(the text is identical either way), no conflict.',
+    languagePoint: 'Collocations / Strong Calques',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.naturalness,
+    expectedCorrectedText: 'Voy a tomar una decisión importante.',
   ),
   TwoPassFixture(
     id: 'grammar-and-naturalness-independent',
@@ -98,6 +151,17 @@ const List<TwoPassFixture> twoPassIntegrationFixtures = [
         'naturalness calque ("hizo una decisión"). Expect: the '
         'naturalness span is untouched by the first pass, so both '
         'variants agree; no conflict.',
+    // Two independent language points in one fixture: the accent fix is
+    // first-pass-owned on its own, but the fixture as a whole isn't
+    // solely either pass's job — see TwoPassExpectedOwner.either's doc.
+    languagePoint:
+        'Accents / Diacritics + Collocations / Strong Calques '
+        '(independent spans)',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText:
+        'El profesor dijo que debía estudiar más, y ella tomó una '
+        'decisión importante.',
   ),
   TwoPassFixture(
     id: 'grammar-overlaps-naturalness',
@@ -109,6 +173,12 @@ const List<TwoPassFixture> twoPassIntegrationFixtures = [
         'pre-correction wording (conflict against firstPassCorrectedText), '
         'naturalness-on-corrected flags the post-correction wording '
         '(resolves cleanly) — fallback used.',
+    languagePoint:
+        'Verb Morphology (spelling) overlapping Collocations / Strong '
+        'Calques',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Ayer tomó una decisión importante.',
   ),
   TwoPassFixture(
     id: 'ambiguous-naturalness-span',
@@ -118,6 +188,10 @@ const List<TwoPassFixture> twoPassIntegrationFixtures = [
         'word ambiguously on both passes. Expect: possible conflict that '
         'the fallback does not resolve either — the "still unsafe after a '
         'rerun" case from issue #37, observed live rather than simulated.',
+    languagePoint: 'Ambiguous / Repeated Span Safety (Naturalness)',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Vi mucho tráfico, y luego vi más tráfico.',
   ),
 ];
 
@@ -480,6 +554,15 @@ String buildReport({
         ..writeln()
         ..writeln('- Input text: `${result.fixture.text}`')
         ..writeln('- Note: ${result.fixture.note}')
+        ..writeln('- Language point: ${result.fixture.languagePoint}')
+        ..writeln(
+          '- Operation type: ${result.fixture.operationType.name}',
+        )
+        ..writeln('- Expected owner: ${result.fixture.expectedOwner.name}')
+        ..writeln(
+          '- Expected corrected text: '
+          '`${result.fixture.expectedCorrectedText}`',
+        )
         ..writeln('- **ERROR**: ${result.errorMessage}');
       if (result.totalStats.totalTokens > 0) {
         buffer.writeln(
@@ -498,6 +581,20 @@ String buildReport({
       ..writeln()
       ..writeln('- Input text: `${result.fixture.text}`')
       ..writeln('- Note: ${result.fixture.note}')
+      ..writeln('- Language point: ${result.fixture.languagePoint}')
+      ..writeln('- Operation type: ${result.fixture.operationType.name}')
+      ..writeln('- Expected owner: ${result.fixture.expectedOwner.name}')
+      ..writeln(
+        '- Expected corrected text: '
+        '`${result.fixture.expectedCorrectedText}`',
+      );
+    if (result.fixture.acceptableAlternatives.isNotEmpty) {
+      buffer.writeln(
+        '- Acceptable alternatives: '
+        '${result.fixture.acceptableAlternatives.map((a) => '`$a`').join(', ')}',
+      );
+    }
+    buffer
       ..writeln(
         '- First-pass corrected text: `${result.firstPassCorrectedText}`',
       )
@@ -586,6 +683,74 @@ void main() {
       final ids = twoPassIntegrationFixtures.map((f) => f.id).toSet();
       expect(ids.length, twoPassIntegrationFixtures.length);
     });
+
+    test(
+      'every fixture carries required benchmark metadata (issue #81)',
+      () {
+        for (final fixture in twoPassIntegrationFixtures) {
+          expect(
+            fixture.languagePoint,
+            isNotEmpty,
+            reason: '${fixture.id} is missing a languagePoint',
+          );
+          expect(
+            fixture.note,
+            isNotEmpty,
+            reason: '${fixture.id} is missing a note',
+          );
+          expect(
+            fixture.expectedCorrectedText,
+            isNotEmpty,
+            reason: '${fixture.id} is missing an expectedCorrectedText',
+          );
+        }
+      },
+    );
+
+    test(
+      'a noChange operation type always expects the input text unchanged '
+      '(issue #81)',
+      () {
+        for (final fixture in twoPassIntegrationFixtures) {
+          if (fixture.operationType == TwoPassOperationType.noChange) {
+            expect(
+              fixture.expectedCorrectedText,
+              fixture.text,
+              reason:
+                  '${fixture.id} is tagged noChange but expects a '
+                  'different corrected text',
+            );
+          }
+        }
+      },
+    );
+
+    test(
+      'TwoPassOperationType distinguishes replacement, insertion, '
+      'deletion, mixed, and no-change (issue #81)',
+      () {
+        expect(TwoPassOperationType.values.toSet(), {
+          TwoPassOperationType.replacement,
+          TwoPassOperationType.insertion,
+          TwoPassOperationType.deletion,
+          TwoPassOperationType.mixed,
+          TwoPassOperationType.noChange,
+        });
+      },
+    );
+
+    test(
+      'TwoPassExpectedOwner distinguishes first pass, naturalness, '
+      'either, and no-change (issue #81)',
+      () {
+        expect(TwoPassExpectedOwner.values.toSet(), {
+          TwoPassExpectedOwner.firstPass,
+          TwoPassExpectedOwner.naturalness,
+          TwoPassExpectedOwner.either,
+          TwoPassExpectedOwner.noChange,
+        });
+      },
+    );
 
     test(
       'callDelayMsFrom reads a real environment variable, not just '
