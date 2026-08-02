@@ -1195,6 +1195,15 @@ List<TwoPassFixture> selectFixtures({
       }
       return matches;
     case 'sample':
+      if (sampleSizePerLanguagePoint < 1) {
+        throw ArgumentError(
+          'fixtureSet "sample" requires sampleSizePerLanguagePoint >= 1 '
+          '(was $sampleSizePerLanguagePoint) — 0 or negative would '
+          'silently select zero fixtures from every language point, '
+          'producing a valid-looking report with no fixtures and no API '
+          'calls at all.',
+        );
+      }
       final byLanguagePoint = <String, List<TwoPassFixture>>{};
       for (final fixture in allTwoPassFixtures) {
         (byLanguagePoint[fixture.languagePoint] ??= []).add(fixture);
@@ -2807,6 +2816,27 @@ void main() {
           for (final entry in countByLanguagePoint.entries) {
             expect(entry.value, min(3, groupSizes[entry.key]!));
           }
+        },
+      );
+
+      test(
+        '"sample" throws for a zero or negative sampleSizePerLanguagePoint '
+        'instead of silently selecting zero fixtures',
+        () {
+          expect(
+            () => selectFixtures(
+              fixtureSet: 'sample',
+              sampleSizePerLanguagePoint: 0,
+            ),
+            throwsArgumentError,
+          );
+          expect(
+            () => selectFixtures(
+              fixtureSet: 'sample',
+              sampleSizePerLanguagePoint: -1,
+            ),
+            throwsArgumentError,
+          );
         },
       );
 
