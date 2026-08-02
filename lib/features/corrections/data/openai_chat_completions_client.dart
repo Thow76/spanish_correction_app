@@ -104,9 +104,16 @@ class ChatCompletionsUsage {
 /// reply into its own structured result is each stage's own concern, not
 /// this class's.
 ///
-/// Deliberately not part of the `CorrectionService` interface and not
-/// wired into `correctText()` or any live route — the staged pipeline this
-/// supports is assembled and tested independently before any such wiring.
+/// Not part of the `CorrectionService` interface directly, but it is
+/// wired into the live route: `OpenAiCorrectionService` instantiates this
+/// class itself (see its constructor) and passes it to
+/// `runStagedCorrectionPipeline`, the live path for Spanish. (Status
+/// update, issue #73: this comment previously said this class was
+/// deliberately not wired into `correctText()` or any live route, which
+/// was accurate when the staged pipeline was still being assembled and
+/// tested independently, but is stale now — see
+/// `docs/two_pass_orchestration_entry_points.md`, issue #27, and issue
+/// #44 for the fuller current-wiring writeup.)
 class OpenAiChatCompletionsClient {
   OpenAiChatCompletionsClient({
     required String apiKey,

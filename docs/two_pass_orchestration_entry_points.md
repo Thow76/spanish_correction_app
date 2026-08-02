@@ -49,6 +49,13 @@ app is separate, later work." That is now stale — `correctText()` calls it
 directly for Spanish via `_correctSpanishTextViaStagedPipeline`. Worth fixing
 that comment separately; not touched here to keep this issue mapping-only.
 
+**Status update (issue #73)**: fixed — that comment, plus the same stale
+"not wired in" claim on `openai_chat_completions_client.dart` and on four
+of the individual stage prompt constants in `correction_prompt.dart`
+(`stage1DetectionDialectSpanish`, `stage1RedundancyDetectionSpanish`,
+`stage2CategorizationSpanish`, `stage3FeedbackSpanish`), now correctly
+state that they're part of the live Spanish path.
+
 ## Where Two-Pass Orchestration Should Live
 
 `_correctSpanishTextViaStagedPipeline` is the seam. Today it only forwards to

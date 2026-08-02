@@ -188,6 +188,9 @@ This audit does not update those comments because issue #5 is prompt-audit only.
 A future documentation-cleanup issue could safely correct them without changing
 prompt behavior.
 
+**Status update (issue #73)**: fixed — all three comments listed above now
+correctly describe the live wiring.
+
 ## Existing Evidence And Harness Context
 
 Current active harnesses and archived reports show why the prompt suite became
