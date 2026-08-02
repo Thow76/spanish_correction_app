@@ -2920,6 +2920,179 @@ void main() {
         },
       );
     });
+
+    // Issue #86: consolidates coverage guarantees for the benchmark
+    // fixtures and the scoring/reporting logic, so a future accidental
+    // deletion or narrowing (a whole language-point group removed, one
+    // operation type or expected owner quietly stops being exercised, a
+    // score label stops rendering) fails a test rather than silently
+    // shrinking what the benchmark actually proves. Several of #86's
+    // bullets are already covered by tests added alongside the features
+    // that needed them (fixture id uniqueness and the five-per-group
+    // check: issue #82's tests above; scoring every case correct_fix
+    // through error: issue #83's `scoreFixtureResult` group above) — this
+    // group covers the remaining gaps: the *exact* set of language points
+    // (not just "however many groups happen to exist"), every expected
+    // owner value actually being used by real data (not just declared in
+    // the enum), well-formed acceptable alternatives, and every score
+    // label rendering end-to-end through a real report, not just being
+    // assigned by the scorer.
+    group('benchmark coverage guarantees (issue #86)', () {
+      test(
+        'every agreed language point is present, and no unexpected one '
+        'has been added — catches an entire group silently disappearing '
+        'or being renamed',
+        () {
+          // Keep in sync with docs/two_pass_language_point_test_map.md's
+          // 15 categories, plus the "Mixed Operations" group issue #82
+          // added for genuine TwoPassOperationType.mixed coverage.
+          // Intentionally adding a new language point group later means
+          // updating this set too — that's the point: an *unintentional*
+          // change (typo, accidental deletion) fails here; a deliberate
+          // one requires a matching, reviewable one-line change.
+          const agreedLanguagePoints = {
+            'Accents / Diacritics',
+            'Gender / Number Agreement',
+            'Verb Agreement / Morphology',
+            'Required Prepositions',
+            'Articles / Determiners',
+            'Subjunctive / Mood',
+            'Required Additions / Omissions',
+            'Unnecessary Extras / Deletions',
+            'Ser / Estar / Haber',
+            'Impersonal Haber / Se',
+            'Collocations / Strong Calques',
+            'False Friends / Word Choice',
+            'Phrase-Level Naturalness',
+            'Valid Regional / Should Not Flag',
+            'Already Correct / Do Not Tinker',
+            'Mixed Operations',
+          };
+          final actualLanguagePoints = languagePointBenchmarkFixtures
+              .map((f) => f.languagePoint)
+              .toSet();
+          expect(actualLanguagePoints, agreedLanguagePoints);
+        },
+      );
+
+      test(
+        'every TwoPassExpectedOwner value is actually used by at least '
+        'one fixture, not just declared in the enum',
+        () {
+          final usedOwners = allTwoPassFixtures
+              .map((f) => f.expectedOwner)
+              .toSet();
+          expect(usedOwners, TwoPassExpectedOwner.values.toSet());
+        },
+      );
+
+      test(
+        'acceptable alternatives, where present, are non-empty and '
+        'distinct from the primary expected corrected text',
+        () {
+          for (final fixture in allTwoPassFixtures) {
+            for (final alternative in fixture.acceptableAlternatives) {
+              expect(
+                alternative,
+                isNotEmpty,
+                reason: '${fixture.id} has an empty acceptable alternative',
+              );
+              expect(
+                alternative,
+                isNot(fixture.expectedCorrectedText),
+                reason:
+                    '${fixture.id} lists its own expectedCorrectedText as '
+                    'an acceptable alternative — redundant, and probably '
+                    'a copy-paste mistake',
+              );
+            }
+          }
+        },
+      );
+
+      test(
+        'every TwoPassScoreLabel renders end-to-end in a generated '
+        'report, not just as a scoreFixtureResult return value',
+        () {
+          final accentFixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'accent-manana',
+          );
+          final noChangeFixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'estar-contento',
+          );
+          final agreementFixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'agreement-ninos-manzanas',
+          );
+          const ambiguousFixture = TwoPassFixture(
+            id: 'coverage-test-ambiguous',
+            text: 'abc',
+            note: 'Synthetic fixture for report-rendering coverage.',
+            languagePoint: 'Test',
+            operationType: TwoPassOperationType.replacement,
+            expectedOwner: TwoPassExpectedOwner.firstPass,
+            expectedCorrectedText: 'xyz',
+          );
+
+          final report = buildReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              // correctFix
+              _fakeResult(
+                accentFixture,
+                finalCorrectedText: accentFixture.expectedCorrectedText,
+              ),
+              // missedIssue
+              _fakeResult(accentFixture, finalCorrectedText: accentFixture.text),
+              // acceptableNoChange
+              _fakeResult(
+                noChangeFixture,
+                finalCorrectedText: noChangeFixture.text,
+              ),
+              // overcorrection
+              _fakeResult(
+                noChangeFixture,
+                finalCorrectedText: 'Estoy contentísimo con el resultado.',
+              ),
+              // partialFix — fixes only the article/noun agreement,
+              // leaving the verb unfixed: a real but incomplete
+              // improvement, strictly closer to expected than the
+              // original input.
+              _fakeResult(
+                agreementFixture,
+                finalCorrectedText: 'Los niños come muchas manzanas.',
+              ),
+              // ambiguous — changed, but not measurably closer to
+              // expected than the original input was.
+              _fakeResult(ambiguousFixture, finalCorrectedText: 'qqc'),
+              // error
+              FixtureResult.error(accentFixture, 'FormatException: boom'),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          // Scoped to the Score summary section specifically (not the
+          // whole report) — the Language/Operation/Owner summary tables
+          // also list every label's reportLabel as a column header
+          // regardless of whether it occurs, so a whole-report substring
+          // check could pass even if the Score summary table itself never
+          // rendered a label.
+          final scoreSummarySection = report.substring(
+            report.indexOf('### Score summary'),
+            report.indexOf('### Language point summary'),
+          );
+          for (final label in TwoPassScoreLabel.values) {
+            expect(
+              scoreSummarySection,
+              contains('| ${label.reportLabel} | 1 |'),
+              reason:
+                  '${label.reportLabel} did not appear in the score '
+                  'summary table with its expected count of 1',
+            );
+          }
+        },
+      );
+    });
   });
 
   test('two-pass live integration experiment', tags: 'live', () async {
