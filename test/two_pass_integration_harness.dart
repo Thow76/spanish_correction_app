@@ -2446,14 +2446,38 @@ String buildProductionModeReport({
       final finalCorrected = result.isError
           ? '—'
           : '`${result.finalCorrectedText}`';
+      // FixtureResult.error collapses whatever partial latency/tokens/cost
+      // was spent before the failure into firstPassStats alone — a legacy
+      // convention from issue #42/#63 that predates this per-phase table,
+      // and isn't reliably attributable to a specific phase: the failure
+      // could have happened during naturalness or fallback just as easily
+      // as during the first pass itself. Rendering that collapsed total
+      // under "First-pass latency" while naturalness/fallback show 0
+      // would misattribute real spend to the wrong phase (review finding
+      // on #106's PR) — so an error row shows "—" for each per-phase
+      // column, and only the aggregate production total, explicitly
+      // labeled as partial.
+      final firstPassLatencyCell = result.isError
+          ? '—'
+          : '${result.firstPassStats.wallClockMs}';
+      final naturalnessLatencyCell = result.isError
+          ? '—'
+          : '${result.naturalnessOnOriginalStats.wallClockMs}';
+      final fallbackLatencyCell = result.isError
+          ? '—'
+          : '${result.hadConflict ? result.naturalnessOnFirstPassStats.wallClockMs : 0}';
+      final productionTotalLatencyCell = result.isError
+          ? '${productionStats.wallClockMs} (partial, before error)'
+          : '${productionStats.wallClockMs}';
+      final productionCostCell = result.isError
+          ? '${_formatCost(productionStats.costUsd)} (partial, before error)'
+          : _formatCost(productionStats.costUsd);
       buffer.writeln(
         '| `${result.fixture.text}` | $firstPassCorrected | '
         '$finalCorrected | $fallbackOutcomeLabel | $passFail | '
-        '${result.firstPassStats.wallClockMs} | '
-        '${result.naturalnessOnOriginalStats.wallClockMs} | '
-        '${result.hadConflict ? result.naturalnessOnFirstPassStats.wallClockMs : 0} | '
-        '${productionStats.wallClockMs} | '
-        '${_formatCost(productionStats.costUsd)} |',
+        '$firstPassLatencyCell | $naturalnessLatencyCell | '
+        '$fallbackLatencyCell | $productionTotalLatencyCell | '
+        '$productionCostCell |',
       );
     }
     buffer.writeln();
@@ -4181,6 +4205,53 @@ void main() {
           expect(report, contains('1 fixture — 0 pass / 1 fail'));
           expect(report, contains('Fallback: 1 error'));
           expect(report, contains('| `${fixture.text}` | — | — | error | fail |'));
+        },
+      );
+
+      test(
+        'buildProductionModeReport (issue #101 review fix) does not '
+        'misattribute an error row\'s collapsed partial spend to '
+        '"First-pass latency" — FixtureResult.error stores whatever was '
+        'spent before the failure entirely in firstPassStats regardless '
+        'of which phase actually failed (issue #42/#63\'s own '
+        'convention), so that total isn\'t really first-pass-specific and '
+        'must not render as if it were',
+        () {
+          final report = buildProductionModeReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              FixtureResult.error(
+                fixture,
+                'FormatException: boom',
+                // A large, distinctive number — if this ever leaked into
+                // the "First-pass latency" column instead of "—", it
+                // would be unmistakable in the assertion below.
+                partialStats: const CallStats(
+                  wallClockMs: 9999,
+                  totalTokens: 500,
+                  costUsd: 0.05,
+                ),
+              ),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          // The full row, in order: phrase | first-pass corrected |
+          // final corrected | fallback outcome | pass/fail | first-pass
+          // latency | naturalness latency | fallback latency |
+          // production total latency | production cost.
+          expect(
+            report,
+            contains(
+              '| `${fixture.text}` | — | — | error | fail | — | — | — | '
+              '9999 (partial, before error) | \$0.050000 (partial, '
+              'before error) |',
+            ),
+          );
+          // The collapsed 9999ms must never appear positioned as if it
+          // were first-pass-specific latency.
+          expect(report, isNot(contains('| 9999 | 0 | 0 |')));
         },
       );
 
