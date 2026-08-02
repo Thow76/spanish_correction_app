@@ -75,6 +75,28 @@ import 'shared/model_pricing.dart' as pricing;
 /// matrix this taxonomy is drawn from.
 enum TwoPassOperationType { replacement, insertion, deletion, mixed, noChange }
 
+extension TwoPassOperationTypeReportName on TwoPassOperationType {
+  /// The external operation-type label from
+  /// `docs/two_pass_language_point_test_map.md`'s "Operation Types" table —
+  /// snake_case (`no_change`), not this enum's own Dart identifier name
+  /// (`.name` would render `noChange`). Reports must use this, matching
+  /// the same reasoning as `TwoPassScoreLabel.reportLabel` (issue #83).
+  String get reportLabel {
+    switch (this) {
+      case TwoPassOperationType.replacement:
+        return 'replacement';
+      case TwoPassOperationType.insertion:
+        return 'insertion';
+      case TwoPassOperationType.deletion:
+        return 'deletion';
+      case TwoPassOperationType.mixed:
+        return 'mixed';
+      case TwoPassOperationType.noChange:
+        return 'no_change';
+    }
+  }
+}
+
 /// Which pass a fixture expects to be responsible for its fix, or that no
 /// fix is expected at all (issue #81). [either] covers both "either pass
 /// alone would be an acceptable source of the fix" (e.g. a collocation
@@ -83,6 +105,25 @@ enum TwoPassOperationType { replacement, insertion, deletion, mixed, noChange }
 /// distinction that matters for reading a report is that no single pass
 /// is the sole expected owner, not which of those two shapes applies.
 enum TwoPassExpectedOwner { firstPass, naturalness, either, noChange }
+
+extension TwoPassExpectedOwnerReportName on TwoPassExpectedOwner {
+  /// A snake_case owner label, consistent with the same reporting
+  /// convention as [TwoPassOperationTypeReportName.reportLabel] and
+  /// `TwoPassScoreLabel.reportLabel` (issue #83) — `.name` would render
+  /// `firstPass`/`noChange` instead of `first_pass`/`no_change`.
+  String get reportLabel {
+    switch (this) {
+      case TwoPassExpectedOwner.firstPass:
+        return 'first_pass';
+      case TwoPassExpectedOwner.naturalness:
+        return 'naturalness';
+      case TwoPassExpectedOwner.either:
+        return 'either';
+      case TwoPassExpectedOwner.noChange:
+        return 'no_change';
+    }
+  }
+}
 
 /// One fixture for this harness, chosen to exercise a distinct point on
 /// the comparison this issue asks for.
@@ -1480,6 +1521,120 @@ String _describeReview(NaturalnessReview review) {
 String _formatCost(double? usd) =>
     usd == null ? 'unknown' : '\$${usd.toStringAsFixed(6)}';
 
+String _formatRate(int count, int total) {
+  if (total == 0) {
+    return 'n/a';
+  }
+  return '${(count / total * 100).toStringAsFixed(1)}%';
+}
+
+/// Builds a markdown table breaking [results] down by a grouping key (via
+/// [keyOf] — e.g. language point, operation type, expected owner) crossed
+/// with score label — so a reader can spot a specific weak spot (e.g.
+/// "Subjunctive / Mood: 1 correct_fix, 4 missed_issue") instead of only a
+/// single aggregate pass rate (issue #84's own acceptance criterion).
+/// Group rows appear in first-encountered order, not sorted, since
+/// [results] is already grouped by construction (fixtures of the same
+/// language point/operation type/owner are declared together).
+String _groupedScoreTable({
+  required String groupHeader,
+  required List<FixtureResult> results,
+  required String Function(TwoPassFixture) keyOf,
+}) {
+  final order = <String>[];
+  final counts = <String, Map<TwoPassScoreLabel, int>>{};
+  for (final result in results) {
+    final key = keyOf(result.fixture);
+    final labelCounts = counts.putIfAbsent(key, () {
+      order.add(key);
+      return {for (final label in TwoPassScoreLabel.values) label: 0};
+    });
+    final label = scoreFixtureResult(result);
+    labelCounts[label] = labelCounts[label]! + 1;
+  }
+
+  final columns = TwoPassScoreLabel.values.map((l) => l.reportLabel).toList();
+  final separatorCells = List.filled(2 + columns.length, '---').join(' | ');
+  final buffer = StringBuffer()
+    ..writeln('| $groupHeader | Fixtures | ${columns.join(' | ')} |')
+    ..writeln('| $separatorCells |');
+  for (final key in order) {
+    final labelCounts = counts[key]!;
+    final total = labelCounts.values.fold<int>(0, (a, b) => a + b);
+    final cells = TwoPassScoreLabel.values
+        .map((label) => labelCounts[label].toString())
+        .join(' | ');
+    buffer.writeln('| $key | $total | $cells |');
+  }
+  return buffer.toString();
+}
+
+/// Flags fixtures whose total latency or (when known) total cost exceeds
+/// [outlierMultiplier] times the average over every non-error result in
+/// [results] — a cheap, deterministic way to satisfy "latency and cost
+/// outliers" (issue #84) without a fragile or overbuilt statistics model.
+/// Excludes errored results from the average itself (their stats are a
+/// partial spend by construction, not comparable to a full run — see
+/// [FixtureResult.error]'s own doc comment), though an errored result
+/// could still, in principle, be flagged if [results] is ever mixed with
+/// externally-computed averages; this function only ever computes and
+/// checks against non-error results.
+String _outliersSection(
+  List<FixtureResult> results, {
+  double outlierMultiplier = 1.5,
+}) {
+  final nonError = results.where((r) => !r.isError).toList();
+  if (nonError.isEmpty) {
+    return 'Not enough non-error fixtures to compute outliers.\n';
+  }
+
+  final avgLatency =
+      nonError.fold<int>(0, (sum, r) => sum + r.totalStats.wallClockMs) /
+      nonError.length;
+  final knownCosts = [
+    for (final r in nonError)
+      if (r.totalStats.costUsd != null) r.totalStats.costUsd!,
+  ];
+  final avgCost = knownCosts.isEmpty
+      ? null
+      : knownCosts.reduce((a, b) => a + b) / knownCosts.length;
+
+  final outliers = nonError.where((r) {
+    final isLatencyOutlier =
+        r.totalStats.wallClockMs > avgLatency * outlierMultiplier;
+    final cost = r.totalStats.costUsd;
+    final isCostOutlier =
+        avgCost != null && cost != null && cost > avgCost * outlierMultiplier;
+    return isLatencyOutlier || isCostOutlier;
+  }).toList();
+
+  final buffer = StringBuffer()
+    ..writeln(
+      '- Average latency: ${avgLatency.round()} ms; average cost: '
+      '${avgCost == null ? 'unknown' : _formatCost(avgCost)} '
+      '(over ${nonError.length} non-error fixture(s)).',
+    )
+    ..writeln(
+      '- Outlier threshold: ${outlierMultiplier}x the average latency or '
+      'cost.',
+    );
+  if (outliers.isEmpty) {
+    buffer.writeln('- No latency or cost outliers.');
+  } else {
+    buffer
+      ..writeln()
+      ..writeln('| Fixture | Latency (ms) | Est. cost (USD) |')
+      ..writeln('| --- | --- | --- |');
+    for (final result in outliers) {
+      buffer.writeln(
+        '| ${result.fixture.id} | ${result.totalStats.wallClockMs} | '
+        '${_formatCost(result.totalStats.costUsd)} |',
+      );
+    }
+  }
+  return buffer.toString();
+}
+
 /// Builds the full markdown report for [results], in the same style as
 /// this repo's other harness reports.
 String buildReport({
@@ -1514,9 +1669,11 @@ String buildReport({
         ..writeln('- Note: ${result.fixture.note}')
         ..writeln('- Language point: ${result.fixture.languagePoint}')
         ..writeln(
-          '- Operation type: ${result.fixture.operationType.name}',
+          '- Operation type: ${result.fixture.operationType.reportLabel}',
         )
-        ..writeln('- Expected owner: ${result.fixture.expectedOwner.name}')
+        ..writeln(
+          '- Expected owner: ${result.fixture.expectedOwner.reportLabel}',
+        )
         ..writeln(
           '- Expected corrected text: '
           '`${result.fixture.expectedCorrectedText}`',
@@ -1541,8 +1698,12 @@ String buildReport({
       ..writeln('- Input text: `${result.fixture.text}`')
       ..writeln('- Note: ${result.fixture.note}')
       ..writeln('- Language point: ${result.fixture.languagePoint}')
-      ..writeln('- Operation type: ${result.fixture.operationType.name}')
-      ..writeln('- Expected owner: ${result.fixture.expectedOwner.name}')
+      ..writeln(
+        '- Operation type: ${result.fixture.operationType.reportLabel}',
+      )
+      ..writeln(
+        '- Expected owner: ${result.fixture.expectedOwner.reportLabel}',
+      )
       ..writeln(
         '- Expected corrected text: '
         '`${result.fixture.expectedCorrectedText}`',
@@ -1650,6 +1811,55 @@ String buildReport({
       buffer.writeln('| ${label.reportLabel} | $count |');
     }
   }
+
+  buffer
+    ..writeln()
+    ..writeln('### Language point summary')
+    ..writeln()
+    ..write(
+      _groupedScoreTable(
+        groupHeader: 'Language point',
+        results: results,
+        keyOf: (fixture) => fixture.languagePoint,
+      ),
+    )
+    ..writeln()
+    ..writeln('### Operation type summary')
+    ..writeln()
+    ..write(
+      _groupedScoreTable(
+        groupHeader: 'Operation type',
+        results: results,
+        keyOf: (fixture) => fixture.operationType.reportLabel,
+      ),
+    )
+    ..writeln()
+    ..writeln('### Expected owner summary')
+    ..writeln()
+    ..write(
+      _groupedScoreTable(
+        groupHeader: 'Expected owner',
+        results: results,
+        keyOf: (fixture) => fixture.expectedOwner.reportLabel,
+      ),
+    )
+    ..writeln()
+    ..writeln('### Fallback / conflict summary')
+    ..writeln()
+    ..writeln('| Metric | Count | Rate |')
+    ..writeln('| --- | --- | --- |')
+    ..writeln(
+      '| Conflicts | $conflictCount | '
+      '${_formatRate(conflictCount, results.length)} |',
+    )
+    ..writeln(
+      '| Fallbacks used | $fallbackCount | '
+      '${_formatRate(fallbackCount, results.length)} |',
+    )
+    ..writeln()
+    ..writeln('### Latency / cost outliers')
+    ..writeln()
+    ..write(_outliersSection(results));
 
   return buffer.toString();
 }
@@ -2155,6 +2365,126 @@ void main() {
         // The overall summary's totals include it too, not just the
         // per-fixture note.
         expect(report, contains('| 1 | 1 | 0 | 0 | 2500 | 500 |'));
+      },
+    );
+
+    test(
+      'buildReport groups results by language point, operation type, and '
+      'expected owner, using snake_case labels not enum .name (issue #84)',
+      () {
+        final accentFixture = languagePointBenchmarkFixtures.firstWhere(
+          (f) => f.id == 'accent-manana',
+        );
+        final noChangeFixture = languagePointBenchmarkFixtures.firstWhere(
+          (f) => f.id == 'estar-contento',
+        );
+        final collocationFixture = languagePointBenchmarkFixtures.firstWhere(
+          (f) => f.id == 'collocation-hacer-decision',
+        );
+
+        final report = buildReport(
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          results: [
+            _fakeResult(
+              accentFixture,
+              finalCorrectedText: accentFixture.expectedCorrectedText,
+            ),
+            _fakeResult(
+              noChangeFixture,
+              finalCorrectedText: noChangeFixture.text,
+            ),
+            FixtureResult.error(collocationFixture, 'FormatException: boom'),
+          ],
+          generatedAt: DateTime.utc(2026, 1, 1),
+        );
+
+        expect(report, contains('### Language point summary'));
+        expect(report, contains('| Accents / Diacritics | 1 |'));
+        expect(report, contains('| Ser / Estar / Haber | 1 |'));
+        expect(report, contains('| Collocations / Strong Calques | 1 |'));
+
+        expect(report, contains('### Operation type summary'));
+        expect(report, contains('| replacement |'));
+        expect(report, contains('| no_change |'));
+
+        expect(report, contains('### Expected owner summary'));
+        expect(report, contains('| first_pass |'));
+        expect(report, contains('| either |'));
+
+        // Locks in the snake_case fix for operation type / expected owner
+        // report labels — the same casing bug class already found and
+        // fixed for score labels (issue #83's review).
+        expect(report, contains('Operation type: no_change'));
+        expect(report, contains('Expected owner: first_pass'));
+        expect(report, isNot(contains('noChange')));
+        expect(report, isNot(contains('firstPass')));
+
+        expect(report, contains('### Fallback / conflict summary'));
+        expect(report, contains('| Conflicts | 0 | 0.0% |'));
+
+        expect(report, contains('### Latency / cost outliers'));
+      },
+    );
+
+    test(
+      'buildReport flags a fixture whose latency is well above the '
+      'average as an outlier, and reports none when all are similar '
+      '(issue #84)',
+      () {
+        final fixtureA = languagePointBenchmarkFixtures[0];
+        final fixtureB = languagePointBenchmarkFixtures[1];
+        final fixtureC = languagePointBenchmarkFixtures[2];
+
+        FixtureResult resultWithLatency(TwoPassFixture fixture, int latencyMs) {
+          return FixtureResult(
+            fixture: fixture,
+            firstPassCorrectedText: fixture.expectedCorrectedText,
+            firstPassStats: CallStats(
+              wallClockMs: latencyMs,
+              totalTokens: 100,
+              costUsd: 0.001,
+            ),
+            naturalnessOnOriginal: const NaturalnessReview(
+              hasNaturalnessIssue: false,
+              issues: [],
+            ),
+            naturalnessOnOriginalStats: CallStats.zero,
+            naturalnessOnFirstPass: const NaturalnessReview(
+              hasNaturalnessIssue: false,
+              issues: [],
+            ),
+            naturalnessOnFirstPassStats: CallStats.zero,
+            hadConflict: false,
+            usedFallback: false,
+            finalCorrectedText: fixture.expectedCorrectedText,
+            finalCorrectionCount: 0,
+          );
+        }
+
+        final noOutliersReport = buildReport(
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          results: [
+            resultWithLatency(fixtureA, 1000),
+            resultWithLatency(fixtureB, 1100),
+            resultWithLatency(fixtureC, 900),
+          ],
+          generatedAt: DateTime.utc(2026, 1, 1),
+        );
+        expect(noOutliersReport, contains('No latency or cost outliers.'));
+
+        final withOutlierReport = buildReport(
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          results: [
+            resultWithLatency(fixtureA, 1000),
+            resultWithLatency(fixtureB, 1000),
+            resultWithLatency(fixtureC, 10000),
+          ],
+          generatedAt: DateTime.utc(2026, 1, 1),
+        );
+        expect(withOutlierReport, contains('| ${fixtureC.id} |'));
       },
     );
   });
