@@ -32,15 +32,15 @@
 // Run offline (fixture/logic sanity only, no API calls):
 //   flutter test test/two_pass_integration_harness.dart --exclude-tags live
 //
-// Run live deliberately (costs real API calls). The live test iterates
-// allTwoPassFixtures — as of issue #82, that's the original 5-fixture
-// smoke subset (twoPassIntegrationFixtures) PLUS the full 80-fixture
-// language-point benchmark (languagePointBenchmarkFixtures, 16 groups x 5,
-// converted from docs/two_pass_language_point_test_map.md), so 85
-// fixtures total, first pass (1 call each) + 2 naturalness calls each —
-// expect on the order of 255 total API calls for a full run. There is no
-// built-in way yet to run only a subset; consider that before opting in,
-// or run a smaller ad hoc fixture list locally first.
+// Run live deliberately (costs real API calls). By default the live test
+// iterates allTwoPassFixtures — as of issue #82, that's the original
+// 5-fixture smoke subset (twoPassIntegrationFixtures) PLUS the full
+// 80-fixture language-point benchmark (languagePointBenchmarkFixtures, 16
+// groups x 5, converted from docs/two_pass_language_point_test_map.md), so
+// 85 fixtures total, first pass (1 call each) + 2 naturalness calls each —
+// expect on the order of 255 total API calls for a full run. Use
+// TWO_PASS_FIXTURE_SET (issue #85, see below) to run a small, cheap slice
+// first before committing to that.
 //   OPENAI_API_KEY=sk-... \
 //   TWO_PASS_LIVE=true \
 //   flutter test test/two_pass_integration_harness.dart --tags live --timeout none
@@ -51,6 +51,23 @@
 // - TWO_PASS_OUTPUT: report path, defaults to
 //   docs/two_pass_integration_harness.md.
 // - TWO_PASS_CALL_DELAY_MS: delay between fixtures, defaults to 750.
+// - TWO_PASS_FIXTURE_SET (issue #85): which fixtures to run, defaults to
+//   `all`. One of:
+//   - `all`: every fixture (~255 API calls — see above).
+//   - `smoke`: just the original 5-fixture smoke subset (~15 API calls).
+//   - `fixture_id`: exactly one fixture — also set TWO_PASS_FIXTURE_ID.
+//   - `language_point`: every fixture in one language-point group — also
+//     set TWO_PASS_LANGUAGE_POINT to its exact name (e.g. "Accents /
+//     Diacritics"; see docs/two_pass_language_point_test_map.md).
+//   - `operation_type`: every fixture with one operation type — also set
+//     TWO_PASS_OPERATION_TYPE (one of replacement, insertion, deletion,
+//     mixed, no_change).
+//   - `sample`: up to TWO_PASS_SAMPLE_SIZE fixtures (defaults to 1) from
+//     *each* language-point group — a cheap cross-section covering every
+//     language point without the full per-group fixture count.
+//   An unrecognized value, or a selection that matches no fixtures at
+//   all, fails fast with a clear error rather than silently running an
+//   empty (or the wrong) set — see selectFixtures's own doc comment.
 
 import 'dart:io';
 import 'dart:math' show min;
@@ -1091,6 +1108,169 @@ bool _liveRunOptIn(Map<String, String> environment) {
       (environment['TWO_PASS_LIVE']?.trim().toLowerCase() == 'true');
 }
 
+/// Default for [selectFixtures]'s `fixtureSet` — the full 85-fixture
+/// benchmark. See that function's doc comment for every other value.
+const String defaultFixtureSet = 'all';
+
+/// Default fixtures-per-language-point cap for the `sample` fixture set.
+const int defaultSampleSizePerLanguagePoint = 1;
+
+/// Selects which fixtures a live run should exercise (issue #85) — lets a
+/// proof-of-concept run start with a small, cheap live sample before
+/// committing to the full ~85-fixture benchmark's ~255-call spend (see
+/// this file's own header comment). [fixtureSet] is one of:
+///
+/// - `all` (default): every fixture in [allTwoPassFixtures].
+/// - `smoke`: just [twoPassIntegrationFixtures] — the original 5-fixture
+///   smoke subset.
+/// - `fixture_id`: exactly the one fixture whose id equals [fixtureId].
+/// - `language_point`: every fixture whose [TwoPassFixture.languagePoint]
+///   equals [languagePoint] exactly.
+/// - `operation_type`: every fixture whose
+///   [TwoPassOperationTypeReportName.reportLabel] equals
+///   [operationTypeLabel] exactly (e.g. `"replacement"`, `"no_change"`).
+/// - `sample`: up to [sampleSizePerLanguagePoint] fixtures from *each*
+///   distinct language point in [allTwoPassFixtures] (in the order they
+///   already appear there) — cross-section coverage of every language
+///   point without the full per-group fixture count.
+///
+/// Throws [ArgumentError] for an unrecognized [fixtureSet], a
+/// `fixture_id`/`language_point`/`operation_type` selection that matches
+/// nothing, or a missing required parameter for the chosen [fixtureSet] —
+/// a silently-empty live run (0 fixtures, 0 API calls, an empty report)
+/// would be a much more confusing failure mode than an immediate, clear
+/// error explaining exactly what didn't match.
+List<TwoPassFixture> selectFixtures({
+  String fixtureSet = defaultFixtureSet,
+  String? fixtureId,
+  String? languagePoint,
+  String? operationTypeLabel,
+  int sampleSizePerLanguagePoint = defaultSampleSizePerLanguagePoint,
+}) {
+  switch (fixtureSet) {
+    case 'all':
+      return allTwoPassFixtures;
+    case 'smoke':
+      return twoPassIntegrationFixtures;
+    case 'fixture_id':
+      if (fixtureId == null || fixtureId.isEmpty) {
+        throw ArgumentError(
+          'fixtureSet "fixture_id" requires a non-empty fixtureId.',
+        );
+      }
+      final matches = allTwoPassFixtures.where((f) => f.id == fixtureId);
+      if (matches.isEmpty) {
+        throw ArgumentError('No fixture with id "$fixtureId".');
+      }
+      return [matches.single];
+    case 'language_point':
+      if (languagePoint == null || languagePoint.isEmpty) {
+        throw ArgumentError(
+          'fixtureSet "language_point" requires a non-empty languagePoint.',
+        );
+      }
+      final matches = allTwoPassFixtures
+          .where((f) => f.languagePoint == languagePoint)
+          .toList();
+      if (matches.isEmpty) {
+        throw ArgumentError(
+          'No fixtures with languagePoint "$languagePoint".',
+        );
+      }
+      return matches;
+    case 'operation_type':
+      if (operationTypeLabel == null || operationTypeLabel.isEmpty) {
+        throw ArgumentError(
+          'fixtureSet "operation_type" requires a non-empty '
+          'operationTypeLabel.',
+        );
+      }
+      final matches = allTwoPassFixtures
+          .where((f) => f.operationType.reportLabel == operationTypeLabel)
+          .toList();
+      if (matches.isEmpty) {
+        throw ArgumentError(
+          'No fixtures with operation type "$operationTypeLabel".',
+        );
+      }
+      return matches;
+    case 'sample':
+      if (sampleSizePerLanguagePoint < 1) {
+        throw ArgumentError(
+          'fixtureSet "sample" requires sampleSizePerLanguagePoint >= 1 '
+          '(was $sampleSizePerLanguagePoint) — 0 or negative would '
+          'silently select zero fixtures from every language point, '
+          'producing a valid-looking report with no fixtures and no API '
+          'calls at all.',
+        );
+      }
+      final byLanguagePoint = <String, List<TwoPassFixture>>{};
+      for (final fixture in allTwoPassFixtures) {
+        (byLanguagePoint[fixture.languagePoint] ??= []).add(fixture);
+      }
+      return [
+        for (final group in byLanguagePoint.values)
+          ...group.take(sampleSizePerLanguagePoint),
+      ];
+    default:
+      throw ArgumentError(
+        'Unknown fixtureSet "$fixtureSet" — expected one of: all, smoke, '
+        'fixture_id, language_point, operation_type, sample.',
+      );
+  }
+}
+
+/// Reads [selectFixtures]'s parameters from a real environment (e.g.
+/// `TWO_PASS_FIXTURE_SET=smoke flutter test ...`), same
+/// real-environment-variable convention as [callDelayMsFrom].
+List<TwoPassFixture> selectedFixturesFrom(Map<String, String> environment) {
+  final sampleSizeRaw = environment['TWO_PASS_SAMPLE_SIZE']?.trim() ?? '';
+  return selectFixtures(
+    fixtureSet: _runtimeString(
+      environment: environment,
+      key: 'TWO_PASS_FIXTURE_SET',
+      defaultValue: defaultFixtureSet,
+    ),
+    fixtureId: environment['TWO_PASS_FIXTURE_ID']?.trim(),
+    languagePoint: environment['TWO_PASS_LANGUAGE_POINT']?.trim(),
+    operationTypeLabel: environment['TWO_PASS_OPERATION_TYPE']?.trim(),
+    sampleSizePerLanguagePoint:
+        int.tryParse(sampleSizeRaw) ?? defaultSampleSizePerLanguagePoint,
+  );
+}
+
+/// A one-line, human-readable description of a fixture selection — recorded
+/// in the generated report's "Run configuration" section (issue #85's own
+/// acceptance criterion) so a report never leaves a reader guessing which
+/// slice of the benchmark it actually covers.
+String describeFixtureSelection({
+  required String fixtureSet,
+  String? fixtureId,
+  String? languagePoint,
+  String? operationTypeLabel,
+  required int sampleSizePerLanguagePoint,
+  required int selectedCount,
+}) {
+  switch (fixtureSet) {
+    case 'smoke':
+      return 'smoke — the original small smoke subset ($selectedCount '
+          'fixtures)';
+    case 'fixture_id':
+      return 'fixture_id = "$fixtureId" ($selectedCount fixture)';
+    case 'language_point':
+      return 'language_point = "$languagePoint" ($selectedCount fixtures)';
+    case 'operation_type':
+      return 'operation_type = "$operationTypeLabel" ($selectedCount '
+          'fixtures)';
+    case 'sample':
+      return 'sample — up to $sampleSizePerLanguagePoint per language '
+          'point ($selectedCount fixtures total)';
+    case 'all':
+    default:
+      return 'all ($selectedCount fixtures)';
+  }
+}
+
 /// Latency/token/cost totals for one logical phase of one fixture (the
 /// first pass, naturalness-on-original, or naturalness-on-first-pass).
 class CallStats {
@@ -1642,6 +1822,7 @@ String buildReport({
   required String naturalnessModel,
   required List<FixtureResult> results,
   required DateTime generatedAt,
+  String fixtureSelection = 'all',
 }) {
   final buffer = StringBuffer()
     ..writeln('# Two-Pass Live Integration Harness')
@@ -1655,6 +1836,7 @@ String buildReport({
     )
     ..writeln('- First-pass model: `$firstPassModel`')
     ..writeln('- Naturalness model: `$naturalnessModel`')
+    ..writeln('- Fixture selection: $fixtureSelection (issue #85)')
     ..writeln('- Fixture count: `${results.length}`')
     ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
     ..writeln()
@@ -2487,6 +2669,257 @@ void main() {
         expect(withOutlierReport, contains('| ${fixtureC.id} |'));
       },
     );
+
+    group('selectFixtures (issue #85)', () {
+      test('"all" (the default) returns every fixture', () {
+        expect(selectFixtures(), allTwoPassFixtures);
+        expect(
+          selectFixtures(fixtureSet: 'all'),
+          allTwoPassFixtures,
+        );
+      });
+
+      test('"smoke" returns only the original smoke subset', () {
+        expect(
+          selectFixtures(fixtureSet: 'smoke'),
+          twoPassIntegrationFixtures,
+        );
+      });
+
+      test('"fixture_id" returns exactly the one matching fixture', () {
+        final selected = selectFixtures(
+          fixtureSet: 'fixture_id',
+          fixtureId: 'accent-manana',
+        );
+        expect(selected, hasLength(1));
+        expect(selected.single.id, 'accent-manana');
+      });
+
+      test('"fixture_id" throws for an unknown id', () {
+        expect(
+          () => selectFixtures(
+            fixtureSet: 'fixture_id',
+            fixtureId: 'not-a-real-fixture',
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('"fixture_id" throws when no id is supplied', () {
+        expect(
+          () => selectFixtures(fixtureSet: 'fixture_id'),
+          throwsArgumentError,
+        );
+      });
+
+      test(
+        '"language_point" returns exactly the fixtures in that group',
+        () {
+          final selected = selectFixtures(
+            fixtureSet: 'language_point',
+            languagePoint: 'Subjunctive / Mood',
+          );
+          expect(selected, hasLength(5));
+          expect(
+            selected.every((f) => f.languagePoint == 'Subjunctive / Mood'),
+            isTrue,
+          );
+        },
+      );
+
+      test('"language_point" throws for an unknown language point', () {
+        expect(
+          () => selectFixtures(
+            fixtureSet: 'language_point',
+            languagePoint: 'Not A Real Language Point',
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test(
+        '"operation_type" returns only fixtures with that operation type',
+        () {
+          final selected = selectFixtures(
+            fixtureSet: 'operation_type',
+            operationTypeLabel: 'no_change',
+          );
+          expect(selected, isNotEmpty);
+          expect(
+            selected.every(
+              (f) => f.operationType == TwoPassOperationType.noChange,
+            ),
+            isTrue,
+          );
+          // Every no_change fixture across the whole benchmark, not just
+          // one group's worth.
+          expect(
+            selected.length,
+            allTwoPassFixtures
+                .where((f) => f.operationType == TwoPassOperationType.noChange)
+                .length,
+          );
+        },
+      );
+
+      test('"operation_type" throws for an unrecognized label', () {
+        expect(
+          () => selectFixtures(
+            fixtureSet: 'operation_type',
+            operationTypeLabel: 'not-a-real-operation-type',
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test(
+        '"sample" caps every language-point group at sampleSizePerLanguagePoint '
+        'while still covering every group',
+        () {
+          final selected = selectFixtures(
+            fixtureSet: 'sample',
+            sampleSizePerLanguagePoint: 1,
+          );
+
+          final countByLanguagePoint = <String, int>{};
+          for (final fixture in selected) {
+            countByLanguagePoint[fixture.languagePoint] =
+                (countByLanguagePoint[fixture.languagePoint] ?? 0) + 1;
+          }
+          expect(countByLanguagePoint.values.every((count) => count <= 1), isTrue);
+
+          final everyLanguagePoint = allTwoPassFixtures
+              .map((f) => f.languagePoint)
+              .toSet();
+          expect(countByLanguagePoint.keys.toSet(), everyLanguagePoint);
+        },
+      );
+
+      test(
+        '"sample" with a larger size still never exceeds a group\'s own '
+        'fixture count',
+        () {
+          final selected = selectFixtures(
+            fixtureSet: 'sample',
+            sampleSizePerLanguagePoint: 3,
+          );
+          final countByLanguagePoint = <String, int>{};
+          for (final fixture in selected) {
+            countByLanguagePoint[fixture.languagePoint] =
+                (countByLanguagePoint[fixture.languagePoint] ?? 0) + 1;
+          }
+          final groupSizes = <String, int>{};
+          for (final fixture in allTwoPassFixtures) {
+            groupSizes[fixture.languagePoint] =
+                (groupSizes[fixture.languagePoint] ?? 0) + 1;
+          }
+          for (final entry in countByLanguagePoint.entries) {
+            expect(entry.value, min(3, groupSizes[entry.key]!));
+          }
+        },
+      );
+
+      test(
+        '"sample" throws for a zero or negative sampleSizePerLanguagePoint '
+        'instead of silently selecting zero fixtures',
+        () {
+          expect(
+            () => selectFixtures(
+              fixtureSet: 'sample',
+              sampleSizePerLanguagePoint: 0,
+            ),
+            throwsArgumentError,
+          );
+          expect(
+            () => selectFixtures(
+              fixtureSet: 'sample',
+              sampleSizePerLanguagePoint: -1,
+            ),
+            throwsArgumentError,
+          );
+        },
+      );
+
+      test('an unrecognized fixtureSet throws', () {
+        expect(
+          () => selectFixtures(fixtureSet: 'not-a-real-set'),
+          throwsArgumentError,
+        );
+      });
+
+      test(
+        'selectedFixturesFrom reads TWO_PASS_FIXTURE_SET and friends from '
+        'a real environment, defaulting to "all" when unset',
+        () {
+          expect(selectedFixturesFrom(const {}), allTwoPassFixtures);
+          expect(
+            selectedFixturesFrom(const {'TWO_PASS_FIXTURE_SET': 'smoke'}),
+            twoPassIntegrationFixtures,
+          );
+          expect(
+            selectedFixturesFrom(const {
+              'TWO_PASS_FIXTURE_SET': 'fixture_id',
+              'TWO_PASS_FIXTURE_ID': 'accent-manana',
+            }).map((f) => f.id),
+            ['accent-manana'],
+          );
+        },
+      );
+
+      test(
+        'describeFixtureSelection records the selection choice for the '
+        'report',
+        () {
+          expect(
+            describeFixtureSelection(
+              fixtureSet: 'all',
+              sampleSizePerLanguagePoint: 1,
+              selectedCount: 85,
+            ),
+            contains('all'),
+          );
+          expect(
+            describeFixtureSelection(
+              fixtureSet: 'language_point',
+              languagePoint: 'Subjunctive / Mood',
+              sampleSizePerLanguagePoint: 1,
+              selectedCount: 5,
+            ),
+            contains('Subjunctive / Mood'),
+          );
+        },
+      );
+
+      test(
+        'buildReport records the fixture selection in its run '
+        'configuration',
+        () {
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'accent-manana',
+          );
+          final report = buildReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              _fakeResult(
+                fixture,
+                finalCorrectedText: fixture.expectedCorrectedText,
+              ),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+            fixtureSelection: 'smoke — the original small smoke subset '
+                '(1 fixtures)',
+          );
+          expect(
+            report,
+            contains(
+              '- Fixture selection: smoke — the original small smoke '
+              'subset (1 fixtures)',
+            ),
+          );
+        },
+      );
+    });
   });
 
   test('two-pass live integration experiment', tags: 'live', () async {
@@ -2522,6 +2955,21 @@ void main() {
       defaultValue: defaultTwoPassOutputPath,
     );
     final callDelayMs = callDelayMsFrom(environment);
+    final selectedFixtures = selectedFixturesFrom(environment);
+    final fixtureSelectionDescription = describeFixtureSelection(
+      fixtureSet: _runtimeString(
+        environment: environment,
+        key: 'TWO_PASS_FIXTURE_SET',
+        defaultValue: defaultFixtureSet,
+      ),
+      fixtureId: environment['TWO_PASS_FIXTURE_ID']?.trim(),
+      languagePoint: environment['TWO_PASS_LANGUAGE_POINT']?.trim(),
+      operationTypeLabel: environment['TWO_PASS_OPERATION_TYPE']?.trim(),
+      sampleSizePerLanguagePoint:
+          int.tryParse(environment['TWO_PASS_SAMPLE_SIZE']?.trim() ?? '') ??
+          defaultSampleSizePerLanguagePoint,
+      selectedCount: selectedFixtures.length,
+    );
 
     final usageLog = <ChatCompletionsUsage>[];
     final client = OpenAiChatCompletionsClient(
@@ -2531,7 +2979,7 @@ void main() {
     );
 
     final results = <FixtureResult>[];
-    for (final fixture in allTwoPassFixtures) {
+    for (final fixture in selectedFixtures) {
       // runFixture already catches its own failures and returns a
       // FixtureResult.error rather than throwing; this try/catch is a
       // defensive second layer only, in case something outside runFixture
@@ -2569,6 +3017,7 @@ void main() {
       naturalnessModel: naturalnessModel,
       results: results,
       generatedAt: DateTime.now(),
+      fixtureSelection: fixtureSelectionDescription,
     );
 
     final file = File(outputPath);
