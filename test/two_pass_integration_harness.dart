@@ -82,6 +82,7 @@
 //   all, fails fast with a clear error rather than silently running an
 //   empty (or the wrong) set — see selectFixtures's own doc comment.
 
+import 'dart:async' show runZonedGuarded;
 import 'dart:io';
 import 'dart:math' show min;
 
@@ -1641,7 +1642,9 @@ int _levenshteinDistance(String a, String b) {
 /// parsing that response's JSON — see [_trackedCall], which records a
 /// phase's stats in a `finally` block so that always happens, on success
 /// or failure alike, rather than only after an `await` expression that
-/// might never finish normally.
+/// might never finish normally. The two parallel-phase calls themselves
+/// are awaited via [_awaitBothSettled] rather than two bare sequential
+/// `await`s — see that function's own doc comment for why.
 Future<FixtureResult> runFixture({
   required String apiKey,
   required HttpClient httpClient,
@@ -1690,8 +1693,12 @@ Future<FixtureResult> runFixture({
       ),
       onStats: (stats) => naturalOriginalStats = stats,
     );
-    final firstPassResponse = await firstPassFuture;
-    final naturalnessOnOriginal = await naturalnessOriginalFuture;
+    // See _awaitBothSettled's own doc comment for why this can't be two
+    // bare sequential `await`s (review finding on #98's PR).
+    final (firstPassResponse, naturalnessOnOriginal) = await _awaitBothSettled(
+      firstPassFuture,
+      naturalnessOriginalFuture,
+    );
     parallelPhaseStopwatch.stop();
     parallelPhaseWallClockMs = parallelPhaseStopwatch.elapsedMilliseconds;
 
@@ -1779,6 +1786,54 @@ Future<T> _trackedCall<T>(
       ),
     );
   }
+}
+
+/// Awaits [first] and [second] until *both* have fully settled — success
+/// or failure — before this function itself either returns their two
+/// results or throws, unlike two bare sequential `await`s (`await first;
+/// await second;`), which abandon whichever future is still pending the
+/// instant the other one throws.
+///
+/// That abandonment matters for [runFixture]'s own concurrent
+/// first-pass/naturalness-on-original phase (issue #98's own review
+/// finding): a still-pending sibling future left un-awaited both risks
+/// dropping its eventual latency/tokens/cost from [FixtureResult.error]'s
+/// `partialStats` (its [_trackedCall]'s `finally` block, which records
+/// those stats, hasn't run yet), and leaves a dangling future whose later
+/// rejection — if that call also fails — nothing ever observes: Dart
+/// reports that as an unhandled async error against whatever happens to
+/// be running when it surfaces, not against this fixture.
+///
+/// Implemented by wrapping each future in `.then(onValue, onError:)` so
+/// neither branch passed to `Future.wait` ever itself rejects — that's
+/// what lets `Future.wait` unconditionally wait for both to finish rather
+/// than short-circuiting on the first rejection the way it normally
+/// would. If both fail, [first]'s error is what gets thrown, matching the
+/// priority order of the two bare sequential awaits this replaces (first
+/// pass was always awaited, and so reported, before
+/// naturalness-on-original).
+Future<(A, B)> _awaitBothSettled<A, B>(Future<A> first, Future<B> second) async {
+  A? firstValue;
+  B? secondValue;
+  Object? firstError;
+  Object? secondError;
+  await Future.wait<void>([
+    first.then(
+      (value) => firstValue = value,
+      onError: (Object error) => firstError = error,
+    ),
+    second.then(
+      (value) => secondValue = value,
+      onError: (Object error) => secondError = error,
+    ),
+  ]);
+  if (firstError != null) {
+    throw firstError!;
+  }
+  if (secondError != null) {
+    throw secondError!;
+  }
+  return (firstValue as A, secondValue as B);
 }
 
 String _describeReview(NaturalnessReview review) {
@@ -2882,6 +2937,120 @@ void main() {
         expect(naturalnessCaptured!.totalTokens, 10);
       },
     );
+
+    group("_awaitBothSettled (review finding on #98's PR)", () {
+      test('returns both values when both futures succeed', () async {
+        final result = await _awaitBothSettled(
+          Future.value('a'),
+          Future.value(1),
+        );
+        expect(result, ('a', 1));
+      });
+
+      test(
+        'still fully awaits the second future even when the first one '
+        'throws immediately — a bare sequential "await first; await '
+        'second;" would jump straight to the catch block here and leave '
+        'second un-awaited',
+        () async {
+          var secondCompleted = false;
+          final second = Future<int>.delayed(const Duration(milliseconds: 20), () {
+            secondCompleted = true;
+            return 1;
+          });
+
+          await expectLater(
+            () => _awaitBothSettled(
+              Future<String>.error(StateError('first failed')),
+              second,
+            ),
+            throwsA(isA<StateError>()),
+          );
+
+          // If this were false, _awaitBothSettled would have returned
+          // (thrown) before the second future — still in flight when the
+          // first one failed — ever got the chance to finish.
+          expect(secondCompleted, isTrue);
+        },
+      );
+
+      test(
+        'still fully awaits the first future even when the second one '
+        'throws immediately',
+        () async {
+          var firstCompleted = false;
+          final first = Future<String>.delayed(const Duration(milliseconds: 20), () {
+            firstCompleted = true;
+            return 'a';
+          });
+
+          await expectLater(
+            () => _awaitBothSettled(
+              first,
+              Future<int>.error(StateError('second failed')),
+            ),
+            throwsA(isA<StateError>()),
+          );
+
+          expect(firstCompleted, isTrue);
+        },
+      );
+
+      test(
+        "when both futures fail, the first future's error is what gets "
+        'thrown — matching the priority order of the two sequential '
+        'awaits this helper replaces (first pass was always awaited, and '
+        'so reported, before naturalness-on-original)',
+        () async {
+          await expectLater(
+            () => _awaitBothSettled(
+              Future<String>.error(StateError('first failed')),
+              Future<int>.error(StateError('second failed')),
+            ),
+            throwsA(
+              isA<StateError>().having((e) => e.message, 'message', 'first failed'),
+            ),
+          );
+        },
+      );
+
+      test(
+        'a rejection from the un-awaited-in-the-old-code sibling future '
+        'never becomes an unhandled async error — regression coverage '
+        'for exactly the failure mode a bare sequential await would '
+        'introduce',
+        () async {
+          // If _awaitBothSettled left the second future's rejection
+          // unobserved (the bug this helper fixes), Dart would report it
+          // as an unhandled async error via the current Zone — which
+          // runZonedGuarded below would catch and record here, failing
+          // this test. Reaching the end of the awaited block with the
+          // recorded list still empty is the proof nothing leaked.
+          final unhandledErrors = <Object>[];
+          await runZonedGuarded(() async {
+            try {
+              await _awaitBothSettled(
+                Future<String>.error(StateError('first failed')),
+                Future<int>.delayed(
+                  const Duration(milliseconds: 20),
+                  () => throw StateError('second failed too'),
+                ),
+              );
+            } on StateError {
+              // Expected — first's error surfaces as this call's own
+              // throw. The second future's later rejection is the one
+              // under test here.
+            }
+            // Give the second future's already-scheduled rejection a
+            // chance to surface as an unhandled error if it were ever
+            // going to.
+            await Future<void>.delayed(const Duration(milliseconds: 40));
+          }, (error, stackTrace) => unhandledErrors.add(error));
+
+          expect(unhandledErrors, isEmpty);
+        },
+      );
+    });
 
     test('statsFor sums tokens and computes verified cost from the '
         'phase\'s own model', () {
