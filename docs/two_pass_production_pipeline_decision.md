@@ -143,9 +143,12 @@ originally skipped it.
   found the first pass inserting an unnecessary article into valid
   regional Spanish (`Voy para casa` → `Voy para la casa`) despite its
   own prompt explicitly saying not to change valid regional Spanish.
-  Reproduced identically across two separate live runs. 1/5 in each of
-  the `Valid Regional / Should Not Flag` and `Already Correct / Do Not
-  Tinker` benchmark groups.
+  Reproduced identically across two separate live runs. 1/5 in the
+  `Valid Regional / Should Not Flag` benchmark group (`regional-voy-para-casa`).
+  The `Already Correct / Do Not Tinker` group's own single overcorrection
+  (`correct-tomar-foto`) is a *different* fixture with a different
+  cause — the first pass left it unchanged, correctly; naturalness is
+  what overcorrected it — see the next two bullets, not this one.
 - **Naturalness sometimes re-edits text the first pass already fixed
   correctly**, producing an unwanted second, unrequested change (e.g.
   `Atendió la universidad` → first pass correctly produces `Asistió a la
