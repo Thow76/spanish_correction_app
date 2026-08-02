@@ -1206,6 +1206,33 @@ enum TwoPassScoreLabel {
   error,
 }
 
+extension TwoPassScoreLabelReportName on TwoPassScoreLabel {
+  /// The external benchmark label this score maps to — issue #83's own
+  /// "Required labels" list and `docs/two_pass_language_point_test_map.md`'s
+  /// "Scoring Labels" table, both snake_case (`correct_fix`, not this
+  /// enum's own Dart identifier name, which `.name` would render as
+  /// `correctFix`). Reports must use this, not `.name`, so a generated
+  /// report actually matches the documented taxonomy.
+  String get reportLabel {
+    switch (this) {
+      case TwoPassScoreLabel.correctFix:
+        return 'correct_fix';
+      case TwoPassScoreLabel.partialFix:
+        return 'partial_fix';
+      case TwoPassScoreLabel.missedIssue:
+        return 'missed_issue';
+      case TwoPassScoreLabel.overcorrection:
+        return 'overcorrection';
+      case TwoPassScoreLabel.acceptableNoChange:
+        return 'acceptable_no_change';
+      case TwoPassScoreLabel.ambiguous:
+        return 'ambiguous';
+      case TwoPassScoreLabel.error:
+        return 'error';
+    }
+  }
+}
+
 /// Scores [result] against its own fixture's expected output.
 ///
 /// Deliberately mechanical, not semantic — this is a "small" scoring
@@ -1494,7 +1521,7 @@ String buildReport({
           '- Expected corrected text: '
           '`${result.fixture.expectedCorrectedText}`',
         )
-        ..writeln('- Score: ${scoreFixtureResult(result).name}')
+        ..writeln('- Score: ${scoreFixtureResult(result).reportLabel}')
         ..writeln('- **ERROR**: ${result.errorMessage}');
       if (result.totalStats.totalTokens > 0) {
         buffer.writeln(
@@ -1543,7 +1570,7 @@ String buildReport({
       ..writeln('- Fallback used: ${result.usedFallback}')
       ..writeln('- Final merged output: `${result.finalCorrectedText}`')
       ..writeln('- Final correction count: ${result.finalCorrectionCount}')
-      ..writeln('- Score: ${scoreFixtureResult(result).name}')
+      ..writeln('- Score: ${scoreFixtureResult(result).reportLabel}')
       ..writeln()
       ..writeln(
         '| Phase | Latency (ms) | Total tokens | Est. cost (USD) |',
@@ -1620,7 +1647,7 @@ String buildReport({
   for (final label in TwoPassScoreLabel.values) {
     final count = scoreCounts[label] ?? 0;
     if (count > 0) {
-      buffer.writeln('| ${label.name} | $count |');
+      buffer.writeln('| ${label.reportLabel} | $count |');
     }
   }
 
@@ -2059,6 +2086,13 @@ void main() {
       expect(report, contains('## clean-grammar-only'));
       expect(report, contains('## Overall summary'));
       expect(report, contains('| 1 | 0 | 0 | 0 |'));
+      // Score labels must render as the documented snake_case benchmark
+      // vocabulary (issue #83's "Required labels" / the language-point
+      // test map's "Scoring Labels" table), not this enum's own Dart
+      // identifier casing.
+      expect(report, contains('Score: correct_fix'));
+      expect(report, contains('| correct_fix | 1 |'));
+      expect(report, isNot(contains('correctFix')));
     });
 
     test(
