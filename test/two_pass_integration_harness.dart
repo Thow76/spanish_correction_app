@@ -48,8 +48,19 @@
 // Optional runtime controls:
 // - FIRST_PASS_MODEL: defaults to gpt-4.1.
 // - NATURALNESS_MODEL: defaults to gpt-5.1.
-// - TWO_PASS_OUTPUT: report path, defaults to
+// - TWO_PASS_OUTPUT: diagnostic report path, defaults to
 //   docs/two_pass_integration_harness.md.
+// - TWO_PASS_PRODUCTION_OUTPUT (issue #97 POC): production-style report
+//   path, defaults to
+//   docs/two_pass_production_mode_language_point_benchmark.md. Written
+//   from the same run as TWO_PASS_OUTPUT — no extra API calls. The
+//   diagnostic report always calls naturalness on both the original and
+//   first-pass corrected text, for comparison; the production-style report
+//   instead only counts the second (fallback) call for a fixture when
+//   runTwoPassCorrectionPipeline would actually have made it (i.e. the
+//   parallel merge had a skipped edit) — see buildProductionModeReport's
+//   own doc comment for its one known fidelity gap (latency is a
+//   sequential-sum upper bound, not a true parallel-call measurement).
 // - TWO_PASS_CALL_DELAY_MS: delay between fixtures, defaults to 750.
 // - TWO_PASS_FIXTURE_SET (issue #85): which fixtures to run, defaults to
 //   `all`. One of:
@@ -78,6 +89,7 @@ import 'package:spanish_correction_app/features/corrections/data/naturalness_rev
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/first_pass_correction_client.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_correction_mapper.dart';
+import 'package:spanish_correction_app/features/corrections/domain/naturalness_issue.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_merge.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
 
@@ -2046,6 +2058,324 @@ String buildReport({
   return buffer.toString();
 }
 
+/// Default output path for [buildProductionModeReport] (issue #97's POC).
+const String defaultTwoPassProductionOutputPath =
+    'docs/two_pass_production_mode_language_point_benchmark.md';
+
+/// Classifies whether the fallback naturalness pass would have run in
+/// production for [result], and if so what happened — derived entirely
+/// from data [runFixture] already collects for the diagnostic report, not
+/// from a second live run (issue #97's POC scope: report-derivation only,
+/// no change to the call pattern [runFixture] itself makes).
+enum TwoPassFallbackOutcome {
+  /// The parallel merge had no skipped edits — production would never call
+  /// fallback for this fixture (`runTwoPassCorrectionPipeline`'s own
+  /// short-circuit at `parallelMerge.skippedEdits.isEmpty`).
+  notNeeded,
+
+  /// Fallback would have run, and it changed the final text relative to
+  /// the first pass's own output.
+  calledChangedText,
+
+  /// Fallback would have run, found nothing to flag on the first pass's
+  /// corrected text, and left it unchanged — a clean resolution.
+  calledUnchangedClean,
+
+  /// Fallback would have run, still flagged an issue, but the second merge
+  /// attempt still could not safely apply it — the "still unsafe after a
+  /// rerun" case (see `ambiguous-naturalness-span`'s own fixture note).
+  calledStillUnsafe,
+}
+
+extension TwoPassFallbackOutcomeReportName on TwoPassFallbackOutcome {
+  /// Snake_case report label, same convention as every other `reportLabel`
+  /// in this file.
+  String get reportLabel {
+    switch (this) {
+      case TwoPassFallbackOutcome.notNeeded:
+        return 'not_needed';
+      case TwoPassFallbackOutcome.calledChangedText:
+        return 'called_changed_text';
+      case TwoPassFallbackOutcome.calledUnchangedClean:
+        return 'called_unchanged_clean';
+      case TwoPassFallbackOutcome.calledStillUnsafe:
+        return 'called_still_unsafe';
+    }
+  }
+}
+
+/// Classifies [result]'s fallback outcome for the production-mode report.
+/// Requires a non-error result — callers must check [FixtureResult.isError]
+/// first, same convention [scoreFixtureResult]'s own callers already follow.
+TwoPassFallbackOutcome classifyFallbackOutcome(FixtureResult result) {
+  assert(
+    !result.isError,
+    'classifyFallbackOutcome requires a non-error result',
+  );
+  if (!result.hadConflict) {
+    return TwoPassFallbackOutcome.notNeeded;
+  }
+  if (result.finalCorrectedText != result.firstPassCorrectedText) {
+    return TwoPassFallbackOutcome.calledChangedText;
+  }
+  return result.naturalnessOnFirstPass.hasNaturalnessIssue
+      ? TwoPassFallbackOutcome.calledStillUnsafe
+      : TwoPassFallbackOutcome.calledUnchangedClean;
+}
+
+/// Derives the production-equivalent [CallStats] for [result]: the first
+/// pass and naturalness-on-original are always spent (production runs
+/// both — see `runTwoPassCorrectionPipeline`), but the fallback
+/// naturalness-on-first-pass call is only counted when
+/// [FixtureResult.hadConflict] is true, matching production's own
+/// conditional fallback trigger exactly.
+///
+/// POC caveat (issue #97): this sums the diagnostic run's own sequential
+/// call latencies rather than re-measuring a true parallel run, so the
+/// latency component is an upper-bound approximation of production's real
+/// wall-clock time, not a faithful reproduction of it — first pass and
+/// naturalness-on-original run *concurrently* in production, not
+/// sequentially. Token/cost totals are unaffected by this, since they
+/// don't depend on call scheduling. The same caveat is surfaced in
+/// [buildProductionModeReport]'s own header for a report reader.
+CallStats productionStatsFor(FixtureResult result) {
+  return result.hadConflict
+      ? result.totalStats
+      : result.firstPassStats + result.naturalnessOnOriginalStats;
+}
+
+/// The number of API calls production would have made for [result]: 2
+/// (first pass + naturalness-on-original) when no conflict, 3 when
+/// fallback was needed too.
+int productionApiCallCount(FixtureResult result) =>
+    result.hadConflict ? 3 : 2;
+
+/// Builds the production-style report for [results] (issue #97's POC): the
+/// same fixture run [buildReport] already reports on, reinterpreted
+/// through production's own call-skipping rule instead of the diagnostic
+/// harness's always-call-both-naturalness-passes behavior. Emitted from
+/// the same live run as [buildReport] — no extra API calls. See
+/// [productionStatsFor]'s doc comment for this report's one known fidelity
+/// gap (sequential-sum latency, not true parallel timing).
+String buildProductionModeReport({
+  required String firstPassModel,
+  required String naturalnessModel,
+  required List<FixtureResult> results,
+  required DateTime generatedAt,
+  String fixtureSelection = 'all',
+}) {
+  final buffer = StringBuffer()
+    ..writeln('# Two-Pass Production-Style Benchmark (issue #97 POC)')
+    ..writeln()
+    ..writeln(
+      'Derived from the same live run as `docs/two_pass_integration_harness.md` '
+      '(diagnostic mode) — no extra API calls. Every fixture below still had '
+      'naturalness run on both the original and first-pass corrected text so '
+      'the diagnostic report could compare them; this report instead only '
+      'counts the second (fallback) naturalness call when '
+      '`runTwoPassCorrectionPipeline` would actually have made it — i.e. '
+      'when the parallel merge had a skipped edit.',
+    )
+    ..writeln()
+    ..writeln(
+      '**Known fidelity gap**: the latency figures below sum this run\'s '
+      'own sequential call timings. Production runs the first pass and '
+      'naturalness-on-original *concurrently*, so real production latency '
+      'for a no-fallback fixture is closer to `max(first pass, '
+      'naturalness)` than the sum shown here — treat latency as an upper '
+      'bound, not a faithful reproduction of production wall-clock time. '
+      'Token and cost totals are unaffected (they don\'t depend on call '
+      'scheduling).',
+    )
+    ..writeln()
+    ..writeln('## Run configuration')
+    ..writeln()
+    ..writeln('- First-pass model: `$firstPassModel`')
+    ..writeln('- Naturalness model: `$naturalnessModel`')
+    ..writeln('- Fixture selection: $fixtureSelection (issue #85)')
+    ..writeln('- Fixture count: `${results.length}`')
+    ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
+    ..writeln();
+
+  for (final result in results) {
+    if (result.isError) {
+      buffer
+        ..writeln('## ${result.fixture.id}')
+        ..writeln()
+        ..writeln('- Input text: `${result.fixture.text}`')
+        ..writeln('- Language point: ${result.fixture.languagePoint}')
+        ..writeln('- Score: ${scoreFixtureResult(result).reportLabel}')
+        ..writeln('- **ERROR**: ${result.errorMessage}')
+        ..writeln();
+      continue;
+    }
+
+    final outcome = classifyFallbackOutcome(result);
+    final productionStats = productionStatsFor(result);
+    buffer
+      ..writeln('## ${result.fixture.id}')
+      ..writeln()
+      ..writeln('- Input text: `${result.fixture.text}`')
+      ..writeln('- Language point: ${result.fixture.languagePoint}')
+      ..writeln(
+        '- Operation type: ${result.fixture.operationType.reportLabel}',
+      )
+      ..writeln(
+        '- Expected owner: ${result.fixture.expectedOwner.reportLabel}',
+      )
+      ..writeln(
+        '- Expected corrected text: '
+        '`${result.fixture.expectedCorrectedText}`',
+      )
+      ..writeln(
+        '- First-pass corrected text: `${result.firstPassCorrectedText}`',
+      )
+      ..writeln('- Conflict (fallback needed): ${result.hadConflict}')
+      ..writeln('- Fallback outcome: ${outcome.reportLabel}')
+      ..writeln('- Final output: `${result.finalCorrectedText}`')
+      ..writeln('- Score: ${scoreFixtureResult(result).reportLabel}')
+      ..writeln('- Production API calls: ${productionApiCallCount(result)}')
+      ..writeln()
+      ..writeln(
+        '| Phase | Latency (ms) | Total tokens | Est. cost (USD) |',
+      )
+      ..writeln('| --- | --- | --- | --- |')
+      ..writeln(
+        '| First pass | ${result.firstPassStats.wallClockMs} | '
+        '${result.firstPassStats.totalTokens} | '
+        '${_formatCost(result.firstPassStats.costUsd)} |',
+      )
+      ..writeln(
+        '| Naturalness (parallel, on original) | '
+        '${result.naturalnessOnOriginalStats.wallClockMs} | '
+        '${result.naturalnessOnOriginalStats.totalTokens} | '
+        '${_formatCost(result.naturalnessOnOriginalStats.costUsd)} |',
+      )
+      ..writeln(
+        '| Fallback (conditional) | '
+        '${result.hadConflict ? result.naturalnessOnFirstPassStats.wallClockMs : 0} | '
+        '${result.hadConflict ? result.naturalnessOnFirstPassStats.totalTokens : 0} | '
+        '${_formatCost(result.hadConflict ? result.naturalnessOnFirstPassStats.costUsd : 0)} |',
+      )
+      ..writeln(
+        '| **Production total** | ${productionStats.wallClockMs} | '
+        '${productionStats.totalTokens} | '
+        '${_formatCost(productionStats.costUsd)} |',
+      )
+      ..writeln();
+  }
+
+  final nonError = results.where((r) => !r.isError).toList();
+  final errorCount = results.length - nonError.length;
+
+  final outcomeCounts = <TwoPassFallbackOutcome, int>{};
+  for (final result in nonError) {
+    final outcome = classifyFallbackOutcome(result);
+    outcomeCounts[outcome] = (outcomeCounts[outcome] ?? 0) + 1;
+  }
+
+  final productionTotalLatencyMs = results.fold<int>(
+    0,
+    (sum, r) =>
+        sum + (r.isError ? r.totalStats.wallClockMs : productionStatsFor(r).wallClockMs),
+  );
+  final productionTotalTokens = results.fold<int>(
+    0,
+    (sum, r) =>
+        sum + (r.isError ? r.totalStats.totalTokens : productionStatsFor(r).totalTokens),
+  );
+  final anyUnknownCost = results.any(
+    (r) => (r.isError ? r.totalStats.costUsd : productionStatsFor(r).costUsd) == null,
+  );
+  final productionTotalCostUsd = anyUnknownCost
+      ? null
+      : results.fold<double>(
+          0,
+          (sum, r) =>
+              sum +
+              ((r.isError ? r.totalStats.costUsd : productionStatsFor(r).costUsd) ?? 0),
+        );
+
+  final diagnosticTotalLatencyMs = results.fold<int>(
+    0,
+    (sum, r) => sum + r.totalStats.wallClockMs,
+  );
+  final diagnosticTotalCostUsd = results.any((r) => r.totalStats.costUsd == null)
+      ? null
+      : results.fold<double>(0, (sum, r) => sum + (r.totalStats.costUsd ?? 0));
+
+  buffer
+    ..writeln('---')
+    ..writeln()
+    ..writeln('## Overall summary')
+    ..writeln()
+    ..writeln('| Fixtures | Errors | Production total latency (ms) | '
+        'Production total tokens | Production total est. cost (USD) |')
+    ..writeln('| --- | --- | --- | --- | --- |')
+    ..writeln(
+      '| ${results.length} | $errorCount | $productionTotalLatencyMs | '
+      '$productionTotalTokens | ${_formatCost(productionTotalCostUsd)} |',
+    )
+    ..writeln()
+    ..writeln('### Diagnostic vs. production-style totals')
+    ..writeln()
+    ..writeln('| Metric | Diagnostic (both naturalness calls always) | '
+        'Production-style (conditional fallback) |')
+    ..writeln('| --- | --- | --- |')
+    ..writeln(
+      '| Latency (ms) | $diagnosticTotalLatencyMs | '
+      '$productionTotalLatencyMs |',
+    )
+    ..writeln(
+      '| Est. cost (USD) | ${_formatCost(diagnosticTotalCostUsd)} | '
+      '${_formatCost(productionTotalCostUsd)} |',
+    )
+    ..writeln()
+    ..writeln('### Fallback outcome summary')
+    ..writeln()
+    ..writeln('| Outcome | Count | Rate |')
+    ..writeln('| --- | --- | --- |');
+  for (final outcome in TwoPassFallbackOutcome.values) {
+    final count = outcomeCounts[outcome] ?? 0;
+    buffer.writeln(
+      '| ${outcome.reportLabel} | $count | '
+      '${_formatRate(count, nonError.length)} |',
+    );
+  }
+
+  buffer
+    ..writeln()
+    ..writeln('### Score summary')
+    ..writeln()
+    ..writeln('| Score | Count |')
+    ..writeln('| --- | --- |');
+  final scoreCounts = <TwoPassScoreLabel, int>{};
+  for (final result in results) {
+    final label = scoreFixtureResult(result);
+    scoreCounts[label] = (scoreCounts[label] ?? 0) + 1;
+  }
+  for (final label in TwoPassScoreLabel.values) {
+    final count = scoreCounts[label] ?? 0;
+    if (count > 0) {
+      buffer.writeln('| ${label.reportLabel} | $count |');
+    }
+  }
+
+  buffer
+    ..writeln()
+    ..writeln('### Language point summary')
+    ..writeln()
+    ..write(
+      _groupedScoreTable(
+        groupHeader: 'Language point',
+        results: results,
+        keyOf: (fixture) => fixture.languagePoint,
+      ),
+    );
+
+  return buffer.toString();
+}
+
 /// Builds a minimal, all-zero-stats [FixtureResult] for [fixture] whose
 /// only fixture-scoring-relevant field is [finalCorrectedText] — a test
 /// helper for [scoreFixtureResult], not a stand-in for [runFixture]'s own
@@ -3093,6 +3423,272 @@ void main() {
         },
       );
     });
+
+    group('production-mode report (issue #97 POC)', () {
+      FixtureResult resultWith({
+        required TwoPassFixture fixture,
+        required bool hadConflict,
+        required String firstPassCorrectedText,
+        required String finalCorrectedText,
+        bool naturalnessOnFirstPassHasIssue = false,
+      }) {
+        return FixtureResult(
+          fixture: fixture,
+          firstPassCorrectedText: firstPassCorrectedText,
+          firstPassStats: const CallStats(
+            wallClockMs: 500,
+            totalTokens: 100,
+            costUsd: 0.001,
+          ),
+          naturalnessOnOriginal: const NaturalnessReview(
+            hasNaturalnessIssue: false,
+            issues: [],
+          ),
+          naturalnessOnOriginalStats: const CallStats(
+            wallClockMs: 700,
+            totalTokens: 150,
+            costUsd: 0.0015,
+          ),
+          naturalnessOnFirstPass: NaturalnessReview(
+            hasNaturalnessIssue: naturalnessOnFirstPassHasIssue,
+            issues: naturalnessOnFirstPassHasIssue
+                ? [
+                    const NaturalnessIssue(
+                      span: 'x',
+                      naturalReplacement: 'y',
+                      explanation: 'test',
+                    ),
+                  ]
+                : [],
+          ),
+          naturalnessOnFirstPassStats: const CallStats(
+            wallClockMs: 900,
+            totalTokens: 200,
+            costUsd: 0.002,
+          ),
+          hadConflict: hadConflict,
+          usedFallback: hadConflict,
+          finalCorrectedText: finalCorrectedText,
+          finalCorrectionCount: 0,
+        );
+      }
+
+      final fixture = languagePointBenchmarkFixtures.firstWhere(
+        (f) => f.id == 'accent-manana',
+      );
+
+      test('classifyFallbackOutcome: notNeeded when there was no conflict', () {
+        final result = resultWith(
+          fixture: fixture,
+          hadConflict: false,
+          firstPassCorrectedText: 'a',
+          finalCorrectedText: 'a',
+        );
+        expect(
+          classifyFallbackOutcome(result),
+          TwoPassFallbackOutcome.notNeeded,
+        );
+      });
+
+      test(
+        'classifyFallbackOutcome: calledChangedText when fallback altered '
+        'the first-pass text',
+        () {
+          final result = resultWith(
+            fixture: fixture,
+            hadConflict: true,
+            firstPassCorrectedText: 'a',
+            finalCorrectedText: 'b',
+          );
+          expect(
+            classifyFallbackOutcome(result),
+            TwoPassFallbackOutcome.calledChangedText,
+          );
+        },
+      );
+
+      test(
+        'classifyFallbackOutcome: calledUnchangedClean when fallback found '
+        'no issue and left the text unchanged',
+        () {
+          final result = resultWith(
+            fixture: fixture,
+            hadConflict: true,
+            firstPassCorrectedText: 'a',
+            finalCorrectedText: 'a',
+            naturalnessOnFirstPassHasIssue: false,
+          );
+          expect(
+            classifyFallbackOutcome(result),
+            TwoPassFallbackOutcome.calledUnchangedClean,
+          );
+        },
+      );
+
+      test(
+        'classifyFallbackOutcome: calledStillUnsafe when fallback still '
+        'flagged an issue but nothing could be safely merged',
+        () {
+          final result = resultWith(
+            fixture: fixture,
+            hadConflict: true,
+            firstPassCorrectedText: 'a',
+            finalCorrectedText: 'a',
+            naturalnessOnFirstPassHasIssue: true,
+          );
+          expect(
+            classifyFallbackOutcome(result),
+            TwoPassFallbackOutcome.calledStillUnsafe,
+          );
+        },
+      );
+
+      test(
+        'productionStatsFor excludes the fallback call when no conflict '
+        'occurred',
+        () {
+          final result = resultWith(
+            fixture: fixture,
+            hadConflict: false,
+            firstPassCorrectedText: 'a',
+            finalCorrectedText: 'a',
+          );
+          final stats = productionStatsFor(result);
+          expect(stats.wallClockMs, 500 + 700);
+          expect(stats.totalTokens, 100 + 150);
+          expect(productionApiCallCount(result), 2);
+        },
+      );
+
+      test(
+        'productionStatsFor includes the fallback call when a conflict '
+        'occurred',
+        () {
+          final result = resultWith(
+            fixture: fixture,
+            hadConflict: true,
+            firstPassCorrectedText: 'a',
+            finalCorrectedText: 'b',
+          );
+          final stats = productionStatsFor(result);
+          expect(stats.wallClockMs, 500 + 700 + 900);
+          expect(stats.totalTokens, 100 + 150 + 200);
+          expect(productionApiCallCount(result), 3);
+        },
+      );
+
+      test(
+        'buildProductionModeReport renders every fixture id and labels '
+        'itself as production-style, distinct from the diagnostic report',
+        () {
+          final report = buildProductionModeReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              resultWith(
+                fixture: fixture,
+                hadConflict: false,
+                firstPassCorrectedText: fixture.expectedCorrectedText,
+                finalCorrectedText: fixture.expectedCorrectedText,
+              ),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(report, contains('Production-Style Benchmark'));
+          expect(report, contains('## ${fixture.id}'));
+          expect(report, contains('Fallback outcome: not_needed'));
+          expect(report, contains('Production API calls: 2'));
+          expect(report, contains('### Fallback outcome summary'));
+          expect(report, contains('### Diagnostic vs. production-style totals'));
+        },
+      );
+
+      test(
+        'buildProductionModeReport fallback outcome counts sum to the '
+        'non-error fixture count',
+        () {
+          final otherFixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'agreement-ninos-manzanas',
+          );
+          final report = buildProductionModeReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              resultWith(
+                fixture: fixture,
+                hadConflict: false,
+                firstPassCorrectedText: 'a',
+                finalCorrectedText: 'a',
+              ),
+              resultWith(
+                fixture: otherFixture,
+                hadConflict: true,
+                firstPassCorrectedText: 'a',
+                finalCorrectedText: 'b',
+              ),
+              FixtureResult.error(fixture, 'FormatException: boom'),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(report, contains('| not_needed | 1 |'));
+          expect(report, contains('| called_changed_text | 1 |'));
+          // The error fixture is excluded from the fallback-outcome rate
+          // denominator (classifyFallbackOutcome requires a non-error
+          // result), but still counted in the overall fixture/error totals.
+          expect(report, contains('| 3 | 1 |'));
+        },
+      );
+
+      test(
+        'production-style totals never exceed the diagnostic totals for '
+        'the same underlying results',
+        () {
+          final results = [
+            resultWith(
+              fixture: fixture,
+              hadConflict: false,
+              firstPassCorrectedText: 'a',
+              finalCorrectedText: 'a',
+            ),
+            resultWith(
+              fixture: languagePointBenchmarkFixtures.firstWhere(
+                (f) => f.id == 'agreement-ninos-manzanas',
+              ),
+              hadConflict: true,
+              firstPassCorrectedText: 'a',
+              finalCorrectedText: 'b',
+            ),
+          ];
+
+          final diagnosticTotalMs = results.fold<int>(
+            0,
+            (sum, r) => sum + r.totalStats.wallClockMs,
+          );
+          final productionTotalMs = results.fold<int>(
+            0,
+            (sum, r) => sum + productionStatsFor(r).wallClockMs,
+          );
+          expect(productionTotalMs, lessThanOrEqualTo(diagnosticTotalMs));
+        },
+      );
+
+      test(
+        'defaultTwoPassProductionOutputPath has a stable, documented '
+        'default distinct from the diagnostic report path',
+        () {
+          expect(
+            defaultTwoPassProductionOutputPath,
+            'docs/two_pass_production_mode_language_point_benchmark.md',
+          );
+          expect(
+            defaultTwoPassProductionOutputPath,
+            isNot(defaultTwoPassOutputPath),
+          );
+        },
+      );
+    });
   });
 
   test('two-pass live integration experiment', tags: 'live', () async {
@@ -3126,6 +3722,11 @@ void main() {
       environment: environment,
       key: 'TWO_PASS_OUTPUT',
       defaultValue: defaultTwoPassOutputPath,
+    );
+    final productionOutputPath = _runtimeString(
+      environment: environment,
+      key: 'TWO_PASS_PRODUCTION_OUTPUT',
+      defaultValue: defaultTwoPassProductionOutputPath,
     );
     final callDelayMs = callDelayMsFrom(environment);
     final selectedFixtures = selectedFixturesFrom(environment);
@@ -3198,5 +3799,23 @@ void main() {
     await file.writeAsString(report);
     // ignore: avoid_print
     print('Wrote two-pass integration report to $outputPath');
+
+    // Issue #97 POC: production-style report, derived from the exact same
+    // run above — no extra API calls, no change to runFixture's own call
+    // pattern. See buildProductionModeReport's doc comment.
+    final productionReport = buildProductionModeReport(
+      firstPassModel: firstPassModel,
+      naturalnessModel: naturalnessModel,
+      results: results,
+      generatedAt: DateTime.now(),
+      fixtureSelection: fixtureSelectionDescription,
+    );
+    final productionFile = File(productionOutputPath);
+    await productionFile.parent.create(recursive: true);
+    await productionFile.writeAsString(productionReport);
+    // ignore: avoid_print
+    print(
+      'Wrote two-pass production-style report to $productionOutputPath',
+    );
   });
 }
