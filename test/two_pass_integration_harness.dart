@@ -32,9 +32,15 @@
 // Run offline (fixture/logic sanity only, no API calls):
 //   flutter test test/two_pass_integration_harness.dart --exclude-tags live
 //
-// Run live deliberately (costs real API calls — 5 fixtures, first pass
-// (1 call each, issue #68) + 2 naturalness calls each; expect on the order
-// of 15 total API calls):
+// Run live deliberately (costs real API calls). The live test iterates
+// allTwoPassFixtures — as of issue #82, that's the original 5-fixture
+// smoke subset (twoPassIntegrationFixtures) PLUS the full 80-fixture
+// language-point benchmark (languagePointBenchmarkFixtures, 16 groups x 5,
+// converted from docs/two_pass_language_point_test_map.md), so 85
+// fixtures total, first pass (1 call each) + 2 naturalness calls each —
+// expect on the order of 255 total API calls for a full run. There is no
+// built-in way yet to run only a subset; consider that before opting in,
+// or run a smaller ad hoc fixture list locally first.
 //   OPENAI_API_KEY=sk-... \
 //   TWO_PASS_LIVE=true \
 //   flutter test test/two_pass_integration_harness.dart --tags live --timeout none
@@ -117,6 +123,9 @@ class TwoPassFixture {
   final List<String> acceptableAlternatives;
 }
 
+/// The original 5-fixture smoke subset (issue #42), kept small and fast
+/// deliberately. For the full benchmark, see [languagePointBenchmarkFixtures]
+/// (issue #82) and the combined [allTwoPassFixtures].
 const List<TwoPassFixture> twoPassIntegrationFixtures = [
   TwoPassFixture(
     id: 'clean-grammar-only',
@@ -193,6 +202,808 @@ const List<TwoPassFixture> twoPassIntegrationFixtures = [
     expectedOwner: TwoPassExpectedOwner.noChange,
     expectedCorrectedText: 'Vi mucho tráfico, y luego vi más tráfico.',
   ),
+];
+
+/// The full language-point benchmark (issue #82), converted from
+/// `docs/two_pass_language_point_test_map.md`'s matrix into executable
+/// [TwoPassFixture]s: 16 language-point groups, 5 fixtures each. Distinct
+/// from [twoPassIntegrationFixtures] (kept as a small smoke subset) — see
+/// [allTwoPassFixtures] for the combined set this harness actually runs.
+const List<TwoPassFixture> languagePointBenchmarkFixtures = [
+  // --- 1. Accents / Diacritics — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'accent-manana',
+    text: 'Voy al parque manana por la tarde.',
+    note: 'Missing accent on "mañana".',
+    languagePoint: 'Accents / Diacritics',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Voy al parque mañana por la tarde.',
+  ),
+  TwoPassFixture(
+    id: 'accent-medico',
+    text: 'El medico llego despues de la reunion.',
+    note: 'Missing accents on "médico", "llegó", "después", "reunión".',
+    languagePoint: 'Accents / Diacritics',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'El médico llegó después de la reunión.',
+  ),
+  TwoPassFixture(
+    id: 'accent-espana-pais',
+    text: 'Espana es un pais muy diverso.',
+    note: 'Missing accent/ñ on "España" and accent on "país".',
+    languagePoint: 'Accents / Diacritics',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'España es un país muy diverso.',
+  ),
+  TwoPassFixture(
+    id: 'accent-cumpleanos-otono',
+    text: 'Mi cumpleanos es en otono.',
+    note: 'Missing ñ/accent on "cumpleaños" and "otoño".',
+    languagePoint: 'Accents / Diacritics',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Mi cumpleaños es en otoño.',
+  ),
+  TwoPassFixture(
+    id: 'accent-cafe-cafeteria',
+    text: 'Compre cafe en una cafeteria pequena.',
+    note: 'Missing accents on "Compré", "café", "cafetería", "pequeña".',
+    languagePoint: 'Accents / Diacritics',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Compré café en una cafetería pequeña.',
+  ),
+
+  // --- 2. Gender / Number Agreement — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'agreement-ninos-manzanas',
+    text: 'Los niño come muchas manzana.',
+    note: 'Plural article/noun/verb and noun-number agreement.',
+    languagePoint: 'Gender / Number Agreement',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Los niños comen muchas manzanas.',
+  ),
+  TwoPassFixture(
+    id: 'agreement-ventanas-abiertas',
+    text: 'Las ventanas estaban abierto.',
+    note: 'Predicate adjective must agree in gender/number with "ventanas".',
+    languagePoint: 'Gender / Number Agreement',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Las ventanas estaban abiertas.',
+  ),
+  TwoPassFixture(
+    id: 'agreement-puerta-cerrada',
+    text: 'Una puerta estaba cerrado.',
+    note: 'Predicate adjective must agree in gender with "puerta".',
+    languagePoint: 'Gender / Number Agreement',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Una puerta estaba cerrada.',
+  ),
+  TwoPassFixture(
+    id: 'agreement-billetes-caros',
+    text: 'Los billetes estaban caro.',
+    note: 'Predicate adjective must agree in number with "billetes".',
+    languagePoint: 'Gender / Number Agreement',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Los billetes estaban caros.',
+  ),
+  TwoPassFixture(
+    id: 'agreement-fechas-escritas',
+    text: 'Las fechas estaban escrito sin tilde.',
+    note: 'Predicate participle must agree in gender/number with "fechas".',
+    languagePoint: 'Gender / Number Agreement',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Las fechas estaban escritas sin tilde.',
+  ),
+
+  // --- 3. Verb Agreement / Morphology — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'verb-nosotros-fuimos',
+    text: 'Mis compañeros y yo fue a la biblioteca.',
+    note: '"fue" must be "fuimos" to agree with "mis compañeros y yo".',
+    languagePoint: 'Verb Agreement / Morphology',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Mis compañeros y yo fuimos a la biblioteca.',
+  ),
+  TwoPassFixture(
+    id: 'verb-ninos-comen',
+    text: 'Los niños come en el jardín.',
+    note: '"come" must be "comen" to agree with the plural subject.',
+    languagePoint: 'Verb Agreement / Morphology',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Los niños comen en el jardín.',
+  ),
+  TwoPassFixture(
+    id: 'verb-compre-pan',
+    text: 'Yo fui al mercado y compra pan.',
+    note: '"compra" must be first-person preterite "compré".',
+    languagePoint: 'Verb Agreement / Morphology',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Yo fui al mercado y compré pan.',
+  ),
+  TwoPassFixture(
+    id: 'verb-ellos-estudian',
+    text: 'Ellos estudia todas las noches.',
+    note: '"estudia" must be "estudian" to agree with "ellos".',
+    languagePoint: 'Verb Agreement / Morphology',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Ellos estudian todas las noches.',
+  ),
+  TwoPassFixture(
+    id: 'verb-nosotros-vivimos',
+    text: 'Nosotros vive cerca del centro.',
+    note: '"vive" must be "vivimos" to agree with "nosotros".',
+    languagePoint: 'Verb Agreement / Morphology',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Nosotros vivimos cerca del centro.',
+  ),
+
+  // --- 4. Required Prepositions — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'prep-insisto-en',
+    text: 'Insisto que revises el contrato.',
+    note: '"insistir" requires "en" before a "que" clause.',
+    languagePoint: 'Required Prepositions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Insisto en que revises el contrato.',
+  ),
+  TwoPassFixture(
+    id: 'prep-empresa-en-la-que',
+    text: 'La empresa que trabajo está cerca.',
+    note: 'Relative clause needs "en la que" (working "at/in" the company).',
+    languagePoint: 'Required Prepositions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'La empresa en la que trabajo está cerca.',
+  ),
+  TwoPassFixture(
+    id: 'prep-dependo-de',
+    text: 'Dependo que me ayudes mañana.',
+    note: '"depender" requires "de" before a "que" clause.',
+    languagePoint: 'Required Prepositions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Dependo de que me ayudes mañana.',
+  ),
+  TwoPassFixture(
+    id: 'prep-pienso-en-ti',
+    text: 'Pienso ti todos los días.',
+    note: '"pensar en" requires the preposition "en" before its object.',
+    languagePoint: 'Required Prepositions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Pienso en ti todos los días.',
+  ),
+  TwoPassFixture(
+    id: 'prep-sone-con',
+    text: 'Soñé mi antiguo colegio.',
+    note: '"soñar con" requires the preposition "con".',
+    languagePoint: 'Required Prepositions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Soñé con mi antiguo colegio.',
+  ),
+
+  // --- 5. Articles / Determiners — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'article-puerta-principal',
+    text: 'Abrió puerta principal.',
+    note: 'Missing definite article before "puerta principal".',
+    languagePoint: 'Articles / Determiners',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Abrió la puerta principal.',
+  ),
+  TwoPassFixture(
+    id: 'article-un-libro',
+    text: 'Necesito comprar libro para la clase.',
+    note: 'Missing indefinite article before "libro".',
+    languagePoint: 'Articles / Determiners',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Necesito comprar un libro para la clase.',
+  ),
+  TwoPassFixture(
+    id: 'article-el-profesor-la-regla',
+    text: 'Profesor explicó regla otra vez.',
+    note: 'Missing definite articles before both "profesor" and "regla".',
+    languagePoint: 'Articles / Determiners',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'El profesor explicó la regla otra vez.',
+  ),
+  TwoPassFixture(
+    id: 'article-la-tienda',
+    text: 'Fui a tienda después del trabajo.',
+    note: 'Missing definite article before "tienda".',
+    languagePoint: 'Articles / Determiners',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Fui a la tienda después del trabajo.',
+  ),
+  TwoPassFixture(
+    id: 'article-cita-medico',
+    text: 'Tengo cita con médico mañana.',
+    note: 'Missing indefinite article before "cita" and definite before '
+        '"médico".',
+    languagePoint: 'Articles / Determiners',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Tengo una cita con el médico mañana.',
+  ),
+
+  // --- 6. Subjunctive / Mood — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'subj-estudies',
+    text: 'Es importante que estudias.',
+    note: 'Impersonal "es importante que" requires the subjunctive.',
+    languagePoint: 'Subjunctive / Mood',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Es importante que estudies.',
+  ),
+  TwoPassFixture(
+    id: 'subj-tenga-razon',
+    text: 'No creo que tiene razón.',
+    note: 'Negated "creer" triggers the subjunctive in its clause.',
+    languagePoint: 'Subjunctive / Mood',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'No creo que tenga razón.',
+  ),
+  TwoPassFixture(
+    id: 'subj-vengas',
+    text: 'Quiero que vienes conmigo.',
+    note: '"querer que" requires the subjunctive.',
+    languagePoint: 'Subjunctive / Mood',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Quiero que vengas conmigo.',
+  ),
+  TwoPassFixture(
+    id: 'subj-enviara',
+    text: 'Era necesario que enviaba su parte.',
+    note: 'Impersonal past "era necesario que" requires the imperfect '
+        'subjunctive.',
+    languagePoint: 'Subjunctive / Mood',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Era necesario que enviara su parte.',
+  ),
+  TwoPassFixture(
+    id: 'subj-hable-frances',
+    text: 'Busco a alguien que habla francés.',
+    note: 'Nonspecific antecedent ("alguien que...") requires the '
+        'subjunctive.',
+    languagePoint: 'Subjunctive / Mood',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Busco a alguien que hable francés.',
+  ),
+
+  // --- 7. Required Additions / Omissions — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'missing-que-creo',
+    text: 'Creo está bien terminar hoy.',
+    note: '"creer" requires the connector "que" before its clause.',
+    languagePoint: 'Required Additions / Omissions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Creo que está bien terminar hoy.',
+  ),
+  TwoPassFixture(
+    id: 'missing-les-ninos',
+    text: 'A los niños expliqué la regla.',
+    note: 'Fronted indirect object "a los niños" requires the clitic "les".',
+    languagePoint: 'Required Additions / Omissions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'A los niños les expliqué la regla.',
+  ),
+  TwoPassFixture(
+    id: 'missing-personal-a-profesor',
+    text: 'Vi mi profesor en la estación.',
+    note: 'Definite human direct object requires the personal "a".',
+    languagePoint: 'Required Additions / Omissions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Vi a mi profesor en la estación.',
+  ),
+  TwoPassFixture(
+    id: 'missing-se-levanto',
+    text: 'Levantó temprano ayer.',
+    note: 'Reflexive "levantarse" requires the reflexive pronoun "se".',
+    languagePoint: 'Required Additions / Omissions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Se levantó temprano ayer.',
+  ),
+  TwoPassFixture(
+    id: 'missing-le-gusta',
+    text: 'A Juan gusta el café.',
+    note: 'Fronted "a Juan" with "gustar" requires the clitic "le".',
+    languagePoint: 'Required Additions / Omissions',
+    operationType: TwoPassOperationType.insertion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'A Juan le gusta el café.',
+  ),
+
+  // --- 8. Unnecessary Extras / Deletions — expected owner: first pass ---
+  // (first pass may catch; for POC scoring, judge final corrected text
+  // rather than correction-card detail — see the language-point test map).
+  TwoPassFixture(
+    id: 'delete-repeated-yo-estudio',
+    text: 'Yo trabajo mucho y yo estudio por las noches.',
+    note: 'Second "yo" is a redundant repeated subject pronoun.',
+    languagePoint: 'Unnecessary Extras / Deletions',
+    operationType: TwoPassOperationType.deletion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Yo trabajo mucho y estudio por las noches.',
+  ),
+  TwoPassFixture(
+    id: 'delete-repeated-ellos-visitaron',
+    text: 'Ellos viajaron a México y ellos visitaron varias ciudades.',
+    note: 'Second "ellos" is a redundant repeated subject pronoun.',
+    languagePoint: 'Unnecessary Extras / Deletions',
+    operationType: TwoPassOperationType.deletion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText:
+        'Ellos viajaron a México y visitaron varias ciudades.',
+  ),
+  TwoPassFixture(
+    id: 'delete-repeated-a-mi',
+    text: 'A mí me gusta el café a mí.',
+    note: 'Trailing "a mí" repeats the fronted emphatic pronoun.',
+    languagePoint: 'Unnecessary Extras / Deletions',
+    operationType: TwoPassOperationType.deletion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'A mí me gusta el café.',
+  ),
+  TwoPassFixture(
+    id: 'delete-repeated-yo-compre',
+    text: 'Yo fui al mercado y yo compré pan.',
+    note: 'Second "yo" is a redundant repeated subject pronoun.',
+    languagePoint: 'Unnecessary Extras / Deletions',
+    operationType: TwoPassOperationType.deletion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Fui al mercado y compré pan.',
+  ),
+  TwoPassFixture(
+    id: 'delete-repeated-nosotros',
+    text: 'Nosotros salimos temprano y nosotros llegamos a tiempo.',
+    note: 'Second "nosotros" is a redundant repeated subject pronoun.',
+    languagePoint: 'Unnecessary Extras / Deletions',
+    operationType: TwoPassOperationType.deletion,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Nosotros salimos temprano y llegamos a tiempo.',
+  ),
+
+  // --- 9. Ser / Estar / Haber — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'ser-profesor',
+    text: 'Mi hermano está profesor.',
+    note: 'Profession/identity requires "ser", not "estar".',
+    languagePoint: 'Ser / Estar / Haber',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Mi hermano es profesor.',
+  ),
+  TwoPassFixture(
+    id: 'haber-veinte-personas',
+    text: 'En la sala son veinte personas.',
+    note: 'Existential "there are" requires impersonal "hay", not "son".',
+    languagePoint: 'Ser / Estar / Haber',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'En la sala hay veinte personas.',
+  ),
+  TwoPassFixture(
+    id: 'ser-capital-madrid',
+    text: 'Madrid está la capital de España.',
+    note: 'Identity/definition requires "ser", not "estar".',
+    languagePoint: 'Ser / Estar / Haber',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Madrid es la capital de España.',
+  ),
+  TwoPassFixture(
+    id: 'estar-contento',
+    text: 'Estoy muy contento con el resultado.',
+    note: 'Already correct: temporary state correctly uses "estar".',
+    languagePoint: 'Ser / Estar / Haber',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Estoy muy contento con el resultado.',
+  ),
+  TwoPassFixture(
+    id: 'ser-reunion-segunda-planta',
+    text: 'La reunión es en la segunda planta.',
+    note: 'Already correct: event location correctly uses "ser".',
+    languagePoint: 'Ser / Estar / Haber',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'La reunión es en la segunda planta.',
+  ),
+
+  // --- 10. Impersonal Haber / Se — expected owner: first pass ---
+  TwoPassFixture(
+    id: 'haber-habia-personas',
+    text: 'Habían muchas personas en la entrada.',
+    note: 'Impersonal "haber" is invariant: "había", never "habían".',
+    languagePoint: 'Impersonal Haber / Se',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Había muchas personas en la entrada.',
+  ),
+  TwoPassFixture(
+    id: 'haber-hubo-problemas',
+    text: 'Hubieron varios problemas durante la reunión.',
+    note: 'Impersonal "haber" is invariant: "hubo", never "hubieron".',
+    languagePoint: 'Impersonal Haber / Se',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Hubo varios problemas durante la reunión.',
+  ),
+  TwoPassFixture(
+    id: 'se-venden-pisos',
+    text: 'Se vende pisos en el centro.',
+    note: 'Passive "se" must agree in number with the plural "pisos".',
+    languagePoint: 'Impersonal Haber / Se',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Se venden pisos en el centro.',
+  ),
+  TwoPassFixture(
+    id: 'se-necesitan-voluntarios',
+    text: 'Se necesita voluntarios para el evento.',
+    note: 'Passive "se" must agree in number with the plural '
+        '"voluntarios".',
+    languagePoint: 'Impersonal Haber / Se',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Se necesitan voluntarios para el evento.',
+  ),
+  TwoPassFixture(
+    id: 'haber-habia-cifras',
+    text: 'Habían varias cifras incorrectas.',
+    note: 'Impersonal "haber" is invariant: "había", never "habían".',
+    languagePoint: 'Impersonal Haber / Se',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText: 'Había varias cifras incorrectas.',
+  ),
+
+  // --- 11. Collocations / Strong Calques — expected owner: either ---
+  TwoPassFixture(
+    id: 'collocation-hacer-decision',
+    text: 'Necesito hacer una decisión.',
+    note: 'English-influenced "hacer una decisión" calque.',
+    languagePoint: 'Collocations / Strong Calques',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Necesito tomar una decisión.',
+  ),
+  TwoPassFixture(
+    id: 'collocation-hacer-atencion',
+    text: 'Tenemos que hacer atención.',
+    note: 'English-influenced "hacer atención" calque.',
+    languagePoint: 'Collocations / Strong Calques',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Tenemos que prestar atención.',
+  ),
+  TwoPassFixture(
+    id: 'collocation-tomar-reunion',
+    text: 'El equipo tomó una reunión.',
+    note: 'English-influenced "tomar una reunión" calque.',
+    languagePoint: 'Collocations / Strong Calques',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'El equipo tuvo una reunión.',
+  ),
+  TwoPassFixture(
+    id: 'collocation-hacer-paseo',
+    text: 'Ella hizo un paseo.',
+    note: 'English-influenced "hacer un paseo" calque.',
+    languagePoint: 'Collocations / Strong Calques',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Ella dio un paseo.',
+  ),
+  TwoPassFixture(
+    id: 'collocation-hace-sentido',
+    text: 'Esto hace sentido.',
+    note: 'English-influenced "hace sentido" calque.',
+    languagePoint: 'Collocations / Strong Calques',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Esto tiene sentido.',
+  ),
+
+  // --- 12. False Friends / Word Choice — expected owner: either ---
+  TwoPassFixture(
+    id: 'false-friend-atendio-universidad',
+    text: 'Atendió la universidad en Madrid.',
+    note: '"atender" is a false friend for "attend"; needs "asistir a".',
+    languagePoint: 'False Friends / Word Choice',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Asistió a la universidad en Madrid.',
+  ),
+  TwoPassFixture(
+    id: 'false-friend-aplico-trabajo',
+    text: 'Aplicó para un trabajo.',
+    note: '"aplicar para" is a false friend for "apply for"; needs '
+        '"solicitar".',
+    languagePoint: 'False Friends / Word Choice',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Solicitó un trabajo.',
+  ),
+  TwoPassFixture(
+    id: 'false-friend-realice',
+    text: 'Realicé que estaba equivocado.',
+    note: '"realizar" is a false friend for "realize"; needs "darse '
+        'cuenta de".',
+    languagePoint: 'False Friends / Word Choice',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Me di cuenta de que estaba equivocado.',
+  ),
+  TwoPassFixture(
+    id: 'false-friend-embarazado',
+    text: 'Estoy embarazado por llegar tarde.',
+    note: '"embarazado" is a false friend for "embarrassed"; needs "me da '
+        'vergüenza".',
+    languagePoint: 'False Friends / Word Choice',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.either,
+    expectedCorrectedText: 'Me da vergüenza llegar tarde.',
+  ),
+  TwoPassFixture(
+    id: 'false-friend-actualmente-control',
+    text: 'Actualmente vivo en Londres.',
+    note: 'Already correct: "actualmente" (currently) used correctly here, '
+        'not as a false-friend trap for "actually".',
+    languagePoint: 'False Friends / Word Choice',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Actualmente vivo en Londres.',
+  ),
+
+  // --- 13. Phrase-Level Naturalness — expected owner: naturalness ---
+  TwoPassFixture(
+    id: 'naturalness-buen-tiempo',
+    text: 'Tuvimos un buen tiempo.',
+    note: 'English-influenced "tener un buen tiempo" ("had a good time").',
+    languagePoint: 'Phrase-Level Naturalness',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.naturalness,
+    expectedCorrectedText: 'Lo pasamos bien.',
+  ),
+  TwoPassFixture(
+    id: 'naturalness-corriendo-tarde',
+    text: 'Estoy corriendo tarde para la reunión.',
+    note: 'English-influenced "corriendo tarde" ("running late").',
+    languagePoint: 'Phrase-Level Naturalness',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.naturalness,
+    expectedCorrectedText: 'Voy tarde a la reunión.',
+  ),
+  TwoPassFixture(
+    id: 'naturalness-pasar-buen-tiempo',
+    text: 'Quiero pasar un buen tiempo.',
+    note: 'English-influenced "pasar un buen tiempo" ("have a good time").',
+    languagePoint: 'Phrase-Level Naturalness',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.naturalness,
+    expectedCorrectedText: 'Quiero pasarlo bien.',
+  ),
+  TwoPassFixture(
+    id: 'naturalness-puedo-tener-cerveza',
+    text: '¿Puedo tener una cerveza?',
+    note: 'English-influenced "¿puedo tener?" ("can I have?").',
+    languagePoint: 'Phrase-Level Naturalness',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.naturalness,
+    expectedCorrectedText: '¿Me pones una cerveza?',
+  ),
+  TwoPassFixture(
+    id: 'naturalness-llamar-para-atras',
+    text: 'Te llamo para atrás.',
+    note: 'English-influenced "llamar para atrás" ("call back").',
+    languagePoint: 'Phrase-Level Naturalness',
+    operationType: TwoPassOperationType.replacement,
+    expectedOwner: TwoPassExpectedOwner.naturalness,
+    expectedCorrectedText: 'Te devuelvo la llamada.',
+  ),
+
+  // --- 14. Valid Regional / Should Not Flag — expected owner: no pass ---
+  TwoPassFixture(
+    id: 'regional-voy-para-casa',
+    text: 'Voy para casa ahora mismo.',
+    note: 'Valid regional Spanish ("para casa"); must not be flagged.',
+    languagePoint: 'Valid Regional / Should Not Flag',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Voy para casa ahora mismo.',
+  ),
+  TwoPassFixture(
+    id: 'regional-vos-tenes',
+    text: 'Vos tenés razón.',
+    note: 'Valid Rioplatense voseo; must not be flagged.',
+    languagePoint: 'Valid Regional / Should Not Flag',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Vos tenés razón.',
+  ),
+  TwoPassFixture(
+    id: 'regional-cojo-autobus',
+    text: 'Cojo el autobús cada mañana.',
+    note: 'Valid Peninsular "coger"; must not be flagged.',
+    languagePoint: 'Valid Regional / Should Not Flag',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Cojo el autobús cada mañana.',
+  ),
+  TwoPassFixture(
+    id: 'regional-preterite-esta-manana',
+    text: 'Esta mañana hablé con mi jefe.',
+    note: 'Valid preterite-for-recent-past regional usage; must not be '
+        'flagged.',
+    languagePoint: 'Valid Regional / Should Not Flag',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Esta mañana hablé con mi jefe.',
+  ),
+  TwoPassFixture(
+    id: 'regional-dale',
+    text: 'Dale, nos vemos más tarde.',
+    note: 'Valid colloquial "dale"; must not be flagged.',
+    languagePoint: 'Valid Regional / Should Not Flag',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Dale, nos vemos más tarde.',
+  ),
+
+  // --- 15. Already Correct / Do Not Tinker — expected owner: no pass ---
+  TwoPassFixture(
+    id: 'correct-buenos-dias',
+    text: 'Buenos días, ¿cómo estás?',
+    note: 'Already correct; must not be tinkered with.',
+    languagePoint: 'Already Correct / Do Not Tinker',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Buenos días, ¿cómo estás?',
+  ),
+  TwoPassFixture(
+    id: 'correct-hacer-pregunta',
+    text: 'Voy a hacer una pregunta al profesor.',
+    note: 'Already correct ("hacer una pregunta" is standard, unlike '
+        '"hacer una decisión"); must not be tinkered with.',
+    languagePoint: 'Already Correct / Do Not Tinker',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Voy a hacer una pregunta al profesor.',
+  ),
+  TwoPassFixture(
+    id: 'correct-tomar-foto',
+    text: 'Necesito tomar una foto del documento.',
+    note: 'Already correct; must not be tinkered with.',
+    languagePoint: 'Already Correct / Do Not Tinker',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Necesito tomar una foto del documento.',
+  ),
+  TwoPassFixture(
+    id: 'correct-visitar-abuela',
+    text: 'Mañana visitaré a mi abuela.',
+    note: 'Already correct; must not be tinkered with.',
+    languagePoint: 'Already Correct / Do Not Tinker',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Mañana visitaré a mi abuela.',
+  ),
+  TwoPassFixture(
+    id: 'correct-me-quedo-en-casa',
+    text: 'Está lloviendo, así que me quedo en casa.',
+    note: 'Already correct; must not be tinkered with.',
+    languagePoint: 'Already Correct / Do Not Tinker',
+    operationType: TwoPassOperationType.noChange,
+    expectedOwner: TwoPassExpectedOwner.noChange,
+    expectedCorrectedText: 'Está lloviendo, así que me quedo en casa.',
+  ),
+
+  // --- 16. Mixed Operations — expected owner: first pass ---
+  // Synthesized (not a row in the language-point map itself) to give this
+  // benchmark genuine TwoPassOperationType.mixed coverage: each fixture
+  // splices two already-vetted single-operation-type sentences from other
+  // groups above into one input, so both operations must be corrected in
+  // the same pass.
+  TwoPassFixture(
+    id: 'mixed-preposition-and-redundant-pronoun',
+    text:
+        'Insisto que revises el contrato, y yo trabajo mucho y yo estudio '
+        'por las noches.',
+    note: 'Combines a required-preposition insertion ("insisto en que") '
+        'with a redundant repeated-pronoun deletion (second "yo").',
+    languagePoint: 'Mixed Operations',
+    operationType: TwoPassOperationType.mixed,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText:
+        'Insisto en que revises el contrato, y yo trabajo mucho y estudio '
+        'por las noches.',
+  ),
+  TwoPassFixture(
+    id: 'mixed-article-and-accent',
+    text: 'Necesito comprar libro para la clase, y compre cafe en una '
+        'cafeteria pequena.',
+    note: 'Combines a missing-article insertion ("un libro") with missing '
+        'accents ("compré", "café", "cafetería", "pequeña").',
+    languagePoint: 'Mixed Operations',
+    operationType: TwoPassOperationType.mixed,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText:
+        'Necesito comprar un libro para la clase, y compré café en una '
+        'cafetería pequeña.',
+  ),
+  TwoPassFixture(
+    id: 'mixed-personal-a-and-subjunctive',
+    text: 'Vi mi profesor en la estación, y es importante que estudias.',
+    note: 'Combines a missing personal-"a" insertion with a subjunctive-'
+        'mood replacement ("estudias" -> "estudies").',
+    languagePoint: 'Mixed Operations',
+    operationType: TwoPassOperationType.mixed,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText:
+        'Vi a mi profesor en la estación, y es importante que estudies.',
+  ),
+  TwoPassFixture(
+    id: 'mixed-gender-agreement-and-redundant-pronoun',
+    text: 'Las ventanas estaban abierto, y a mí me gusta el café a mí.',
+    note: 'Combines a gender-agreement replacement ("abierto" -> '
+        '"abiertas") with a redundant-pronoun deletion (trailing "a mí").',
+    languagePoint: 'Mixed Operations',
+    operationType: TwoPassOperationType.mixed,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText:
+        'Las ventanas estaban abiertas, y a mí me gusta el café.',
+  ),
+  TwoPassFixture(
+    id: 'mixed-verb-agreement-and-missing-que',
+    text: 'Ellos estudia todas las noches, y creo está bien terminar hoy.',
+    note: 'Combines a verb-agreement replacement ("estudia" -> "estudian") '
+        'with a missing-connector insertion ("creo que").',
+    languagePoint: 'Mixed Operations',
+    operationType: TwoPassOperationType.mixed,
+    expectedOwner: TwoPassExpectedOwner.firstPass,
+    expectedCorrectedText:
+        'Ellos estudian todas las noches, y creo que está bien terminar '
+        'hoy.',
+  ),
+];
+
+/// The full executable benchmark set this harness can run: the original
+/// small smoke-test fixtures plus the full language-point matrix (issue
+/// #82). [twoPassIntegrationFixtures] stays available on its own as a
+/// smaller, faster smoke subset — see that list's own doc comment.
+const List<TwoPassFixture> allTwoPassFixtures = [
+  ...twoPassIntegrationFixtures,
+  ...languagePointBenchmarkFixtures,
 ];
 
 const String _defaultFirstPassModel = 'gpt-4.1';
@@ -680,14 +1491,44 @@ String buildReport({
 void main() {
   group('offline sanity (no API calls)', () {
     test('fixture ids are unique', () {
-      final ids = twoPassIntegrationFixtures.map((f) => f.id).toSet();
-      expect(ids.length, twoPassIntegrationFixtures.length);
+      final ids = allTwoPassFixtures.map((f) => f.id).toSet();
+      expect(ids.length, allTwoPassFixtures.length);
     });
+
+    test(
+      'every language-point group has exactly five fixtures (issue #82)',
+      () {
+        final byLanguagePoint = <String, int>{};
+        for (final fixture in languagePointBenchmarkFixtures) {
+          byLanguagePoint[fixture.languagePoint] =
+              (byLanguagePoint[fixture.languagePoint] ?? 0) + 1;
+        }
+        for (final entry in byLanguagePoint.entries) {
+          expect(
+            entry.value,
+            5,
+            reason:
+                '"${entry.key}" has ${entry.value} fixtures, expected 5',
+          );
+        }
+      },
+    );
+
+    test(
+      'the language-point benchmark represents every operation type '
+      '(issue #82)',
+      () {
+        final represented = languagePointBenchmarkFixtures
+            .map((f) => f.operationType)
+            .toSet();
+        expect(represented, TwoPassOperationType.values.toSet());
+      },
+    );
 
     test(
       'every fixture carries required benchmark metadata (issue #81)',
       () {
-        for (final fixture in twoPassIntegrationFixtures) {
+        for (final fixture in allTwoPassFixtures) {
           expect(
             fixture.languagePoint,
             isNotEmpty,
@@ -711,7 +1552,7 @@ void main() {
       'a noChange operation type always expects the input text unchanged '
       '(issue #81)',
       () {
-        for (final fixture in twoPassIntegrationFixtures) {
+        for (final fixture in allTwoPassFixtures) {
           if (fixture.operationType == TwoPassOperationType.noChange) {
             expect(
               fixture.expectedCorrectedText,
@@ -1034,7 +1875,7 @@ void main() {
     );
 
     final results = <FixtureResult>[];
-    for (final fixture in twoPassIntegrationFixtures) {
+    for (final fixture in allTwoPassFixtures) {
       // runFixture already catches its own failures and returns a
       // FixtureResult.error rather than throwing; this try/catch is a
       // defensive second layer only, in case something outside runFixture
