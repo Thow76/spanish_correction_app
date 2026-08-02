@@ -2298,12 +2298,44 @@ CallStats productionStatsFor(FixtureResult result) {
 int productionApiCallCount(FixtureResult result) =>
     result.hadConflict ? 3 : 2;
 
+/// Whether [label] counts as a benchmark "pass" (issue #101) — the same
+/// pass/fail convention already established by hand in
+/// `docs/two_pass_live_language_point_benchmark_issue_log.md`: `pass`
+/// means [TwoPassScoreLabel.correctFix] or
+/// [TwoPassScoreLabel.acceptableNoChange]; every other label (including
+/// [TwoPassScoreLabel.error]) counts as a fail.
+bool isPassingScore(TwoPassScoreLabel label) =>
+    label == TwoPassScoreLabel.correctFix ||
+    label == TwoPassScoreLabel.acceptableNoChange;
+
+/// Groups [results] by [TwoPassFixture.languagePoint] ("benchmark group",
+/// issue #101), preserving first-encountered order — the same convention
+/// [_groupedScoreTable] already uses, so a group's section order matches
+/// its summary-table row order.
+Map<String, List<FixtureResult>> _groupByLanguagePoint(
+  List<FixtureResult> results,
+) {
+  final grouped = <String, List<FixtureResult>>{};
+  for (final result in results) {
+    (grouped[result.fixture.languagePoint] ??= []).add(result);
+  }
+  return grouped;
+}
+
 /// Builds the production-style report for [results] (issue #97's POC,
-/// timing fixed by issue #98): the same fixture run [buildReport] already
-/// reports on, reinterpreted through production's own call-skipping rule
-/// instead of the diagnostic harness's always-call-both-naturalness-passes
-/// behavior. Emitted from the same live run as [buildReport] — no extra
-/// API calls.
+/// timing fixed by issue #98, shaped into per-benchmark-group sections by
+/// issue #101): the same fixture run [buildReport] already reports on,
+/// reinterpreted through production's own call-skipping rule instead of
+/// the diagnostic harness's always-call-both-naturalness-passes behavior.
+/// Emitted from the same live run as [buildReport] — no extra API calls.
+///
+/// Sectioned by [TwoPassFixture.languagePoint] ("benchmark group") rather
+/// than one flat per-fixture list (issue #101's own acceptance
+/// criterion): each group gets a short readable pass/fail + fallback
+/// summary line, then a per-phrase table with the columns issue #101
+/// asks for (phrase, first-pass/final corrected phrase, fallback
+/// outcome, pass/fail, per-call and production-total latency, production
+/// cost) — see [_groupByLanguagePoint].
 String buildProductionModeReport({
   required String firstPassModel,
   required String naturalnessModel,
@@ -2312,7 +2344,7 @@ String buildProductionModeReport({
   String fixtureSelection = 'all',
 }) {
   final buffer = StringBuffer()
-    ..writeln('# Two-Pass Production-Style Benchmark (issues #97/#98 POC)')
+    ..writeln('# Two-Pass Production-Style Benchmark (issues #97/#98/#101 POC)')
     ..writeln()
     ..writeln(
       'Derived from the same live run as `docs/two_pass_integration_harness.md` '
@@ -2321,19 +2353,20 @@ String buildProductionModeReport({
       'the diagnostic report could compare them; this report instead only '
       'counts the second (fallback) naturalness call when '
       '`runTwoPassCorrectionPipeline` would actually have made it — i.e. '
-      'when the parallel merge had a skipped edit.',
+      '**fallback is conditional here**, only triggered when the parallel '
+      'merge had a skipped edit, exactly matching production behavior.',
     )
     ..writeln()
     ..writeln(
       '**Latency methodology (issue #98)**: the first pass and '
       'naturalness-on-original calls are started concurrently — mirroring '
-      '`runTwoPassCorrectionPipeline`\'s own parallel phase — and the '
-      '"Parallel phase wall-clock" figures below are the real measured '
-      'time from starting both to both completing, not a sum of their '
-      'individual latencies. Fallback latency is added only for fixtures '
-      'where it was actually needed. Per-call latency for the first pass '
-      'and naturalness-on-original individually is still shown alongside '
-      'the parallel-phase figure, for debugging which call is slower.',
+      '`runTwoPassCorrectionPipeline`\'s own parallel phase. Each '
+      'per-phrase table below shows "First-pass latency" and "Naturalness '
+      '(parallel) latency" as each call\'s own individual latency, for '
+      'debugging which call is slower — but "Production total latency" '
+      'uses the real measured concurrent-phase wall-clock time (plus '
+      'fallback latency, only when fallback actually ran), not a sum of '
+      'those two per-call figures.',
     )
     ..writeln()
     ..writeln('## Run configuration')
@@ -2343,78 +2376,87 @@ String buildProductionModeReport({
     ..writeln('- Fixture selection: $fixtureSelection (issue #85)')
     ..writeln('- Fixture count: `${results.length}`')
     ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
+    ..writeln(
+      '- Report layout: one section per benchmark group (language point), '
+      'each with a readable pass/fail + fallback summary and a per-phrase '
+      'table (issue #101)',
+    )
     ..writeln();
 
-  for (final result in results) {
-    if (result.isError) {
-      buffer
-        ..writeln('## ${result.fixture.id}')
-        ..writeln()
-        ..writeln('- Input text: `${result.fixture.text}`')
-        ..writeln('- Language point: ${result.fixture.languagePoint}')
-        ..writeln('- Score: ${scoreFixtureResult(result).reportLabel}')
-        ..writeln('- **ERROR**: ${result.errorMessage}')
-        ..writeln();
-      continue;
-    }
+  // Sectioned by benchmark group (language point, issue #101) rather than
+  // one flat per-fixture list — each group gets a short readable summary
+  // plus a per-phrase table, so a reader can judge one group's production
+  // reliability without scanning every fixture in the whole benchmark.
+  final groupedByLanguagePoint = _groupByLanguagePoint(results);
+  final orderedOutcomeLabels = [
+    ...TwoPassFallbackOutcome.values.map((o) => o.reportLabel),
+    'error',
+  ];
+  for (final entry in groupedByLanguagePoint.entries) {
+    final languagePoint = entry.key;
+    final groupResults = entry.value;
+    final groupPassCount = groupResults
+        .where((r) => isPassingScore(scoreFixtureResult(r)))
+        .length;
+    final groupFailCount = groupResults.length - groupPassCount;
 
-    final outcome = classifyFallbackOutcome(result);
-    final productionStats = productionStatsFor(result);
+    final groupOutcomeCounts = <String, int>{};
+    for (final result in groupResults) {
+      final label = result.isError
+          ? 'error'
+          : classifyFallbackOutcome(result).reportLabel;
+      groupOutcomeCounts[label] = (groupOutcomeCounts[label] ?? 0) + 1;
+    }
+    final outcomeSummary = [
+      for (final label in orderedOutcomeLabels)
+        if ((groupOutcomeCounts[label] ?? 0) > 0)
+          '${groupOutcomeCounts[label]} $label',
+    ].join(', ');
+
     buffer
-      ..writeln('## ${result.fixture.id}')
-      ..writeln()
-      ..writeln('- Input text: `${result.fixture.text}`')
-      ..writeln('- Language point: ${result.fixture.languagePoint}')
-      ..writeln(
-        '- Operation type: ${result.fixture.operationType.reportLabel}',
-      )
-      ..writeln(
-        '- Expected owner: ${result.fixture.expectedOwner.reportLabel}',
-      )
-      ..writeln(
-        '- Expected corrected text: '
-        '`${result.fixture.expectedCorrectedText}`',
-      )
-      ..writeln(
-        '- First-pass corrected text: `${result.firstPassCorrectedText}`',
-      )
-      ..writeln('- Conflict (fallback needed): ${result.hadConflict}')
-      ..writeln('- Fallback outcome: ${outcome.reportLabel}')
-      ..writeln('- Final output: `${result.finalCorrectedText}`')
-      ..writeln('- Score: ${scoreFixtureResult(result).reportLabel}')
-      ..writeln('- Production API calls: ${productionApiCallCount(result)}')
+      ..writeln('## $languagePoint')
       ..writeln()
       ..writeln(
-        '| Phase | Latency (ms) | Total tokens | Est. cost (USD) |',
+        '${groupResults.length} '
+        'fixture${groupResults.length == 1 ? '' : 's'} — $groupPassCount '
+        'pass / $groupFailCount fail. Fallback: $outcomeSummary.',
       )
-      ..writeln('| --- | --- | --- | --- |')
+      ..writeln()
       ..writeln(
-        '| First pass | ${result.firstPassStats.wallClockMs} | '
-        '${result.firstPassStats.totalTokens} | '
-        '${_formatCost(result.firstPassStats.costUsd)} |',
+        '| Phrase | First-pass corrected phrase | Final corrected phrase | '
+        'Fallback outcome | Pass/fail | First-pass latency (ms) | '
+        'Naturalness (parallel) latency (ms) | Fallback latency (ms) | '
+        'Production total latency (ms) | Production cost (USD) |',
       )
       ..writeln(
-        '| Naturalness (parallel, on original) | '
+        '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+      );
+
+    for (final result in groupResults) {
+      final productionStats = productionStatsFor(result);
+      final passFail = isPassingScore(scoreFixtureResult(result))
+          ? 'pass'
+          : 'fail';
+      final fallbackOutcomeLabel = result.isError
+          ? 'error'
+          : classifyFallbackOutcome(result).reportLabel;
+      final firstPassCorrected = result.isError
+          ? '—'
+          : '`${result.firstPassCorrectedText}`';
+      final finalCorrected = result.isError
+          ? '—'
+          : '`${result.finalCorrectedText}`';
+      buffer.writeln(
+        '| `${result.fixture.text}` | $firstPassCorrected | '
+        '$finalCorrected | $fallbackOutcomeLabel | $passFail | '
+        '${result.firstPassStats.wallClockMs} | '
         '${result.naturalnessOnOriginalStats.wallClockMs} | '
-        '${result.naturalnessOnOriginalStats.totalTokens} | '
-        '${_formatCost(result.naturalnessOnOriginalStats.costUsd)} |',
-      )
-      ..writeln(
-        '| Parallel phase wall-clock (first pass + naturalness, '
-        'concurrent) | ${result.parallelPhaseWallClockMs} | — | — |',
-      )
-      ..writeln(
-        '| Fallback (conditional) | '
         '${result.hadConflict ? result.naturalnessOnFirstPassStats.wallClockMs : 0} | '
-        '${result.hadConflict ? result.naturalnessOnFirstPassStats.totalTokens : 0} | '
-        '${_formatCost(result.hadConflict ? result.naturalnessOnFirstPassStats.costUsd : 0)} |',
-      )
-      ..writeln(
-        '| **Production total** | ${productionStats.wallClockMs} | '
-        '${productionStats.totalTokens} | '
+        '${productionStats.wallClockMs} | '
         '${_formatCost(productionStats.costUsd)} |',
-      )
-      ..writeln();
+      );
+    }
+    buffer.writeln();
   }
 
   final nonError = results.where((r) => !r.isError).toList();
@@ -2426,26 +2468,27 @@ String buildProductionModeReport({
     outcomeCounts[outcome] = (outcomeCounts[outcome] ?? 0) + 1;
   }
 
+  final overallPassCount = results
+      .where((r) => isPassingScore(scoreFixtureResult(r)))
+      .length;
+  final overallFailCount = results.length - overallPassCount;
+
   final productionTotalLatencyMs = results.fold<int>(
     0,
-    (sum, r) =>
-        sum + (r.isError ? r.totalStats.wallClockMs : productionStatsFor(r).wallClockMs),
+    (sum, r) => sum + productionStatsFor(r).wallClockMs,
   );
   final productionTotalTokens = results.fold<int>(
     0,
-    (sum, r) =>
-        sum + (r.isError ? r.totalStats.totalTokens : productionStatsFor(r).totalTokens),
+    (sum, r) => sum + productionStatsFor(r).totalTokens,
   );
   final anyUnknownCost = results.any(
-    (r) => (r.isError ? r.totalStats.costUsd : productionStatsFor(r).costUsd) == null,
+    (r) => productionStatsFor(r).costUsd == null,
   );
   final productionTotalCostUsd = anyUnknownCost
       ? null
       : results.fold<double>(
           0,
-          (sum, r) =>
-              sum +
-              ((r.isError ? r.totalStats.costUsd : productionStatsFor(r).costUsd) ?? 0),
+          (sum, r) => sum + (productionStatsFor(r).costUsd ?? 0),
         );
 
   final diagnosticTotalLatencyMs = results.fold<int>(
@@ -2455,6 +2498,24 @@ String buildProductionModeReport({
   final diagnosticTotalCostUsd = results.any((r) => r.totalStats.costUsd == null)
       ? null
       : results.fold<double>(0, (sum, r) => sum + (r.totalStats.costUsd ?? 0));
+
+  final latencySavingsMs = diagnosticTotalLatencyMs - productionTotalLatencyMs;
+  final latencySavingsPct = diagnosticTotalLatencyMs == 0
+      ? 0.0
+      : latencySavingsMs / diagnosticTotalLatencyMs * 100;
+  final costSavingsUsd =
+      (diagnosticTotalCostUsd != null && productionTotalCostUsd != null)
+      ? diagnosticTotalCostUsd - productionTotalCostUsd
+      : null;
+  final costSavingsPct =
+      (costSavingsUsd != null &&
+          diagnosticTotalCostUsd != null &&
+          diagnosticTotalCostUsd != 0)
+      ? costSavingsUsd / diagnosticTotalCostUsd * 100
+      : null;
+  final costSavingsText = costSavingsUsd == null || costSavingsPct == null
+      ? 'unknown'
+      : '${_formatCost(costSavingsUsd)} (${costSavingsPct.toStringAsFixed(1)}%)';
 
   buffer
     ..writeln('---')
@@ -2469,18 +2530,32 @@ String buildProductionModeReport({
       '$productionTotalTokens | ${_formatCost(productionTotalCostUsd)} |',
     )
     ..writeln()
+    ..writeln('### Pass/fail summary')
+    ..writeln()
+    ..writeln('| Metric | Count | Rate |')
+    ..writeln('| --- | --- | --- |')
+    ..writeln(
+      '| Pass | $overallPassCount | '
+      '${_formatRate(overallPassCount, results.length)} |',
+    )
+    ..writeln(
+      '| Fail | $overallFailCount | '
+      '${_formatRate(overallFailCount, results.length)} |',
+    )
+    ..writeln()
     ..writeln('### Diagnostic vs. production-style totals')
     ..writeln()
     ..writeln('| Metric | Diagnostic (both naturalness calls always) | '
-        'Production-style (conditional fallback) |')
-    ..writeln('| --- | --- | --- |')
+        'Production-style (conditional fallback) | Estimated savings |')
+    ..writeln('| --- | --- | --- | --- |')
     ..writeln(
       '| Latency (ms) | $diagnosticTotalLatencyMs | '
-      '$productionTotalLatencyMs |',
+      '$productionTotalLatencyMs | $latencySavingsMs ms '
+      '(${latencySavingsPct.toStringAsFixed(1)}%) |',
     )
     ..writeln(
       '| Est. cost (USD) | ${_formatCost(diagnosticTotalCostUsd)} | '
-      '${_formatCost(productionTotalCostUsd)} |',
+      '${_formatCost(productionTotalCostUsd)} | $costSavingsText |',
     )
     ..writeln()
     ..writeln('### Fallback outcome summary')
@@ -3960,8 +4035,10 @@ void main() {
       );
 
       test(
-        'buildProductionModeReport renders every fixture id and labels '
-        'itself as production-style, distinct from the diagnostic report',
+        'buildProductionModeReport labels itself as production-style, '
+        'sections by benchmark group (issue #101), and renders a '
+        'per-phrase row with the fixture\'s own phrase text, fallback '
+        'outcome, and pass/fail',
         () {
           final report = buildProductionModeReport(
             firstPassModel: 'gpt-4.1',
@@ -3978,11 +4055,19 @@ void main() {
           );
 
           expect(report, contains('Production-Style Benchmark'));
-          expect(report, contains('## ${fixture.id}'));
-          expect(report, contains('Fallback outcome: not_needed'));
-          expect(report, contains('Production API calls: 2'));
+          // Sectioned by benchmark group (language point), not per-fixture
+          // id — issue #101's own restructuring.
+          expect(report, contains('## ${fixture.languagePoint}'));
+          expect(report, contains('1 pass / 0 fail'));
+          expect(report, contains('| `${fixture.text}` |'));
+          expect(
+            report,
+            contains('| not_needed | pass |'),
+          );
+          expect(report, contains('### Pass/fail summary'));
           expect(report, contains('### Fallback outcome summary'));
           expect(report, contains('### Diagnostic vs. production-style totals'));
+          expect(report, contains('Estimated savings'));
         },
       );
 
@@ -4020,6 +4105,82 @@ void main() {
           // denominator (classifyFallbackOutcome requires a non-error
           // result), but still counted in the overall fixture/error totals.
           expect(report, contains('| 3 | 1 |'));
+        },
+      );
+
+      test(
+        'isPassingScore matches the pass/fail convention already '
+        'established in docs/two_pass_live_language_point_benchmark_'
+        'issue_log.md: correct_fix and acceptable_no_change pass, '
+        'everything else — including error — fails',
+        () {
+          expect(isPassingScore(TwoPassScoreLabel.correctFix), isTrue);
+          expect(isPassingScore(TwoPassScoreLabel.acceptableNoChange), isTrue);
+          expect(isPassingScore(TwoPassScoreLabel.partialFix), isFalse);
+          expect(isPassingScore(TwoPassScoreLabel.missedIssue), isFalse);
+          expect(isPassingScore(TwoPassScoreLabel.overcorrection), isFalse);
+          expect(isPassingScore(TwoPassScoreLabel.ambiguous), isFalse);
+          expect(isPassingScore(TwoPassScoreLabel.error), isFalse);
+        },
+      );
+
+      test(
+        'buildProductionModeReport (issue #101) sections results by '
+        'benchmark group — two fixtures from different language points '
+        'get two distinct group headings, each with its own per-phrase '
+        'table containing only that group\'s own phrase',
+        () {
+          final otherFixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'agreement-ninos-manzanas',
+          );
+          final report = buildProductionModeReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              resultWith(
+                fixture: fixture,
+                hadConflict: false,
+                firstPassCorrectedText: fixture.expectedCorrectedText,
+                finalCorrectedText: fixture.expectedCorrectedText,
+              ),
+              resultWith(
+                fixture: otherFixture,
+                hadConflict: false,
+                firstPassCorrectedText: otherFixture.expectedCorrectedText,
+                finalCorrectedText: otherFixture.expectedCorrectedText,
+              ),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(report, contains('## ${fixture.languagePoint}'));
+          expect(report, contains('## ${otherFixture.languagePoint}'));
+
+          final accentsSection = report.substring(
+            report.indexOf('## ${fixture.languagePoint}'),
+            report.indexOf('## ${otherFixture.languagePoint}'),
+          );
+          expect(accentsSection, contains('| `${fixture.text}` |'));
+          expect(accentsSection, isNot(contains('| `${otherFixture.text}` |')));
+        },
+      );
+
+      test(
+        'buildProductionModeReport (issue #101) still renders an errored '
+        'fixture as a row inside its own group\'s table — phrase and '
+        '"error"/"fail" cells, not a crash or a dropped fixture',
+        () {
+          final report = buildProductionModeReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [FixtureResult.error(fixture, 'FormatException: boom')],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(report, contains('## ${fixture.languagePoint}'));
+          expect(report, contains('1 fixture — 0 pass / 1 fail'));
+          expect(report, contains('Fallback: 1 error'));
+          expect(report, contains('| `${fixture.text}` | — | — | error | fail |'));
         },
       );
 
