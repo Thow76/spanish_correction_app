@@ -58,9 +58,11 @@
 //   first-pass corrected text, for comparison; the production-style report
 //   instead only counts the second (fallback) call for a fixture when
 //   runTwoPassCorrectionPipeline would actually have made it (i.e. the
-//   parallel merge had a skipped edit) — see buildProductionModeReport's
-//   own doc comment for its one known fidelity gap (latency is a
-//   sequential-sum upper bound, not a true parallel-call measurement).
+//   parallel merge had a skipped edit). The first pass and
+//   naturalness-on-original calls themselves are started concurrently
+//   (issue #98), mirroring runTwoPassCorrectionPipeline's own parallel
+//   phase, so both reports' latency figures reflect the real measured
+//   concurrent-phase wall-clock time rather than a sequential-call sum.
 // - TWO_PASS_CALL_DELAY_MS: delay between fixtures, defaults to 750.
 // - TWO_PASS_FIXTURE_SET (issue #85): which fixtures to run, defaults to
 //   `all`. One of:
@@ -1366,6 +1368,7 @@ class FixtureResult {
     required this.naturalnessOnOriginalStats,
     required this.naturalnessOnFirstPass,
     required this.naturalnessOnFirstPassStats,
+    required this.parallelPhaseWallClockMs,
     required this.hadConflict,
     required this.usedFallback,
     required this.finalCorrectedText,
@@ -1380,10 +1383,20 @@ class FixtureResult {
   /// went out at all. Reported as [firstPassStats] here so it still shows
   /// up in the report and the overall summary's totals, rather than
   /// silently disappearing as an unreported $0.
+  ///
+  /// [parallelPhaseWallClockMs] defaults to [partialStats]'s own
+  /// wall-clock time (issue #98) — a failure can happen before the
+  /// concurrent first-pass/naturalness-on-original phase ever finishes
+  /// timing itself, so there's no real measured parallel-phase duration to
+  /// report; falling back to whatever partial latency was already spent
+  /// keeps [totalStats] on an error result numerically identical to what
+  /// it always reported (the partial spend), rather than silently
+  /// dropping it.
   factory FixtureResult.error(
     TwoPassFixture fixture,
     String message, {
     CallStats partialStats = CallStats.zero,
+    int? parallelPhaseWallClockMs,
   }) {
     const emptyReview = NaturalnessReview(
       hasNaturalnessIssue: false,
@@ -1397,6 +1410,8 @@ class FixtureResult {
       naturalnessOnOriginalStats: CallStats.zero,
       naturalnessOnFirstPass: emptyReview,
       naturalnessOnFirstPassStats: CallStats.zero,
+      parallelPhaseWallClockMs:
+          parallelPhaseWallClockMs ?? partialStats.wallClockMs,
       hadConflict: false,
       usedFallback: false,
       finalCorrectedText: '',
@@ -1412,6 +1427,17 @@ class FixtureResult {
   final CallStats naturalnessOnOriginalStats;
   final NaturalnessReview naturalnessOnFirstPass;
   final CallStats naturalnessOnFirstPassStats;
+
+  /// Measured wall-clock time for the concurrent first-pass +
+  /// naturalness-on-original phase (issue #98) — from starting both calls
+  /// to both completing, not [firstPassStats.wallClockMs] +
+  /// [naturalnessOnOriginalStats.wallClockMs]. Those two per-call fields
+  /// stay available unchanged for per-call debugging (e.g. spotting which
+  /// of the two calls is the slower one); this field is what [totalStats]
+  /// and `productionStatsFor` use instead of naively summing them, since
+  /// summing sequential-looking latencies for two calls that actually ran
+  /// concurrently overstates real elapsed time.
+  final int parallelPhaseWallClockMs;
   final bool hadConflict;
   final bool usedFallback;
   final String finalCorrectedText;
@@ -1420,8 +1446,21 @@ class FixtureResult {
 
   bool get isError => errorMessage != null;
 
-  CallStats get totalStats =>
-      firstPassStats + naturalnessOnOriginalStats + naturalnessOnFirstPassStats;
+  /// Total latency/tokens/cost for this fixture's diagnostic run. Latency
+  /// is [parallelPhaseWallClockMs] (the real concurrent-phase wall-clock)
+  /// plus [naturalnessOnFirstPassStats.wallClockMs] — not a naive sum of
+  /// every per-call latency, since the first two calls overlap in real
+  /// time (issue #98). Tokens and cost are unaffected by call scheduling,
+  /// so those stay a straightforward sum across all three calls.
+  CallStats get totalStats {
+    final tokensAndCost =
+        firstPassStats + naturalnessOnOriginalStats + naturalnessOnFirstPassStats;
+    return CallStats(
+      wallClockMs: parallelPhaseWallClockMs + naturalnessOnFirstPassStats.wallClockMs,
+      totalTokens: tokensAndCost.totalTokens,
+      costUsd: tokensAndCost.costUsd,
+    );
+  }
 }
 
 /// Benchmark outcome labels for one fixture's result (issue #83), matching
@@ -1571,12 +1610,25 @@ int _levenshteinDistance(String a, String b) {
 
 /// Runs the full comparison for one fixture: first pass
 /// (`callFirstPassCorrection`, the narrow simple first-pass client — issue
-/// #68), naturalness on the original text, naturalness on the first
-/// pass's own corrected text, the parallel merge (to determine whether a
-/// conflict exists), and —
-/// only when a conflict exists, matching runTwoPassCorrectionPipeline's
-/// own fallback-trigger condition — the fallback merge using the
-/// naturalness-on-first-pass result already fetched above.
+/// #68) and naturalness on the original text — *concurrently*, matching
+/// `runTwoPassCorrectionPipeline`'s own parallel phase (issue #98; both
+/// futures are created before either is awaited, same shape as production)
+/// — then naturalness on the first pass's own corrected text, the parallel
+/// merge (to determine whether a conflict exists), and — only when a
+/// conflict exists, matching production's own fallback-trigger condition —
+/// the fallback merge using the naturalness-on-first-pass result already
+/// fetched above.
+///
+/// Each of the three calls gets its own isolated [OpenAiChatCompletionsClient]
+/// (sharing [httpClient] for connection reuse, but each with its own
+/// private usage-collecting list) rather than one shared client/log pair.
+/// This matters specifically for the first two calls: they run
+/// concurrently, and [_trackedCall]'s "everything logged since I started"
+/// bookkeeping only gives each call the right [ChatCompletionsUsage]
+/// entries when nothing *else* can log into the same list while it's in
+/// flight — true for a private list, not guaranteed for one shared across
+/// concurrent calls. The fallback call isn't concurrent with anything, so
+/// isolating its list too is for consistency, not correctness.
 ///
 /// If any call fails partway through (a malformed model response, a
 /// network error), whatever latency/tokens/cost was spent before the
@@ -1585,14 +1637,14 @@ int _levenshteinDistance(String a, String b) {
 /// real money spent even on a fixture that ultimately failed. Critically,
 /// this includes the *failing* call's own spend, not just earlier calls
 /// that fully succeeded: a naturalness call can get a valid, billed HTTP
-/// response (recorded in [usageLog] the moment it arrives) and only then
-/// throw while parsing that response's JSON — see [_trackedCall], which
-/// records a phase's stats in a `finally` block so that always happens,
-/// on success or failure alike, rather than only after an `await`
-/// expression that might never finish normally.
+/// response (recorded the moment it arrives) and only then throw while
+/// parsing that response's JSON — see [_trackedCall], which records a
+/// phase's stats in a `finally` block so that always happens, on success
+/// or failure alike, rather than only after an `await` expression that
+/// might never finish normally.
 Future<FixtureResult> runFixture({
-  required OpenAiChatCompletionsClient client,
-  required List<ChatCompletionsUsage> usageLog,
+  required String apiKey,
+  required HttpClient httpClient,
   required String firstPassModel,
   required String naturalnessModel,
   required TwoPassFixture fixture,
@@ -1600,32 +1652,59 @@ Future<FixtureResult> runFixture({
   var firstPassStats = CallStats.zero;
   var naturalOriginalStats = CallStats.zero;
   var naturalFirstPassStats = CallStats.zero;
+  var parallelPhaseWallClockMs = 0;
 
   try {
-    final firstPassResponse = await _trackedCall(
-      usageLog,
+    final firstPassUsage = <ChatCompletionsUsage>[];
+    final naturalOriginalUsage = <ChatCompletionsUsage>[];
+    final firstPassClient = OpenAiChatCompletionsClient(
+      apiKey: apiKey,
+      httpClient: httpClient,
+      onUsage: firstPassUsage.add,
+    );
+    final naturalOriginalClient = OpenAiChatCompletionsClient(
+      apiKey: apiKey,
+      httpClient: httpClient,
+      onUsage: naturalOriginalUsage.add,
+    );
+
+    final parallelPhaseStopwatch = Stopwatch()..start();
+    // Both futures created before either is awaited — the same "start
+    // both, then await both" shape runTwoPassCorrectionPipeline itself
+    // uses for its own parallel phase.
+    final firstPassFuture = _trackedCall(
+      firstPassUsage,
       () => callFirstPassCorrection(
-        client: client,
+        client: firstPassClient,
         model: firstPassModel,
         submittedText: fixture.text,
       ),
       onStats: (stats) => firstPassStats = stats,
     );
-
-    final naturalnessOnOriginal = await _trackedCall(
-      usageLog,
+    final naturalnessOriginalFuture = _trackedCall(
+      naturalOriginalUsage,
       () => callNaturalnessReview(
-        client: client,
+        client: naturalOriginalClient,
         model: naturalnessModel,
         text: fixture.text,
       ),
       onStats: (stats) => naturalOriginalStats = stats,
     );
+    final firstPassResponse = await firstPassFuture;
+    final naturalnessOnOriginal = await naturalnessOriginalFuture;
+    parallelPhaseStopwatch.stop();
+    parallelPhaseWallClockMs = parallelPhaseStopwatch.elapsedMilliseconds;
 
+    final fallbackUsage = <ChatCompletionsUsage>[];
+    final fallbackClient = OpenAiChatCompletionsClient(
+      apiKey: apiKey,
+      httpClient: httpClient,
+      onUsage: fallbackUsage.add,
+    );
     final naturalnessOnFirstPass = await _trackedCall(
-      usageLog,
+      fallbackUsage,
       () => callNaturalnessReview(
-        client: client,
+        client: fallbackClient,
         model: naturalnessModel,
         text: firstPassResponse.correctedText,
       ),
@@ -1660,6 +1739,7 @@ Future<FixtureResult> runFixture({
       naturalnessOnOriginalStats: naturalOriginalStats,
       naturalnessOnFirstPass: naturalnessOnFirstPass,
       naturalnessOnFirstPassStats: naturalFirstPassStats,
+      parallelPhaseWallClockMs: parallelPhaseWallClockMs,
       hadConflict: hadConflict,
       usedFallback: hadConflict,
       finalCorrectedText: finalResponse.correctedText,
@@ -1943,6 +2023,11 @@ String buildReport({
         '${_formatCost(result.naturalnessOnOriginalStats.costUsd)} |',
       )
       ..writeln(
+        '| Parallel phase wall-clock (first pass + naturalness, '
+        'concurrent — issue #98) | ${result.parallelPhaseWallClockMs} | '
+        '— | — |',
+      )
+      ..writeln(
         '| Naturalness (first-pass corrected) | '
         '${result.naturalnessOnFirstPassStats.wallClockMs} | '
         '${result.naturalnessOnFirstPassStats.totalTokens} | '
@@ -2065,8 +2150,11 @@ const String defaultTwoPassProductionOutputPath =
 /// Classifies whether the fallback naturalness pass would have run in
 /// production for [result], and if so what happened — derived entirely
 /// from data [runFixture] already collects for the diagnostic report, not
-/// from a second live run (issue #97's POC scope: report-derivation only,
-/// no change to the call pattern [runFixture] itself makes).
+/// from a second live run (issue #97's POC scope). [runFixture] still only
+/// calls this fallback naturalness pass unconditionally for diagnostic
+/// comparison purposes; issue #98 changed *how* the first two calls are
+/// timed and attributed (concurrently, with isolated usage collectors),
+/// not whether this third call happens.
 enum TwoPassFallbackOutcome {
   /// The parallel merge had no skipped edits — production would never call
   /// fallback for this fixture (`runTwoPassCorrectionPipeline`'s own
@@ -2125,23 +2213,28 @@ TwoPassFallbackOutcome classifyFallbackOutcome(FixtureResult result) {
 
 /// Derives the production-equivalent [CallStats] for [result]: the first
 /// pass and naturalness-on-original are always spent (production runs
-/// both — see `runTwoPassCorrectionPipeline`), but the fallback
-/// naturalness-on-first-pass call is only counted when
+/// both, concurrently — see `runTwoPassCorrectionPipeline`), but the
+/// fallback naturalness-on-first-pass call is only counted when
 /// [FixtureResult.hadConflict] is true, matching production's own
 /// conditional fallback trigger exactly.
 ///
-/// POC caveat (issue #97): this sums the diagnostic run's own sequential
-/// call latencies rather than re-measuring a true parallel run, so the
-/// latency component is an upper-bound approximation of production's real
-/// wall-clock time, not a faithful reproduction of it — first pass and
-/// naturalness-on-original run *concurrently* in production, not
-/// sequentially. Token/cost totals are unaffected by this, since they
-/// don't depend on call scheduling. The same caveat is surfaced in
-/// [buildProductionModeReport]'s own header for a report reader.
+/// Latency uses [FixtureResult.parallelPhaseWallClockMs] — the real
+/// measured wall-clock time for the concurrent first-pass +
+/// naturalness-on-original phase [runFixture] times directly (issue #98)
+/// — plus the fallback call's own latency when it was needed, rather than
+/// summing every per-call latency as if the calls ran one after another.
+/// Tokens and cost are unaffected by call scheduling, so those stay a
+/// straightforward sum.
 CallStats productionStatsFor(FixtureResult result) {
-  return result.hadConflict
-      ? result.totalStats
+  final tokensAndCost = result.hadConflict
+      ? result.firstPassStats + result.naturalnessOnOriginalStats + result.naturalnessOnFirstPassStats
       : result.firstPassStats + result.naturalnessOnOriginalStats;
+  return CallStats(
+    wallClockMs: result.parallelPhaseWallClockMs +
+        (result.hadConflict ? result.naturalnessOnFirstPassStats.wallClockMs : 0),
+    totalTokens: tokensAndCost.totalTokens,
+    costUsd: tokensAndCost.costUsd,
+  );
 }
 
 /// The number of API calls production would have made for [result]: 2
@@ -2150,13 +2243,12 @@ CallStats productionStatsFor(FixtureResult result) {
 int productionApiCallCount(FixtureResult result) =>
     result.hadConflict ? 3 : 2;
 
-/// Builds the production-style report for [results] (issue #97's POC): the
-/// same fixture run [buildReport] already reports on, reinterpreted
-/// through production's own call-skipping rule instead of the diagnostic
-/// harness's always-call-both-naturalness-passes behavior. Emitted from
-/// the same live run as [buildReport] — no extra API calls. See
-/// [productionStatsFor]'s doc comment for this report's one known fidelity
-/// gap (sequential-sum latency, not true parallel timing).
+/// Builds the production-style report for [results] (issue #97's POC,
+/// timing fixed by issue #98): the same fixture run [buildReport] already
+/// reports on, reinterpreted through production's own call-skipping rule
+/// instead of the diagnostic harness's always-call-both-naturalness-passes
+/// behavior. Emitted from the same live run as [buildReport] — no extra
+/// API calls.
 String buildProductionModeReport({
   required String firstPassModel,
   required String naturalnessModel,
@@ -2165,7 +2257,7 @@ String buildProductionModeReport({
   String fixtureSelection = 'all',
 }) {
   final buffer = StringBuffer()
-    ..writeln('# Two-Pass Production-Style Benchmark (issue #97 POC)')
+    ..writeln('# Two-Pass Production-Style Benchmark (issues #97/#98 POC)')
     ..writeln()
     ..writeln(
       'Derived from the same live run as `docs/two_pass_integration_harness.md` '
@@ -2178,14 +2270,15 @@ String buildProductionModeReport({
     )
     ..writeln()
     ..writeln(
-      '**Known fidelity gap**: the latency figures below sum this run\'s '
-      'own sequential call timings. Production runs the first pass and '
-      'naturalness-on-original *concurrently*, so real production latency '
-      'for a no-fallback fixture is closer to `max(first pass, '
-      'naturalness)` than the sum shown here — treat latency as an upper '
-      'bound, not a faithful reproduction of production wall-clock time. '
-      'Token and cost totals are unaffected (they don\'t depend on call '
-      'scheduling).',
+      '**Latency methodology (issue #98)**: the first pass and '
+      'naturalness-on-original calls are started concurrently — mirroring '
+      '`runTwoPassCorrectionPipeline`\'s own parallel phase — and the '
+      '"Parallel phase wall-clock" figures below are the real measured '
+      'time from starting both to both completing, not a sum of their '
+      'individual latencies. Fallback latency is added only for fixtures '
+      'where it was actually needed. Per-call latency for the first pass '
+      'and naturalness-on-original individually is still shown alongside '
+      'the parallel-phase figure, for debugging which call is slower.',
     )
     ..writeln()
     ..writeln('## Run configuration')
@@ -2250,6 +2343,10 @@ String buildProductionModeReport({
         '${result.naturalnessOnOriginalStats.wallClockMs} | '
         '${result.naturalnessOnOriginalStats.totalTokens} | '
         '${_formatCost(result.naturalnessOnOriginalStats.costUsd)} |',
+      )
+      ..writeln(
+        '| Parallel phase wall-clock (first pass + naturalness, '
+        'concurrent) | ${result.parallelPhaseWallClockMs} | — | — |',
       )
       ..writeln(
         '| Fallback (conditional) | '
@@ -2393,6 +2490,7 @@ FixtureResult _fakeResult(
     naturalnessOnOriginalStats: CallStats.zero,
     naturalnessOnFirstPass: emptyReview,
     naturalnessOnFirstPassStats: CallStats.zero,
+    parallelPhaseWallClockMs: 0,
     hadConflict: false,
     usedFallback: false,
     finalCorrectedText: finalCorrectedText,
@@ -2719,6 +2817,72 @@ void main() {
       },
     );
 
+    test(
+      'two concurrent _trackedCall invocations, each given its own '
+      'isolated usage list, do not cross-contaminate each other\'s usage '
+      'attribution — the pattern runFixture now relies on for its '
+      'concurrent first-pass/naturalness-on-original phase (issue #98). '
+      'A single *shared* list here would let the slower call\'s '
+      'sublist(start) slice pick up entries the faster, already-finished '
+      'call logged after the slower one had already captured its start '
+      'index — this proves isolated lists avoid that.',
+      () async {
+        final firstPassUsage = <ChatCompletionsUsage>[];
+        final naturalnessUsage = <ChatCompletionsUsage>[];
+        CallStats? firstPassCaptured;
+        CallStats? naturalnessCaptured;
+
+        // Deliberately finishes *second* despite being awaited *first*
+        // below, forcing real interleaving: by the time the naturalness
+        // call's usage is logged, the first-pass call is still in flight.
+        final firstPassFuture = _trackedCall(
+          firstPassUsage,
+          () async {
+            await Future<void>.delayed(const Duration(milliseconds: 30));
+            firstPassUsage.add(
+              const ChatCompletionsUsage(
+                stageLabel: 'first_pass_correction',
+                model: 'gpt-4.1',
+                latencyMs: 30,
+                promptTokens: 40,
+                completionTokens: 10,
+                totalTokens: 50,
+              ),
+            );
+            return 'first-pass-response';
+          },
+          onStats: (stats) => firstPassCaptured = stats,
+        );
+        final naturalnessFuture = _trackedCall(
+          naturalnessUsage,
+          () async {
+            naturalnessUsage.add(
+              const ChatCompletionsUsage(
+                stageLabel: 'naturalness_review',
+                model: 'gpt-5.1',
+                latencyMs: 5,
+                promptTokens: 5,
+                completionTokens: 5,
+                totalTokens: 10,
+              ),
+            );
+            return 'naturalness-response';
+          },
+          onStats: (stats) => naturalnessCaptured = stats,
+        );
+
+        final firstPassResult = await firstPassFuture;
+        final naturalnessResult = await naturalnessFuture;
+
+        expect(firstPassResult, 'first-pass-response');
+        expect(naturalnessResult, 'naturalness-response');
+        // Each call's own captured stats reflect only its own usage entry
+        // — not the other concurrent call's, and not both combined.
+        expect(firstPassCaptured!.totalTokens, 50);
+        expect(naturalnessCaptured!.totalTokens, 10);
+      },
+    );
+
     test('statsFor sums tokens and computes verified cost from the '
         'phase\'s own model', () {
       final stats = statsFor(
@@ -2796,6 +2960,7 @@ void main() {
               issues: [],
             ),
             naturalnessOnFirstPassStats: CallStats.zero,
+            parallelPhaseWallClockMs: 0,
             hadConflict: false,
             usedFallback: false,
             finalCorrectedText: 'Vi mucho tráfico ayer.',
@@ -2967,6 +3132,7 @@ void main() {
               issues: [],
             ),
             naturalnessOnFirstPassStats: CallStats.zero,
+            parallelPhaseWallClockMs: latencyMs,
             hadConflict: false,
             usedFallback: false,
             finalCorrectedText: fixture.expectedCorrectedText,
@@ -3431,6 +3597,12 @@ void main() {
         required String firstPassCorrectedText,
         required String finalCorrectedText,
         bool naturalnessOnFirstPassHasIssue = false,
+        // Deliberately less than firstPassStats.wallClockMs (500) +
+        // naturalnessOnOriginalStats.wallClockMs (700) = 1200 — issue #98's
+        // whole point is that the real parallel-phase wall-clock is not
+        // that sum, so a default equal to the sum would mask the fix
+        // rather than exercise it.
+        int parallelPhaseWallClockMs = 650,
       }) {
         return FixtureResult(
           fixture: fixture,
@@ -3466,6 +3638,7 @@ void main() {
             totalTokens: 200,
             costUsd: 0.002,
           ),
+          parallelPhaseWallClockMs: parallelPhaseWallClockMs,
           hadConflict: hadConflict,
           usedFallback: hadConflict,
           finalCorrectedText: finalCorrectedText,
@@ -3545,16 +3718,21 @@ void main() {
 
       test(
         'productionStatsFor excludes the fallback call when no conflict '
-        'occurred',
+        'occurred, and uses the measured parallel-phase wall-clock rather '
+        'than summing the first-pass and naturalness-on-original '
+        'latencies (issue #98)',
         () {
           final result = resultWith(
             fixture: fixture,
             hadConflict: false,
             firstPassCorrectedText: 'a',
             finalCorrectedText: 'a',
+            parallelPhaseWallClockMs: 650,
           );
           final stats = productionStatsFor(result);
-          expect(stats.wallClockMs, 500 + 700);
+          // Not 500 + 700 (the naive sequential-sum figure this issue
+          // replaces) — the real measured concurrent-phase time instead.
+          expect(stats.wallClockMs, 650);
           expect(stats.totalTokens, 100 + 150);
           expect(productionApiCallCount(result), 2);
         },
@@ -3562,18 +3740,53 @@ void main() {
 
       test(
         'productionStatsFor includes the fallback call when a conflict '
-        'occurred',
+        'occurred, adding fallback latency on top of the parallel-phase '
+        'wall-clock rather than the naive per-call sum (issue #98)',
         () {
           final result = resultWith(
             fixture: fixture,
             hadConflict: true,
             firstPassCorrectedText: 'a',
             finalCorrectedText: 'b',
+            parallelPhaseWallClockMs: 650,
           );
           final stats = productionStatsFor(result);
-          expect(stats.wallClockMs, 500 + 700 + 900);
+          // Not 500 + 700 + 900 — parallel-phase wall-clock (650) plus
+          // fallback latency (900) only.
+          expect(stats.wallClockMs, 650 + 900);
           expect(stats.totalTokens, 100 + 150 + 200);
           expect(productionApiCallCount(result), 3);
+        },
+      );
+
+      test(
+        'parallel-phase wall-clock can be shorter than either individual '
+        'call\'s own latency would suggest when summed — proving '
+        'productionStatsFor and totalStats really do use the measured '
+        'concurrent-phase time, not first-pass-latency + '
+        'naturalness-latency (issue #98)',
+        () {
+          // firstPassStats.wallClockMs=500 and naturalnessOnOriginalStats.
+          // wallClockMs=700 (resultWith's fixed values) sum to 1200; a
+          // parallel-phase figure below the *smaller* of the two (500)
+          // would be physically impossible for two calls that really ran
+          // concurrently, so 300 here is deliberately implausible — it
+          // exists purely to prove the formula reads
+          // parallelPhaseWallClockMs directly rather than deriving
+          // anything from the per-call CallStats.
+          final result = resultWith(
+            fixture: fixture,
+            hadConflict: false,
+            firstPassCorrectedText: 'a',
+            finalCorrectedText: 'a',
+            parallelPhaseWallClockMs: 300,
+          );
+          expect(productionStatsFor(result).wallClockMs, 300);
+          expect(result.totalStats.wallClockMs, 300 + 900);
+          // Per-call timing must still be available for debugging,
+          // unchanged by the parallel-phase figure existing alongside it.
+          expect(result.firstPassStats.wallClockMs, 500);
+          expect(result.naturalnessOnOriginalStats.wallClockMs, 700);
         },
       );
 
@@ -3745,12 +3958,12 @@ void main() {
       selectedCount: selectedFixtures.length,
     );
 
-    final usageLog = <ChatCompletionsUsage>[];
-    final client = OpenAiChatCompletionsClient(
-      apiKey: apiKey,
-      httpClient: HttpClient(),
-      onUsage: usageLog.add,
-    );
+    // Issue #98: one shared HttpClient (connection reuse is fine — it's
+    // designed for concurrent requests), but no shared usage-collecting
+    // list or client instance — runFixture builds its own isolated
+    // per-call clients so its concurrent first-pass/naturalness-on-original
+    // phase can't cross-contaminate usage attribution between them.
+    final httpClient = HttpClient();
 
     final results = <FixtureResult>[];
     for (final fixture in selectedFixtures) {
@@ -3762,8 +3975,8 @@ void main() {
       // for every other fixture.
       try {
         final result = await runFixture(
-          client: client,
-          usageLog: usageLog,
+          apiKey: apiKey,
+          httpClient: httpClient,
           firstPassModel: firstPassModel,
           naturalnessModel: naturalnessModel,
           fixture: fixture,
