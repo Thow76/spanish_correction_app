@@ -321,3 +321,11 @@ Follow-up:
 - For mixed failures, record whether the failure belongs to first pass, naturalness/fallback, merge behavior, or benchmark scoring.
 - Add a focused comparison between a simple repeated-pronoun case and the mixed missing-preposition-plus-repeated-pronoun case to see whether the first pass misses pronoun deletion only when another correction is present.
 - Consider rewriting semantically odd mixed fixtures so they still test the same operations but do not invite coherence repair from the naturalness pass.
+
+## Prompt/contract audit: first pass, naturalness, and fallback
+
+Full writeup moved to a dedicated file rather than kept here: `docs/two_pass_prompt_contract_audit.md`.
+
+Confirms the fallback pass has no prompt of its own — it reuses `naturalnessReviewSpanish` (the same prompt and client as the parallel naturalness call) against the first pass's own corrected text, with no framing telling the model it's a rerun. Lays out where each prompt is defined, exact input text and output schema per pass, when each runs in production vs. the diagnostic harness, and connects four recurring failure patterns (naturalness over-rewriting correct first-pass output, slash-separated alternatives, first pass straying into word-choice/naturalness territory, fallback changing meaning after the first pass already fixed objective errors) to specific gaps in the prompt text — cross-checked against both the diagnostic issue log and the production-style benchmark report, so these read as prompt-level issues, not artifacts of either report's own methodology.
+
+No prompts or production code changed as part of this audit — it's investigation only, with a possible follow-up prompt-change issue noted as a next step, not started here.

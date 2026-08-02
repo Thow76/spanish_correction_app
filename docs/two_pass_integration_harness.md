@@ -7,7 +7,7 @@
 - Naturalness model: `gpt-5.1`
 - Fixture selection: all (85 fixtures) (issue #85)
 - Fixture count: `85`
-- Generated: 2026-08-02T14:01:00.981686Z
+- Generated: 2026-08-02T22:29:36.945131Z
 
 ## Pricing
 
@@ -24,7 +24,7 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Vi mucho tráfico ayer.`
 - First-pass corrected text: `Vi mucho tráfico ayer.`
-- Naturalness on original text: trafico -> tráfico
+- Naturalness on original text: mucho trafico -> mucho tráfico
 - Naturalness on first-pass corrected text: Vi mucho tráfico ayer. -> Había mucho tráfico ayer.
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -34,10 +34,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 739 | 153 | $0.000372 |
-| Naturalness (original) | 2052 | 384 | $0.001381 |
-| Naturalness (first-pass corrected) | 2135 | 399 | $0.001540 |
-| **Total** | 4926 | 936 | $0.003293 |
+| First pass | 1815 | 153 | $0.000372 |
+| Naturalness (original) | 3438 | 371 | $0.001251 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 3440 | — | — |
+| Naturalness (first-pass corrected) | 2048 | 390 | $0.001450 |
+| **Total** | 5488 | 914 | $0.003073 |
 
 ## naturalness-only
 
@@ -58,10 +59,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 502 | 156 | $0.000390 |
-| Naturalness (original) | 1878 | 374 | $0.001273 |
-| Naturalness (first-pass corrected) | 930 | 311 | $0.000643 |
-| **Total** | 3310 | 841 | $0.002305 |
+| First pass | 807 | 156 | $0.000390 |
+| Naturalness (original) | 1789 | 370 | $0.001233 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1790 | — | — |
+| Naturalness (first-pass corrected) | 1095 | 311 | $0.000643 |
+| **Total** | 2885 | 837 | $0.002265 |
 
 ## grammar-and-naturalness-independent
 
@@ -72,7 +74,7 @@ Verified estimated costs use:
 - Expected owner: either
 - Expected corrected text: `El profesor dijo que debía estudiar más, y ella tomó una decisión importante.`
 - First-pass corrected text: `El profesor dijo que debía estudiar más, y ella tomó una decisión importante.`
-- Naturalness on original text: hizo una decisión importante -> tomó una decisión importante
+- Naturalness on original text: hizo una decisión -> tomó una decisión
 - Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -82,10 +84,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 728 | 172 | $0.000470 |
-| Naturalness (original) | 1948 | 393 | $0.001392 |
-| Naturalness (first-pass corrected) | 1021 | 319 | $0.000652 |
-| **Total** | 3697 | 884 | $0.002515 |
+| First pass | 918 | 172 | $0.000470 |
+| Naturalness (original) | 1469 | 384 | $0.001302 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1469 | — | — |
+| Naturalness (first-pass corrected) | 1128 | 319 | $0.000652 |
+| **Total** | 2597 | 875 | $0.002425 |
 
 ## grammar-overlaps-naturalness
 
@@ -97,7 +100,7 @@ Verified estimated costs use:
 - Expected corrected text: `Ayer tomó una decisión importante.`
 - First-pass corrected text: `Ayer hizo una decisión importante.`
 - Naturalness on original text: iso una decisión -> tomó una decisión
-- Naturalness on first-pass corrected text: hizo una decisión -> tomó una decisión
+- Naturalness on first-pass corrected text: hizo una decisión importante -> tomó una decisión importante
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
 - Final merged output: `Ayer tomó una decisión importante.`
@@ -106,10 +109,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 681 | 156 | $0.000390 |
-| Naturalness (original) | 1946 | 372 | $0.001253 |
-| Naturalness (first-pass corrected) | 1740 | 373 | $0.001263 |
-| **Total** | 4367 | 901 | $0.002905 |
+| First pass | 570 | 156 | $0.000390 |
+| Naturalness (original) | 1764 | 377 | $0.001303 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1765 | — | — |
+| Naturalness (first-pass corrected) | 1952 | 399 | $0.001522 |
+| **Total** | 3717 | 932 | $0.003215 |
 
 ## ambiguous-naturalness-span
 
@@ -120,20 +124,21 @@ Verified estimated costs use:
 - Expected owner: no_change
 - Expected corrected text: `Vi mucho tráfico, y luego vi más tráfico.`
 - First-pass corrected text: `Vi mucho tráfico, y luego vi más tráfico.`
-- Naturalness on original text: Vi mucho tráfico, y luego vi más tráfico. -> Había mucho tráfico, y luego había todavía más.
+- Naturalness on original text: Vi mucho tráfico, y luego vi más tráfico. -> Había mucho tráfico, y luego todavía más.
 - Naturalness on first-pass corrected text: Vi mucho tráfico, y luego vi más tráfico. -> Había mucho tráfico, y luego todavía más.
 - Conflict (parallel merge had a skipped edit): false
 - Fallback used: false
-- Final merged output: `Había mucho tráfico, y luego había todavía más.`
+- Final merged output: `Había mucho tráfico, y luego todavía más.`
 - Final correction count: 1
 - Score: overcorrection
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 497 | 162 | $0.000420 |
-| Naturalness (original) | 2435 | 429 | $0.001796 |
-| Naturalness (first-pass corrected) | 2560 | 421 | $0.001716 |
-| **Total** | 5492 | 1012 | $0.003933 |
+| First pass | 672 | 162 | $0.000420 |
+| Naturalness (original) | 2383 | 416 | $0.001666 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2384 | — | — |
+| Naturalness (first-pass corrected) | 2894 | 399 | $0.001496 |
+| **Total** | 5278 | 977 | $0.003583 |
 
 ## accent-manana
 
@@ -154,10 +159,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 677 | 158 | $0.000400 |
-| Naturalness (original) | 1177 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 972 | 312 | $0.000644 |
-| **Total** | 2826 | 782 | $0.001687 |
+| First pass | 745 | 158 | $0.000400 |
+| Naturalness (original) | 1183 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1184 | — | — |
+| Naturalness (first-pass corrected) | 1139 | 312 | $0.000644 |
+| **Total** | 2323 | 782 | $0.001687 |
 
 ## accent-medico
 
@@ -178,10 +184,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 579 | 159 | $0.000402 |
-| Naturalness (original) | 1230 | 313 | $0.000645 |
-| Naturalness (first-pass corrected) | 1020 | 312 | $0.000644 |
-| **Total** | 2829 | 784 | $0.001691 |
+| First pass | 680 | 159 | $0.000402 |
+| Naturalness (original) | 984 | 313 | $0.000645 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 984 | — | — |
+| Naturalness (first-pass corrected) | 1023 | 312 | $0.000644 |
+| **Total** | 2007 | 784 | $0.001691 |
 
 ## accent-espana-pais
 
@@ -202,10 +209,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 683 | 157 | $0.000392 |
-| Naturalness (original) | 2251 | 388 | $0.001404 |
-| Naturalness (first-pass corrected) | 1898 | 311 | $0.000643 |
-| **Total** | 4832 | 856 | $0.002438 |
+| First pass | 576 | 157 | $0.000392 |
+| Naturalness (original) | 1601 | 354 | $0.001064 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1602 | — | — |
+| Naturalness (first-pass corrected) | 1024 | 311 | $0.000643 |
+| **Total** | 2626 | 822 | $0.002098 |
 
 ## accent-cumpleanos-otono
 
@@ -226,10 +234,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 525 | 156 | $0.000384 |
-| Naturalness (original) | 3378 | 456 | $0.002084 |
-| Naturalness (first-pass corrected) | 1023 | 310 | $0.000641 |
-| **Total** | 4926 | 922 | $0.003109 |
+| First pass | 679 | 156 | $0.000384 |
+| Naturalness (original) | 2520 | 455 | $0.002074 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2521 | — | — |
+| Naturalness (first-pass corrected) | 1024 | 310 | $0.000641 |
+| **Total** | 3545 | 921 | $0.003099 |
 
 ## accent-cafe-cafeteria
 
@@ -250,10 +259,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 577 | 159 | $0.000408 |
-| Naturalness (original) | 3687 | 525 | $0.002774 |
-| Naturalness (first-pass corrected) | 972 | 313 | $0.000645 |
-| **Total** | 5236 | 997 | $0.003827 |
+| First pass | 674 | 159 | $0.000408 |
+| Naturalness (original) | 3036 | 508 | $0.002604 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 3036 | — | — |
+| Naturalness (first-pass corrected) | 1019 | 313 | $0.000645 |
+| **Total** | 4055 | 980 | $0.003657 |
 
 ## agreement-ninos-manzanas
 
@@ -274,10 +284,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 663 | 157 | $0.000398 |
-| Naturalness (original) | 1190 | 311 | $0.000643 |
-| Naturalness (first-pass corrected) | 1336 | 312 | $0.000644 |
-| **Total** | 3189 | 780 | $0.001684 |
+| First pass | 620 | 157 | $0.000398 |
+| Naturalness (original) | 1110 | 311 | $0.000643 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1111 | — | — |
+| Naturalness (first-pass corrected) | 1419 | 312 | $0.000644 |
+| **Total** | 2530 | 780 | $0.001684 |
 
 ## agreement-ventanas-abiertas
 
@@ -298,10 +309,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 609 | 152 | $0.000370 |
-| Naturalness (original) | 992 | 309 | $0.000640 |
-| Naturalness (first-pass corrected) | 2063 | 309 | $0.000640 |
-| **Total** | 3664 | 770 | $0.001650 |
+| First pass | 576 | 152 | $0.000370 |
+| Naturalness (original) | 1087 | 309 | $0.000640 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1088 | — | — |
+| Naturalness (first-pass corrected) | 1125 | 309 | $0.000640 |
+| **Total** | 2213 | 770 | $0.001650 |
 
 ## agreement-puerta-cerrada
 
@@ -312,20 +324,21 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Una puerta estaba cerrada.`
 - First-pass corrected text: `Una puerta estaba cerrada.`
-- Naturalness on original text: (none)
+- Naturalness on original text: estaba cerrado -> estaba cerrada
 - Naturalness on first-pass corrected text: (none)
-- Conflict (parallel merge had a skipped edit): false
-- Fallback used: false
+- Conflict (parallel merge had a skipped edit): true
+- Fallback used: true
 - Final merged output: `Una puerta estaba cerrada.`
 - Final correction count: 0
 - Score: correct_fix
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 671 | 153 | $0.000378 |
-| Naturalness (original) | 1505 | 309 | $0.000640 |
-| Naturalness (first-pass corrected) | 1036 | 310 | $0.000641 |
-| **Total** | 3212 | 772 | $0.001659 |
+| First pass | 682 | 153 | $0.000378 |
+| Naturalness (original) | 2421 | 381 | $0.001360 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2422 | — | — |
+| Naturalness (first-pass corrected) | 1331 | 310 | $0.000641 |
+| **Total** | 3753 | 844 | $0.002379 |
 
 ## agreement-billetes-caros
 
@@ -346,10 +359,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 587 | 154 | $0.000380 |
-| Naturalness (original) | 947 | 310 | $0.000641 |
-| Naturalness (first-pass corrected) | 1001 | 310 | $0.000641 |
-| **Total** | 2535 | 774 | $0.001662 |
+| First pass | 577 | 154 | $0.000380 |
+| Naturalness (original) | 1499 | 310 | $0.000641 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1499 | — | — |
+| Naturalness (first-pass corrected) | 1023 | 310 | $0.000641 |
+| **Total** | 2522 | 774 | $0.001662 |
 
 ## agreement-fechas-escritas
 
@@ -360,7 +374,7 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Las fechas estaban escritas sin tilde.`
 - First-pass corrected text: `Las fechas estaban escritas sin tilde.`
-- Naturalness on original text: estaban escrito -> estaban escritas
+- Naturalness on original text: Las fechas estaban escrito -> Las fechas estaban escritas
 - Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -370,10 +384,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 586 | 159 | $0.000408 |
-| Naturalness (original) | 2550 | 392 | $0.001444 |
-| Naturalness (first-pass corrected) | 1147 | 313 | $0.000645 |
-| **Total** | 4283 | 864 | $0.002497 |
+| First pass | 575 | 159 | $0.000408 |
+| Naturalness (original) | 1650 | 379 | $0.001314 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1651 | — | — |
+| Naturalness (first-pass corrected) | 970 | 313 | $0.000645 |
+| **Total** | 2621 | 851 | $0.002367 |
 
 ## verb-nosotros-fuimos
 
@@ -394,10 +409,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 569 | 161 | $0.000418 |
-| Naturalness (original) | 975 | 313 | $0.000645 |
-| Naturalness (first-pass corrected) | 907 | 314 | $0.000646 |
-| **Total** | 2451 | 788 | $0.001709 |
+| First pass | 906 | 161 | $0.000418 |
+| Naturalness (original) | 1106 | 313 | $0.000645 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1107 | — | — |
+| Naturalness (first-pass corrected) | 1111 | 314 | $0.000646 |
+| **Total** | 2218 | 788 | $0.001709 |
 
 ## verb-ninos-comen
 
@@ -418,10 +434,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 527 | 156 | $0.000390 |
-| Naturalness (original) | 1025 | 311 | $0.000643 |
-| Naturalness (first-pass corrected) | 1428 | 311 | $0.000643 |
-| **Total** | 2980 | 778 | $0.001675 |
+| First pass | 779 | 156 | $0.000390 |
+| Naturalness (original) | 1191 | 311 | $0.000643 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1192 | — | — |
+| Naturalness (first-pass corrected) | 1026 | 311 | $0.000643 |
+| **Total** | 2218 | 778 | $0.001675 |
 
 ## verb-compre-pan
 
@@ -442,10 +459,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 536 | 159 | $0.000408 |
-| Naturalness (original) | 1058 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 1214 | 313 | $0.000645 |
-| **Total** | 2808 | 784 | $0.001697 |
+| First pass | 676 | 159 | $0.000408 |
+| Naturalness (original) | 1393 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1394 | — | — |
+| Naturalness (first-pass corrected) | 1226 | 313 | $0.000645 |
+| **Total** | 2620 | 784 | $0.001697 |
 
 ## verb-ellos-estudian
 
@@ -466,10 +484,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 704 | 158 | $0.000400 |
-| Naturalness (original) | 1137 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 1219 | 312 | $0.000644 |
-| **Total** | 3060 | 782 | $0.001687 |
+| First pass | 686 | 158 | $0.000400 |
+| Naturalness (original) | 1005 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1006 | — | — |
+| Naturalness (first-pass corrected) | 1144 | 312 | $0.000644 |
+| **Total** | 2150 | 782 | $0.001687 |
 
 ## verb-nosotros-vivimos
 
@@ -480,20 +499,21 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Nosotros vivimos cerca del centro.`
 - First-pass corrected text: `Nosotros vivimos cerca del centro.`
-- Naturalness on original text: (none)
+- Naturalness on original text: Nosotros vive cerca del centro. -> Nosotros vivimos cerca del centro.
 - Naturalness on first-pass corrected text: (none)
-- Conflict (parallel merge had a skipped edit): false
-- Fallback used: false
+- Conflict (parallel merge had a skipped edit): true
+- Fallback used: true
 - Final merged output: `Nosotros vivimos cerca del centro.`
 - Final correction count: 0
 - Score: correct_fix
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 783 | 156 | $0.000390 |
-| Naturalness (original) | 1233 | 311 | $0.000643 |
-| Naturalness (first-pass corrected) | 1175 | 311 | $0.000643 |
-| **Total** | 3191 | 778 | $0.001675 |
+| First pass | 1192 | 156 | $0.000390 |
+| Naturalness (original) | 2393 | 408 | $0.001613 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2394 | — | — |
+| Naturalness (first-pass corrected) | 1121 | 311 | $0.000643 |
+| **Total** | 3515 | 875 | $0.002645 |
 
 ## prep-insisto-en
 
@@ -514,10 +534,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 604 | 159 | $0.000408 |
-| Naturalness (original) | 1876 | 399 | $0.001514 |
-| Naturalness (first-pass corrected) | 1117 | 313 | $0.000645 |
-| **Total** | 3597 | 871 | $0.002567 |
+| First pass | 689 | 159 | $0.000408 |
+| Naturalness (original) | 1909 | 390 | $0.001424 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1910 | — | — |
+| Naturalness (first-pass corrected) | 985 | 313 | $0.000645 |
+| **Total** | 2895 | 862 | $0.002477 |
 
 ## prep-empresa-en-la-que
 
@@ -529,19 +550,20 @@ Verified estimated costs use:
 - Expected corrected text: `La empresa en la que trabajo está cerca.`
 - First-pass corrected text: `La empresa en que trabajo está cerca.`
 - Naturalness on original text: La empresa que trabajo está cerca. -> La empresa donde trabajo está cerca.
-- Naturalness on first-pass corrected text: La empresa en que trabajo -> La empresa en la que trabajo
+- Naturalness on first-pass corrected text: La empresa en que trabajo está cerca. -> La empresa donde trabajo está cerca.
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
-- Final merged output: `La empresa en la que trabajo está cerca.`
+- Final merged output: `La empresa donde trabajo está cerca.`
 - Final correction count: 1
-- Score: correct_fix
+- Score: ambiguous
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 988 | 157 | $0.000398 |
-| Naturalness (original) | 2456 | 393 | $0.001463 |
-| Naturalness (first-pass corrected) | 2352 | 380 | $0.001324 |
-| **Total** | 5796 | 930 | $0.003184 |
+| First pass | 592 | 157 | $0.000398 |
+| Naturalness (original) | 2356 | 383 | $0.001362 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2357 | — | — |
+| Naturalness (first-pass corrected) | 2252 | 380 | $0.001324 |
+| **Total** | 4609 | 920 | $0.003084 |
 
 ## prep-dependo-de
 
@@ -562,10 +584,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 580 | 159 | $0.000408 |
-| Naturalness (original) | 1839 | 384 | $0.001364 |
-| Naturalness (first-pass corrected) | 1024 | 313 | $0.000645 |
-| **Total** | 3443 | 856 | $0.002417 |
+| First pass | 677 | 159 | $0.000408 |
+| Naturalness (original) | 2009 | 387 | $0.001394 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2010 | — | — |
+| Naturalness (first-pass corrected) | 1022 | 313 | $0.000645 |
+| **Total** | 3032 | 859 | $0.002447 |
 
 ## prep-pienso-en-ti
 
@@ -586,10 +609,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 531 | 157 | $0.000398 |
-| Naturalness (original) | 2057 | 381 | $0.001342 |
-| Naturalness (first-pass corrected) | 1063 | 312 | $0.000644 |
-| **Total** | 3651 | 850 | $0.002384 |
+| First pass | 581 | 157 | $0.000398 |
+| Naturalness (original) | 2014 | 384 | $0.001373 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2015 | — | — |
+| Naturalness (first-pass corrected) | 1135 | 312 | $0.000644 |
+| **Total** | 3150 | 853 | $0.002414 |
 
 ## prep-sone-con
 
@@ -610,10 +634,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 794 | 157 | $0.000398 |
-| Naturalness (original) | 2105 | 390 | $0.001433 |
-| Naturalness (first-pass corrected) | 1055 | 312 | $0.000644 |
-| **Total** | 3954 | 859 | $0.002474 |
+| First pass | 569 | 157 | $0.000398 |
+| Naturalness (original) | 1899 | 395 | $0.001482 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1900 | — | — |
+| Naturalness (first-pass corrected) | 2615 | 312 | $0.000644 |
+| **Total** | 4515 | 864 | $0.002524 |
 
 ## article-puerta-principal
 
@@ -634,10 +659,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 675 | 153 | $0.000378 |
-| Naturalness (original) | 1773 | 379 | $0.001340 |
-| Naturalness (first-pass corrected) | 993 | 310 | $0.000641 |
-| **Total** | 3441 | 842 | $0.002359 |
+| First pass | 694 | 153 | $0.000378 |
+| Naturalness (original) | 3289 | 374 | $0.001290 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 3289 | — | — |
+| Naturalness (first-pass corrected) | 1177 | 310 | $0.000641 |
+| **Total** | 4466 | 837 | $0.002309 |
 
 ## article-un-libro
 
@@ -658,10 +684,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 682 | 159 | $0.000408 |
-| Naturalness (original) | 2252 | 374 | $0.001264 |
-| Naturalness (first-pass corrected) | 1024 | 313 | $0.000645 |
-| **Total** | 3958 | 846 | $0.002317 |
+| First pass | 523 | 159 | $0.000408 |
+| Naturalness (original) | 2060 | 395 | $0.001474 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2060 | — | — |
+| Naturalness (first-pass corrected) | 975 | 313 | $0.000645 |
+| **Total** | 3035 | 867 | $0.002527 |
 
 ## article-el-profesor-la-regla
 
@@ -682,10 +709,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 579 | 156 | $0.000396 |
-| Naturalness (original) | 2033 | 393 | $0.001471 |
-| Naturalness (first-pass corrected) | 1138 | 312 | $0.000644 |
-| **Total** | 3750 | 861 | $0.002511 |
+| First pass | 525 | 156 | $0.000396 |
+| Naturalness (original) | 1955 | 377 | $0.001311 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1956 | — | — |
+| Naturalness (first-pass corrected) | 1367 | 312 | $0.000644 |
+| **Total** | 3323 | 845 | $0.002351 |
 
 ## article-la-tienda
 
@@ -706,10 +734,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 1031 | 159 | $0.000408 |
-| Naturalness (original) | 1598 | 369 | $0.001214 |
-| Naturalness (first-pass corrected) | 918 | 313 | $0.000645 |
-| **Total** | 3547 | 841 | $0.002267 |
+| First pass | 542 | 159 | $0.000408 |
+| Naturalness (original) | 2693 | 377 | $0.001294 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2694 | — | — |
+| Naturalness (first-pass corrected) | 1236 | 313 | $0.000645 |
+| **Total** | 3930 | 849 | $0.002347 |
 
 ## article-cita-medico
 
@@ -730,10 +759,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 988 | 155 | $0.000388 |
-| Naturalness (original) | 1739 | 380 | $0.001341 |
-| Naturalness (first-pass corrected) | 1146 | 311 | $0.000643 |
-| **Total** | 3873 | 846 | $0.002372 |
+| First pass | 773 | 155 | $0.000388 |
+| Naturalness (original) | 1900 | 368 | $0.001221 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1901 | — | — |
+| Naturalness (first-pass corrected) | 1332 | 311 | $0.000643 |
+| **Total** | 3233 | 834 | $0.002252 |
 
 ## subj-estudies
 
@@ -754,10 +784,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 574 | 154 | $0.000380 |
-| Naturalness (original) | 1011 | 310 | $0.000641 |
-| Naturalness (first-pass corrected) | 1130 | 310 | $0.000641 |
-| **Total** | 2715 | 774 | $0.001662 |
+| First pass | 561 | 154 | $0.000380 |
+| Naturalness (original) | 1143 | 310 | $0.000641 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1144 | — | — |
+| Naturalness (first-pass corrected) | 1067 | 310 | $0.000641 |
+| **Total** | 2211 | 774 | $0.001662 |
 
 ## subj-tenga-razon
 
@@ -778,10 +809,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 571 | 154 | $0.000380 |
-| Naturalness (original) | 2217 | 374 | $0.001281 |
-| Naturalness (first-pass corrected) | 957 | 310 | $0.000641 |
-| **Total** | 3745 | 838 | $0.002302 |
+| First pass | 737 | 154 | $0.000380 |
+| Naturalness (original) | 2424 | 398 | $0.001521 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2425 | — | — |
+| Naturalness (first-pass corrected) | 1125 | 310 | $0.000641 |
+| **Total** | 3550 | 862 | $0.002543 |
 
 ## subj-vengas
 
@@ -802,10 +834,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 491 | 156 | $0.000390 |
-| Naturalness (original) | 2238 | 389 | $0.001423 |
-| Naturalness (first-pass corrected) | 1330 | 311 | $0.000643 |
-| **Total** | 4059 | 856 | $0.002455 |
+| First pass | 679 | 156 | $0.000390 |
+| Naturalness (original) | 2728 | 386 | $0.001393 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2729 | — | — |
+| Naturalness (first-pass corrected) | 1328 | 311 | $0.000643 |
+| **Total** | 4057 | 853 | $0.002425 |
 
 ## subj-enviara
 
@@ -816,20 +849,21 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Era necesario que enviara su parte.`
 - First-pass corrected text: `Era necesario que enviara su parte.`
-- Naturalness on original text: Era necesario que enviaba su parte. -> Era necesario que enviara su parte.
-- Naturalness on first-pass corrected text: su parte -> su informe
+- Naturalness on original text: enviaba su parte -> enviara su parte
+- Naturalness on first-pass corrected text: su parte -> su informe / su reporte / su formulario (según el contexto)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
-- Final merged output: `Era necesario que enviara su informe.`
+- Final merged output: `Era necesario que enviara su informe / su reporte / su formulario (según el contexto).`
 - Final correction count: 1
 - Score: ambiguous
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 680 | 158 | $0.000400 |
-| Naturalness (original) | 2046 | 394 | $0.001464 |
-| Naturalness (first-pass corrected) | 2491 | 417 | $0.001694 |
-| **Total** | 5217 | 969 | $0.003557 |
+| First pass | 513 | 158 | $0.000400 |
+| Naturalness (original) | 2012 | 387 | $0.001394 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2013 | — | — |
+| Naturalness (first-pass corrected) | 3993 | 444 | $0.001964 |
+| **Total** | 6006 | 989 | $0.003758 |
 
 ## subj-hable-frances
 
@@ -850,10 +884,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 749 | 159 | $0.000408 |
-| Naturalness (original) | 3007 | 417 | $0.001694 |
-| Naturalness (first-pass corrected) | 1189 | 313 | $0.000645 |
-| **Total** | 4945 | 889 | $0.002747 |
+| First pass | 659 | 159 | $0.000408 |
+| Naturalness (original) | 3722 | 383 | $0.001354 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 3723 | — | — |
+| Naturalness (first-pass corrected) | 1156 | 313 | $0.000645 |
+| **Total** | 4879 | 855 | $0.002407 |
 
 ## missing-que-creo
 
@@ -874,10 +909,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 578 | 155 | $0.000388 |
-| Naturalness (original) | 1741 | 378 | $0.001321 |
-| Naturalness (first-pass corrected) | 1228 | 311 | $0.000643 |
-| **Total** | 3547 | 844 | $0.002352 |
+| First pass | 691 | 155 | $0.000388 |
+| Naturalness (original) | 2114 | 386 | $0.001401 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2114 | — | — |
+| Naturalness (first-pass corrected) | 981 | 311 | $0.000643 |
+| **Total** | 3095 | 852 | $0.002432 |
 
 ## missing-les-ninos
 
@@ -898,10 +934,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 679 | 157 | $0.000398 |
-| Naturalness (original) | 2253 | 407 | $0.001603 |
-| Naturalness (first-pass corrected) | 1025 | 312 | $0.000644 |
-| **Total** | 3957 | 876 | $0.002644 |
+| First pass | 619 | 157 | $0.000398 |
+| Naturalness (original) | 1985 | 386 | $0.001393 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1985 | — | — |
+| Naturalness (first-pass corrected) | 1162 | 312 | $0.000644 |
+| **Total** | 3147 | 855 | $0.002434 |
 
 ## missing-personal-a-profesor
 
@@ -922,10 +959,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 707 | 157 | $0.000398 |
-| Naturalness (original) | 2019 | 382 | $0.001352 |
-| Naturalness (first-pass corrected) | 1023 | 312 | $0.000644 |
-| **Total** | 3749 | 851 | $0.002394 |
+| First pass | 604 | 157 | $0.000398 |
+| Naturalness (original) | 2054 | 380 | $0.001332 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2055 | — | — |
+| Naturalness (first-pass corrected) | 1172 | 312 | $0.000644 |
+| **Total** | 3227 | 849 | $0.002374 |
 
 ## missing-se-levanto
 
@@ -946,10 +984,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 698 | 154 | $0.000380 |
-| Naturalness (original) | 2029 | 394 | $0.001481 |
-| Naturalness (first-pass corrected) | 1124 | 310 | $0.000641 |
-| **Total** | 3851 | 858 | $0.002502 |
+| First pass | 726 | 154 | $0.000380 |
+| Naturalness (original) | 2201 | 387 | $0.001411 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2201 | — | — |
+| Naturalness (first-pass corrected) | 972 | 310 | $0.000641 |
+| **Total** | 3173 | 851 | $0.002432 |
 
 ## missing-le-gusta
 
@@ -970,10 +1009,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 577 | 155 | $0.000388 |
-| Naturalness (original) | 2424 | 392 | $0.001461 |
-| Naturalness (first-pass corrected) | 1160 | 311 | $0.000643 |
-| **Total** | 4161 | 858 | $0.002492 |
+| First pass | 588 | 155 | $0.000388 |
+| Naturalness (original) | 1826 | 374 | $0.001281 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1827 | — | — |
+| Naturalness (first-pass corrected) | 1115 | 311 | $0.000643 |
+| **Total** | 2942 | 840 | $0.002312 |
 
 ## delete-repeated-yo-estudio
 
@@ -984,20 +1024,21 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Yo trabajo mucho y estudio por las noches.`
 - First-pass corrected text: `Yo trabajo mucho y yo estudio por las noches.`
-- Naturalness on original text: y yo estudio por las noches -> y estudio por las noches
+- Naturalness on original text: yo trabajo mucho y yo estudio por las noches -> trabajo mucho y estudio por las noches
 - Naturalness on first-pass corrected text: Yo trabajo mucho y yo estudio por las noches. -> Trabajo mucho y estudio por las noches.
-- Conflict (parallel merge had a skipped edit): false
-- Fallback used: false
-- Final merged output: `Yo trabajo mucho y estudio por las noches.`
+- Conflict (parallel merge had a skipped edit): true
+- Fallback used: true
+- Final merged output: `Trabajo mucho y estudio por las noches.`
 - Final correction count: 1
-- Score: correct_fix
+- Score: ambiguous
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 704 | 162 | $0.000420 |
-| Naturalness (original) | 1768 | 391 | $0.001416 |
-| Naturalness (first-pass corrected) | 1903 | 396 | $0.001466 |
-| **Total** | 4375 | 949 | $0.003302 |
+| First pass | 783 | 162 | $0.000420 |
+| Naturalness (original) | 1897 | 386 | $0.001366 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1898 | — | — |
+| Naturalness (first-pass corrected) | 2045 | 400 | $0.001506 |
+| **Total** | 3943 | 948 | $0.003293 |
 
 ## delete-repeated-ellos-visitaron
 
@@ -1008,20 +1049,21 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Ellos viajaron a México y visitaron varias ciudades.`
 - First-pass corrected text: `Ellos viajaron a México y ellos visitaron varias ciudades.`
-- Naturalness on original text: Ellos viajaron a México y ellos visitaron varias ciudades. -> Viajaron a México y visitaron varias ciudades.
+- Naturalness on original text: Ellos viajaron a México y ellos visitaron varias ciudades. -> Ellos viajaron a México y visitaron varias ciudades.
 - Naturalness on first-pass corrected text: Ellos viajaron a México y ellos visitaron varias ciudades. -> Viajaron a México y visitaron varias ciudades.
 - Conflict (parallel merge had a skipped edit): false
 - Fallback used: false
-- Final merged output: `Viajaron a México y visitaron varias ciudades.`
+- Final merged output: `Ellos viajaron a México y visitaron varias ciudades.`
 - Final correction count: 1
-- Score: ambiguous
+- Score: correct_fix
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 671 | 168 | $0.000450 |
-| Naturalness (original) | 1944 | 387 | $0.001350 |
-| Naturalness (first-pass corrected) | 2455 | 405 | $0.001530 |
-| **Total** | 5070 | 960 | $0.003330 |
+| First pass | 694 | 168 | $0.000450 |
+| Naturalness (original) | 1822 | 384 | $0.001320 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1823 | — | — |
+| Naturalness (first-pass corrected) | 2097 | 404 | $0.001520 |
+| **Total** | 3920 | 956 | $0.003290 |
 
 ## delete-repeated-a-mi
 
@@ -1042,10 +1084,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 588 | 158 | $0.000394 |
-| Naturalness (original) | 2040 | 391 | $0.001425 |
-| Naturalness (first-pass corrected) | 875 | 311 | $0.000643 |
-| **Total** | 3503 | 860 | $0.002462 |
+| First pass | 629 | 158 | $0.000394 |
+| Naturalness (original) | 2473 | 376 | $0.001275 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2473 | — | — |
+| Naturalness (first-pass corrected) | 1127 | 311 | $0.000643 |
+| **Total** | 3600 | 845 | $0.002312 |
 
 ## delete-repeated-yo-compre
 
@@ -1066,10 +1109,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 724 | 162 | $0.000420 |
-| Naturalness (original) | 2425 | 394 | $0.001446 |
-| Naturalness (first-pass corrected) | 1873 | 383 | $0.001336 |
-| **Total** | 5022 | 939 | $0.003203 |
+| First pass | 680 | 162 | $0.000420 |
+| Naturalness (original) | 2421 | 408 | $0.001586 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2422 | — | — |
+| Naturalness (first-pass corrected) | 2090 | 408 | $0.001586 |
+| **Total** | 4512 | 978 | $0.003593 |
 
 ## delete-repeated-nosotros
 
@@ -1090,10 +1134,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 719 | 166 | $0.000440 |
-| Naturalness (original) | 2065 | 404 | $0.001529 |
-| Naturalness (first-pass corrected) | 1787 | 395 | $0.001439 |
-| **Total** | 4571 | 965 | $0.003407 |
+| First pass | 639 | 166 | $0.000440 |
+| Naturalness (original) | 1966 | 400 | $0.001489 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1966 | — | — |
+| Naturalness (first-pass corrected) | 2673 | 396 | $0.001449 |
+| **Total** | 4639 | 962 | $0.003377 |
 
 ## ser-profesor
 
@@ -1114,10 +1159,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 655 | 152 | $0.000370 |
-| Naturalness (original) | 1662 | 372 | $0.001270 |
-| Naturalness (first-pass corrected) | 1432 | 309 | $0.000640 |
-| **Total** | 3749 | 833 | $0.002280 |
+| First pass | 671 | 152 | $0.000370 |
+| Naturalness (original) | 1888 | 355 | $0.001100 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1888 | — | — |
+| Naturalness (first-pass corrected) | 1137 | 309 | $0.000640 |
+| **Total** | 3025 | 816 | $0.002110 |
 
 ## haber-veinte-personas
 
@@ -1138,10 +1184,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 501 | 156 | $0.000390 |
-| Naturalness (original) | 1612 | 386 | $0.001393 |
-| Naturalness (first-pass corrected) | 1126 | 311 | $0.000643 |
-| **Total** | 3239 | 853 | $0.002425 |
+| First pass | 681 | 156 | $0.000390 |
+| Naturalness (original) | 1803 | 376 | $0.001293 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1804 | — | — |
+| Naturalness (first-pass corrected) | 895 | 311 | $0.000643 |
+| **Total** | 2699 | 843 | $0.002325 |
 
 ## ser-capital-madrid
 
@@ -1152,20 +1199,21 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Madrid es la capital de España.`
 - First-pass corrected text: `Madrid es la capital de España.`
-- Naturalness on original text: (none)
+- Naturalness on original text: está la capital de España -> es la capital de España
 - Naturalness on first-pass corrected text: (none)
-- Conflict (parallel merge had a skipped edit): false
-- Fallback used: false
+- Conflict (parallel merge had a skipped edit): true
+- Fallback used: true
 - Final merged output: `Madrid es la capital de España.`
 - Final correction count: 0
 - Score: correct_fix
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 680 | 156 | $0.000390 |
-| Naturalness (original) | 1127 | 311 | $0.000643 |
-| Naturalness (first-pass corrected) | 1061 | 311 | $0.000643 |
-| **Total** | 2868 | 778 | $0.001675 |
+| First pass | 902 | 156 | $0.000390 |
+| Naturalness (original) | 1937 | 383 | $0.001362 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1938 | — | — |
+| Naturalness (first-pass corrected) | 1024 | 311 | $0.000643 |
+| **Total** | 2962 | 850 | $0.002395 |
 
 ## estar-contento
 
@@ -1186,10 +1234,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 642 | 158 | $0.000400 |
-| Naturalness (original) | 933 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 1063 | 312 | $0.000644 |
-| **Total** | 2638 | 782 | $0.001687 |
+| First pass | 678 | 158 | $0.000400 |
+| Naturalness (original) | 987 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 988 | — | — |
+| Naturalness (first-pass corrected) | 1022 | 312 | $0.000644 |
+| **Total** | 2010 | 782 | $0.001687 |
 
 ## ser-reunion-segunda-planta
 
@@ -1201,7 +1250,7 @@ Verified estimated costs use:
 - Expected corrected text: `La reunión es en la segunda planta.`
 - First-pass corrected text: `La reunión es en la segunda planta.`
 - Naturalness on original text: (none)
-- Naturalness on first-pass corrected text: (none)
+- Naturalness on first-pass corrected text: segunda planta -> segundo piso
 - Conflict (parallel merge had a skipped edit): false
 - Fallback used: false
 - Final merged output: `La reunión es en la segunda planta.`
@@ -1210,10 +1259,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 534 | 158 | $0.000400 |
-| Naturalness (original) | 1133 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 1247 | 312 | $0.000644 |
-| **Total** | 2914 | 782 | $0.001687 |
+| First pass | 577 | 158 | $0.000400 |
+| Naturalness (original) | 1296 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1297 | — | — |
+| Naturalness (first-pass corrected) | 1945 | 406 | $0.001584 |
+| **Total** | 3242 | 876 | $0.002628 |
 
 ## haber-habia-personas
 
@@ -1234,10 +1284,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 645 | 158 | $0.000400 |
-| Naturalness (original) | 2605 | 391 | $0.001434 |
-| Naturalness (first-pass corrected) | 1060 | 312 | $0.000644 |
-| **Total** | 4310 | 861 | $0.002478 |
+| First pass | 784 | 158 | $0.000400 |
+| Naturalness (original) | 2122 | 398 | $0.001504 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2123 | — | — |
+| Naturalness (first-pass corrected) | 1217 | 312 | $0.000644 |
+| **Total** | 3340 | 868 | $0.002547 |
 
 ## haber-hubo-problemas
 
@@ -1248,7 +1299,7 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Hubo varios problemas durante la reunión.`
 - First-pass corrected text: `Hubo varios problemas durante la reunión.`
-- Naturalness on original text: Hubieron varios problemas -> Hubo varios problemas
+- Naturalness on original text: Hubieron varios problemas durante la reunión. -> Hubo varios problemas durante la reunión.
 - Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -1258,10 +1309,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 593 | 158 | $0.000400 |
-| Naturalness (original) | 1980 | 398 | $0.001504 |
-| Naturalness (first-pass corrected) | 893 | 312 | $0.000644 |
-| **Total** | 3466 | 868 | $0.002547 |
+| First pass | 691 | 158 | $0.000400 |
+| Naturalness (original) | 2730 | 400 | $0.001524 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2730 | — | — |
+| Naturalness (first-pass corrected) | 1025 | 312 | $0.000644 |
+| **Total** | 3755 | 870 | $0.002567 |
 
 ## se-venden-pisos
 
@@ -1272,7 +1324,7 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Se venden pisos en el centro.`
 - First-pass corrected text: `Se venden pisos en el centro.`
-- Naturalness on original text: Se vende pisos -> Se venden pisos / Se vende piso
+- Naturalness on original text: Se vende pisos -> Se venden pisos
 - Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -1282,10 +1334,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 782 | 156 | $0.000390 |
-| Naturalness (original) | 1969 | 385 | $0.001383 |
-| Naturalness (first-pass corrected) | 921 | 311 | $0.000643 |
-| **Total** | 3672 | 852 | $0.002415 |
+| First pass | 574 | 156 | $0.000390 |
+| Naturalness (original) | 1965 | 381 | $0.001342 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1965 | — | — |
+| Naturalness (first-pass corrected) | 1068 | 311 | $0.000643 |
+| **Total** | 3033 | 848 | $0.002375 |
 
 ## se-necesitan-voluntarios
 
@@ -1306,10 +1359,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 761 | 158 | $0.000400 |
-| Naturalness (original) | 1974 | 389 | $0.001414 |
-| Naturalness (first-pass corrected) | 991 | 312 | $0.000644 |
-| **Total** | 3726 | 859 | $0.002458 |
+| First pass | 682 | 158 | $0.000400 |
+| Naturalness (original) | 2331 | 384 | $0.001364 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2332 | — | — |
+| Naturalness (first-pass corrected) | 1125 | 312 | $0.000644 |
+| **Total** | 3457 | 854 | $0.002407 |
 
 ## haber-habia-cifras
 
@@ -1330,10 +1384,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 685 | 156 | $0.000390 |
-| Naturalness (original) | 2252 | 387 | $0.001403 |
-| Naturalness (first-pass corrected) | 1136 | 311 | $0.000643 |
-| **Total** | 4073 | 854 | $0.002435 |
+| First pass | 518 | 156 | $0.000390 |
+| Naturalness (original) | 1699 | 385 | $0.001383 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1700 | — | — |
+| Naturalness (first-pass corrected) | 1021 | 311 | $0.000643 |
+| **Total** | 2721 | 852 | $0.002415 |
 
 ## collocation-hacer-decision
 
@@ -1354,10 +1409,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 569 | 154 | $0.000380 |
-| Naturalness (original) | 1636 | 374 | $0.001281 |
-| Naturalness (first-pass corrected) | 1026 | 310 | $0.000641 |
-| **Total** | 3231 | 838 | $0.002302 |
+| First pass | 576 | 154 | $0.000380 |
+| Naturalness (original) | 1805 | 380 | $0.001341 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1805 | — | — |
+| Naturalness (first-pass corrected) | 1331 | 310 | $0.000641 |
+| **Total** | 3136 | 844 | $0.002363 |
 
 ## collocation-hacer-atencion
 
@@ -1378,10 +1434,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 578 | 152 | $0.000370 |
-| Naturalness (original) | 2077 | 365 | $0.001200 |
-| Naturalness (first-pass corrected) | 927 | 309 | $0.000640 |
-| **Total** | 3582 | 826 | $0.002210 |
+| First pass | 682 | 152 | $0.000370 |
+| Naturalness (original) | 2113 | 364 | $0.001190 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2114 | — | — |
+| Naturalness (first-pass corrected) | 1024 | 309 | $0.000640 |
+| **Total** | 3138 | 825 | $0.002200 |
 
 ## collocation-tomar-reunion
 
@@ -1392,7 +1449,7 @@ Verified estimated costs use:
 - Expected owner: either
 - Expected corrected text: `El equipo tuvo una reunión.`
 - First-pass corrected text: `El equipo tuvo una reunión.`
-- Naturalness on original text: tomó una reunión -> tuvo una reunión / se reunió
+- Naturalness on original text: tomó una reunión -> tuvo una reunión
 - Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -1402,10 +1459,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 713 | 154 | $0.000380 |
-| Naturalness (original) | 1633 | 382 | $0.001361 |
-| Naturalness (first-pass corrected) | 1032 | 310 | $0.000641 |
-| **Total** | 3378 | 846 | $0.002383 |
+| First pass | 594 | 154 | $0.000380 |
+| Naturalness (original) | 1807 | 384 | $0.001381 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1808 | — | — |
+| Naturalness (first-pass corrected) | 920 | 310 | $0.000641 |
+| **Total** | 2728 | 848 | $0.002402 |
 
 ## collocation-hacer-paseo
 
@@ -1426,10 +1484,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 709 | 152 | $0.000370 |
-| Naturalness (original) | 1864 | 385 | $0.001400 |
-| Naturalness (first-pass corrected) | 1573 | 366 | $0.001210 |
-| **Total** | 4146 | 903 | $0.002980 |
+| First pass | 783 | 152 | $0.000370 |
+| Naturalness (original) | 2162 | 386 | $0.001410 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2163 | — | — |
+| Naturalness (first-pass corrected) | 1998 | 377 | $0.001320 |
+| **Total** | 4161 | 915 | $0.003100 |
 
 ## collocation-hace-sentido
 
@@ -1439,21 +1498,22 @@ Verified estimated costs use:
 - Operation type: replacement
 - Expected owner: either
 - Expected corrected text: `Esto tiene sentido.`
-- First-pass corrected text: `Esto hace sentido.`
-- Naturalness on original text: Hace sentido -> Tiene sentido
-- Naturalness on first-pass corrected text: Esto hace sentido. -> Esto tiene sentido.
+- First-pass corrected text: `Esto tiene sentido.`
+- Naturalness on original text: hace sentido -> tiene sentido
+- Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
 - Final merged output: `Esto tiene sentido.`
-- Final correction count: 1
+- Final correction count: 0
 - Score: correct_fix
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 582 | 150 | $0.000360 |
-| Naturalness (original) | 1576 | 373 | $0.001289 |
-| Naturalness (first-pass corrected) | 1560 | 366 | $0.001219 |
-| **Total** | 3718 | 889 | $0.002868 |
+| First pass | 534 | 150 | $0.000360 |
+| Naturalness (original) | 1711 | 369 | $0.001249 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1712 | — | — |
+| Naturalness (first-pass corrected) | 1324 | 308 | $0.000639 |
+| **Total** | 3036 | 827 | $0.002247 |
 
 ## false-friend-atendio-universidad
 
@@ -1464,7 +1524,7 @@ Verified estimated costs use:
 - Expected owner: either
 - Expected corrected text: `Asistió a la universidad en Madrid.`
 - First-pass corrected text: `Asistió a la universidad en Madrid.`
-- Naturalness on original text: Atendió la universidad en Madrid -> Estudió en la universidad en Madrid
+- Naturalness on original text: Atendió la universidad en Madrid. -> Estudió en la universidad en Madrid.
 - Naturalness on first-pass corrected text: Asistió a la universidad en Madrid. -> Estudió en la universidad en Madrid.
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -1474,10 +1534,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 554 | 159 | $0.000408 |
-| Naturalness (original) | 1945 | 396 | $0.001484 |
-| Naturalness (first-pass corrected) | 1844 | 402 | $0.001535 |
-| **Total** | 4343 | 957 | $0.003427 |
+| First pass | 681 | 159 | $0.000408 |
+| Naturalness (original) | 2269 | 409 | $0.001614 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2270 | — | — |
+| Naturalness (first-pass corrected) | 2822 | 423 | $0.001745 |
+| **Total** | 5092 | 991 | $0.003767 |
 
 ## false-friend-aplico-trabajo
 
@@ -1487,21 +1548,22 @@ Verified estimated costs use:
 - Operation type: replacement
 - Expected owner: either
 - Expected corrected text: `Solicitó un trabajo.`
-- First-pass corrected text: `Aplicó a un trabajo.`
-- Naturalness on original text: Aplicó para un trabajo. -> Solicitó un trabajo.
-- Naturalness on first-pass corrected text: Aplicó a un trabajo. -> Se postuló a un trabajo.
-- Conflict (parallel merge had a skipped edit): true
-- Fallback used: true
-- Final merged output: `Se postuló a un trabajo.`
+- First-pass corrected text: `Aplicó para un trabajo.`
+- Naturalness on original text: Aplicó para un trabajo -> Solicitó un trabajo
+- Naturalness on first-pass corrected text: Aplicó para un trabajo. -> Solicitó un trabajo.
+- Conflict (parallel merge had a skipped edit): false
+- Fallback used: false
+- Final merged output: `Solicitó un trabajo.`
 - Final correction count: 1
-- Score: ambiguous
+- Score: correct_fix
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 552 | 154 | $0.000380 |
-| Naturalness (original) | 2277 | 423 | $0.001771 |
-| Naturalness (first-pass corrected) | 1947 | 388 | $0.001421 |
-| **Total** | 4776 | 965 | $0.003573 |
+| First pass | 2211 | 154 | $0.000380 |
+| Naturalness (original) | 2210 | 394 | $0.001481 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2211 | — | — |
+| Naturalness (first-pass corrected) | 2453 | 402 | $0.001561 |
+| **Total** | 4664 | 950 | $0.003423 |
 
 ## false-friend-realice
 
@@ -1512,7 +1574,7 @@ Verified estimated costs use:
 - Expected owner: either
 - Expected corrected text: `Me di cuenta de que estaba equivocado.`
 - First-pass corrected text: `Me di cuenta de que estaba equivocado.`
-- Naturalness on original text: Realicé que estaba equivocado. -> Me di cuenta de que estaba equivocado.
+- Naturalness on original text: Realicé que estaba equivocado -> Me di cuenta de que estaba equivocado
 - Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -1522,10 +1584,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 679 | 159 | $0.000408 |
-| Naturalness (original) | 1843 | 382 | $0.001344 |
-| Naturalness (first-pass corrected) | 1024 | 313 | $0.000645 |
-| **Total** | 3546 | 854 | $0.002397 |
+| First pass | 568 | 159 | $0.000408 |
+| Naturalness (original) | 1940 | 376 | $0.001284 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1941 | — | — |
+| Naturalness (first-pass corrected) | 992 | 313 | $0.000645 |
+| **Total** | 2933 | 848 | $0.002337 |
 
 ## false-friend-embarazado
 
@@ -1535,21 +1598,22 @@ Verified estimated costs use:
 - Operation type: replacement
 - Expected owner: either
 - Expected corrected text: `Me da vergüenza llegar tarde.`
-- First-pass corrected text: `Estoy apenado por llegar tarde.`
-- Naturalness on original text: Estoy embarazado por llegar tarde. -> Me da vergüenza haber llegado tarde.
-- Naturalness on first-pass corrected text: Estoy apenado por llegar tarde. -> Siento llegar tarde.
+- First-pass corrected text: `Estoy avergonzado por llegar tarde.`
+- Naturalness on original text: Estoy embarazado por llegar tarde. -> Me da vergüenza llegar tarde.
+- Naturalness on first-pass corrected text: Estoy avergonzado por llegar tarde. -> Me da vergüenza llegar tarde.
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
-- Final merged output: `Siento llegar tarde.`
+- Final merged output: `Me da vergüenza llegar tarde.`
 - Final correction count: 1
-- Score: partial_fix
+- Score: correct_fix
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 676 | 158 | $0.000400 |
-| Naturalness (original) | 2255 | 434 | $0.001864 |
-| Naturalness (first-pass corrected) | 1941 | 401 | $0.001534 |
-| **Total** | 4872 | 993 | $0.003798 |
+| First pass | 681 | 159 | $0.000408 |
+| Naturalness (original) | 2128 | 425 | $0.001774 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2129 | — | — |
+| Naturalness (first-pass corrected) | 2120 | 408 | $0.001595 |
+| **Total** | 4249 | 992 | $0.003777 |
 
 ## false-friend-actualmente-control
 
@@ -1570,10 +1634,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 682 | 152 | $0.000370 |
-| Naturalness (original) | 923 | 309 | $0.000640 |
-| Naturalness (first-pass corrected) | 1022 | 309 | $0.000640 |
-| **Total** | 2627 | 770 | $0.001650 |
+| First pass | 610 | 152 | $0.000370 |
+| Naturalness (original) | 1002 | 309 | $0.000640 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1002 | — | — |
+| Naturalness (first-pass corrected) | 1020 | 309 | $0.000640 |
+| **Total** | 2022 | 770 | $0.001650 |
 
 ## naturalness-buen-tiempo
 
@@ -1594,10 +1659,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 502 | 156 | $0.000390 |
-| Naturalness (original) | 1818 | 394 | $0.001472 |
-| Naturalness (first-pass corrected) | 2353 | 410 | $0.001632 |
-| **Total** | 4673 | 960 | $0.003495 |
+| First pass | 784 | 156 | $0.000390 |
+| Naturalness (original) | 1707 | 394 | $0.001472 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1707 | — | — |
+| Naturalness (first-pass corrected) | 1664 | 395 | $0.001482 |
+| **Total** | 3371 | 945 | $0.003345 |
 
 ## naturalness-corriendo-tarde
 
@@ -1608,20 +1674,21 @@ Verified estimated costs use:
 - Expected owner: naturalness
 - Expected corrected text: `Voy tarde a la reunión.`
 - First-pass corrected text: `Estoy llegando tarde para la reunión.`
-- Naturalness on original text: Estoy corriendo tarde para la reunión. -> Llego tarde a la reunión.
-- Naturalness on first-pass corrected text: Estoy llegando tarde para la reunión. -> Voy a llegar tarde a la reunión.
+- Naturalness on original text: Estoy corriendo tarde para la reunión. -> Voy tarde a la reunión.
+- Naturalness on first-pass corrected text: para la reunión -> a la reunión
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
-- Final merged output: `Voy a llegar tarde a la reunión.`
+- Final merged output: `Estoy llegando tarde a la reunión.`
 - Final correction count: 1
 - Score: partial_fix
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 697 | 157 | $0.000392 |
-| Naturalness (original) | 2253 | 398 | $0.001504 |
-| Naturalness (first-pass corrected) | 2304 | 422 | $0.001752 |
-| **Total** | 5254 | 977 | $0.003648 |
+| First pass | 528 | 157 | $0.000392 |
+| Naturalness (original) | 2088 | 389 | $0.001414 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2089 | — | — |
+| Naturalness (first-pass corrected) | 2065 | 380 | $0.001332 |
+| **Total** | 4154 | 926 | $0.003138 |
 
 ## naturalness-pasar-buen-tiempo
 
@@ -1642,10 +1709,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 637 | 156 | $0.000390 |
-| Naturalness (original) | 1920 | 387 | $0.001403 |
-| Naturalness (first-pass corrected) | 2160 | 392 | $0.001453 |
-| **Total** | 4717 | 935 | $0.003245 |
+| First pass | 661 | 156 | $0.000390 |
+| Naturalness (original) | 1582 | 397 | $0.001502 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1583 | — | — |
+| Naturalness (first-pass corrected) | 1945 | 401 | $0.001543 |
+| **Total** | 3528 | 954 | $0.003435 |
 
 ## naturalness-puedo-tener-cerveza
 
@@ -1656,20 +1724,21 @@ Verified estimated costs use:
 - Expected owner: naturalness
 - Expected corrected text: `¿Me pones una cerveza?`
 - First-pass corrected text: `¿Puedo tener una cerveza?`
-- Naturalness on original text: ¿Puedo tener una cerveza? -> ¿Me pones una cerveza? / ¿Me das una cerveza? / ¿Me pones una caña?
-- Naturalness on first-pass corrected text: ¿Puedo tener una cerveza? -> ¿Me pones una cerveza? / ¿Me traes una cerveza? / ¿Me das una cerveza?
+- Naturalness on original text: ¿Puedo tener una cerveza? -> ¿Me pones una cerveza? / ¿Me traes una cerveza? / ¿Me das una cerveza?
+- Naturalness on first-pass corrected text: ¿Puedo tener una cerveza? -> ¿Me pones / me pones una cerveza?; ¿Me das una cerveza?; ¿Me pones una cerveza, por favor?
 - Conflict (parallel merge had a skipped edit): false
 - Fallback used: false
-- Final merged output: `¿Me pones una cerveza? / ¿Me das una cerveza? / ¿Me pones una caña?`
+- Final merged output: `¿Me pones una cerveza? / ¿Me traes una cerveza? / ¿Me das una cerveza?`
 - Final correction count: 1
 - Score: ambiguous
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 712 | 156 | $0.000390 |
-| Naturalness (original) | 2722 | 451 | $0.002043 |
-| Naturalness (first-pass corrected) | 2559 | 431 | $0.001842 |
-| **Total** | 5993 | 1038 | $0.004275 |
+| First pass | 683 | 156 | $0.000390 |
+| Naturalness (original) | 2118 | 429 | $0.001822 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2119 | — | — |
+| Naturalness (first-pass corrected) | 2451 | 463 | $0.002162 |
+| **Total** | 4570 | 1048 | $0.004375 |
 
 ## naturalness-llamar-para-atras
 
@@ -1680,20 +1749,21 @@ Verified estimated costs use:
 - Expected owner: naturalness
 - Expected corrected text: `Te devuelvo la llamada.`
 - First-pass corrected text: `Te llamo para atrás.`
-- Naturalness on original text: Te llamo para atrás. -> Te devuelvo la llamada.
+- Naturalness on original text: Te llamo para atrás. -> Te devuelvo la llamada / Te llamo luego / Te vuelvo a llamar.
 - Naturalness on first-pass corrected text: Te llamo para atrás. -> Te devuelvo la llamada.
 - Conflict (parallel merge had a skipped edit): false
 - Fallback used: false
-- Final merged output: `Te devuelvo la llamada.`
+- Final merged output: `Te devuelvo la llamada / Te llamo luego / Te vuelvo a llamar.`
 - Final correction count: 1
-- Score: correct_fix
+- Score: ambiguous
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 681 | 154 | $0.000380 |
-| Naturalness (original) | 2364 | 415 | $0.001691 |
-| Naturalness (first-pass corrected) | 2037 | 400 | $0.001541 |
-| **Total** | 5082 | 969 | $0.003613 |
+| First pass | 577 | 154 | $0.000380 |
+| Naturalness (original) | 2070 | 413 | $0.001671 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2071 | — | — |
+| Naturalness (first-pass corrected) | 2298 | 408 | $0.001621 |
+| **Total** | 4369 | 975 | $0.003672 |
 
 ## regional-voy-para-casa
 
@@ -1703,21 +1773,22 @@ Verified estimated costs use:
 - Operation type: no_change
 - Expected owner: no_change
 - Expected corrected text: `Voy para casa ahora mismo.`
-- First-pass corrected text: `Voy para la casa ahora mismo.`
+- First-pass corrected text: `Voy a casa ahora mismo.`
 - Naturalness on original text: (none)
 - Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): false
 - Fallback used: false
-- Final merged output: `Voy para la casa ahora mismo.`
+- Final merged output: `Voy a casa ahora mismo.`
 - Final correction count: 0
 - Score: overcorrection
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 681 | 155 | $0.000388 |
-| Naturalness (original) | 986 | 310 | $0.000641 |
-| Naturalness (first-pass corrected) | 1163 | 311 | $0.000643 |
-| **Total** | 2830 | 776 | $0.001672 |
+| First pass | 679 | 154 | $0.000380 |
+| Naturalness (original) | 1135 | 310 | $0.000641 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1136 | — | — |
+| Naturalness (first-pass corrected) | 1077 | 310 | $0.000641 |
+| **Total** | 2213 | 774 | $0.001662 |
 
 ## regional-vos-tenes
 
@@ -1738,10 +1809,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 594 | 152 | $0.000370 |
-| Naturalness (original) | 979 | 309 | $0.000640 |
-| Naturalness (first-pass corrected) | 1165 | 309 | $0.000640 |
-| **Total** | 2738 | 770 | $0.001650 |
+| First pass | 576 | 152 | $0.000370 |
+| Naturalness (original) | 975 | 309 | $0.000640 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 975 | — | — |
+| Naturalness (first-pass corrected) | 1074 | 309 | $0.000640 |
+| **Total** | 2049 | 770 | $0.001650 |
 
 ## regional-cojo-autobus
 
@@ -1762,10 +1834,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 668 | 158 | $0.000400 |
-| Naturalness (original) | 1048 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 1016 | 312 | $0.000644 |
-| **Total** | 2732 | 782 | $0.001687 |
+| First pass | 640 | 158 | $0.000400 |
+| Naturalness (original) | 1152 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1152 | — | — |
+| Naturalness (first-pass corrected) | 1024 | 312 | $0.000644 |
+| **Total** | 2176 | 782 | $0.001687 |
 
 ## regional-preterite-esta-manana
 
@@ -1786,10 +1859,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 563 | 158 | $0.000400 |
-| Naturalness (original) | 1000 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 931 | 312 | $0.000644 |
-| **Total** | 2494 | 782 | $0.001687 |
+| First pass | 535 | 158 | $0.000400 |
+| Naturalness (original) | 891 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 892 | — | — |
+| Naturalness (first-pass corrected) | 1149 | 312 | $0.000644 |
+| **Total** | 2041 | 782 | $0.001687 |
 
 ## regional-dale
 
@@ -1810,10 +1884,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 592 | 158 | $0.000400 |
-| Naturalness (original) | 1122 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 1029 | 312 | $0.000644 |
-| **Total** | 2743 | 782 | $0.001687 |
+| First pass | 645 | 158 | $0.000400 |
+| Naturalness (original) | 851 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 852 | — | — |
+| Naturalness (first-pass corrected) | 1230 | 312 | $0.000644 |
+| **Total** | 2082 | 782 | $0.001687 |
 
 ## correct-buenos-dias
 
@@ -1834,10 +1909,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 682 | 156 | $0.000390 |
-| Naturalness (original) | 977 | 311 | $0.000643 |
-| Naturalness (first-pass corrected) | 1068 | 311 | $0.000643 |
-| **Total** | 2727 | 778 | $0.001675 |
+| First pass | 689 | 156 | $0.000390 |
+| Naturalness (original) | 1189 | 311 | $0.000643 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1189 | — | — |
+| Naturalness (first-pass corrected) | 1141 | 311 | $0.000643 |
+| **Total** | 2330 | 778 | $0.001675 |
 
 ## correct-hacer-pregunta
 
@@ -1858,10 +1934,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 579 | 158 | $0.000400 |
-| Naturalness (original) | 1029 | 312 | $0.000644 |
-| Naturalness (first-pass corrected) | 1122 | 312 | $0.000644 |
-| **Total** | 2730 | 782 | $0.001687 |
+| First pass | 661 | 158 | $0.000400 |
+| Naturalness (original) | 1513 | 312 | $0.000644 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1513 | — | — |
+| Naturalness (first-pass corrected) | 1097 | 312 | $0.000644 |
+| **Total** | 2610 | 782 | $0.001687 |
 
 ## correct-tomar-foto
 
@@ -1873,7 +1950,7 @@ Verified estimated costs use:
 - Expected corrected text: `Necesito tomar una foto del documento.`
 - First-pass corrected text: `Necesito tomar una foto del documento.`
 - Naturalness on original text: tomar una foto -> sacar una foto / hacer una foto
-- Naturalness on first-pass corrected text: (none)
+- Naturalness on first-pass corrected text: tomar una foto -> sacar una foto / hacer una foto
 - Conflict (parallel merge had a skipped edit): false
 - Fallback used: false
 - Final merged output: `Necesito sacar una foto / hacer una foto del documento.`
@@ -1882,10 +1959,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 577 | 158 | $0.000400 |
-| Naturalness (original) | 2356 | 400 | $0.001524 |
-| Naturalness (first-pass corrected) | 1228 | 312 | $0.000644 |
-| **Total** | 4161 | 870 | $0.002567 |
+| First pass | 586 | 158 | $0.000400 |
+| Naturalness (original) | 2217 | 389 | $0.001414 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2217 | — | — |
+| Naturalness (first-pass corrected) | 1534 | 375 | $0.001274 |
+| **Total** | 3751 | 922 | $0.003087 |
 
 ## correct-visitar-abuela
 
@@ -1906,10 +1984,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 580 | 162 | $0.000420 |
-| Naturalness (original) | 1122 | 314 | $0.000646 |
-| Naturalness (first-pass corrected) | 1023 | 314 | $0.000646 |
-| **Total** | 2725 | 790 | $0.001713 |
+| First pass | 716 | 162 | $0.000420 |
+| Naturalness (original) | 1294 | 314 | $0.000646 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1295 | — | — |
+| Naturalness (first-pass corrected) | 1022 | 314 | $0.000646 |
+| **Total** | 2317 | 790 | $0.001713 |
 
 ## correct-me-quedo-en-casa
 
@@ -1930,10 +2009,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 782 | 168 | $0.000450 |
-| Naturalness (original) | 1023 | 317 | $0.000650 |
-| Naturalness (first-pass corrected) | 1239 | 317 | $0.000650 |
-| **Total** | 3044 | 802 | $0.001750 |
+| First pass | 780 | 168 | $0.000450 |
+| Naturalness (original) | 966 | 317 | $0.000650 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 967 | — | — |
+| Naturalness (first-pass corrected) | 1661 | 317 | $0.000650 |
+| **Total** | 2628 | 802 | $0.001750 |
 
 ## mixed-preposition-and-redundant-pronoun
 
@@ -1954,10 +2034,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 830 | 181 | $0.000518 |
-| Naturalness (original) | 2303 | 455 | $0.001978 |
-| Naturalness (first-pass corrected) | 2149 | 404 | $0.001459 |
-| **Total** | 5282 | 1040 | $0.003954 |
+| First pass | 676 | 181 | $0.000518 |
+| Naturalness (original) | 2287 | 451 | $0.001937 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2287 | — | — |
+| Naturalness (first-pass corrected) | 2533 | 416 | $0.001579 |
+| **Total** | 4820 | 1048 | $0.004034 |
 
 ## mixed-article-and-accent
 
@@ -1968,7 +2049,7 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Necesito comprar un libro para la clase, y compré café en una cafetería pequeña.`
 - First-pass corrected text: `Necesito comprar un libro para la clase, y compré café en una cafetería pequeña.`
-- Naturalness on original text: comprar libro -> comprar un libro<br>cafe -> café<br>una cafeteria pequena -> una cafetería pequeña
+- Naturalness on original text: comprar libro -> comprar un libro<br>compre cafe -> compré café<br>en una cafeteria pequena -> en una cafetería pequeña
 - Naturalness on first-pass corrected text: (none)
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
@@ -1978,10 +2059,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 1089 | 177 | $0.000504 |
-| Naturalness (original) | 2687 | 473 | $0.002184 |
-| Naturalness (first-pass corrected) | 1305 | 323 | $0.000657 |
-| **Total** | 5081 | 973 | $0.003345 |
+| First pass | 733 | 177 | $0.000504 |
+| Naturalness (original) | 3633 | 551 | $0.002964 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 3633 | — | — |
+| Naturalness (first-pass corrected) | 1200 | 323 | $0.000657 |
+| **Total** | 4833 | 1051 | $0.004125 |
 
 ## mixed-personal-a-and-subjunctive
 
@@ -1993,19 +2075,20 @@ Verified estimated costs use:
 - Expected corrected text: `Vi a mi profesor en la estación, y es importante que estudies.`
 - First-pass corrected text: `Vi a mi profesor en la estación, y es importante que estudies.`
 - Naturalness on original text: Vi mi profesor en la estación -> Vi a mi profesor en la estación<br>es importante que estudias -> es importante que estudies
-- Naturalness on first-pass corrected text: Vi a mi profesor en la estación, y es importante que estudies. -> Vi a mi profesor en la estación, y me dijo que era importante que estudiara.
+- Naturalness on first-pass corrected text: Vi a mi profesor en la estación, y es importante que estudies. -> Vi a mi profesor en la estación. Es importante que estudies.
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
-- Final merged output: `Vi a mi profesor en la estación, y me dijo que era importante que estudiara.`
+- Final merged output: `Vi a mi profesor en la estación. Es importante que estudies.`
 - Final correction count: 1
 - Score: ambiguous
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 1396 | 171 | $0.000468 |
-| Naturalness (original) | 2561 | 462 | $0.002091 |
-| Naturalness (first-pass corrected) | 2554 | 440 | $0.001862 |
-| **Total** | 6511 | 1073 | $0.004422 |
+| First pass | 678 | 171 | $0.000468 |
+| Naturalness (original) | 2418 | 450 | $0.001971 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2418 | — | — |
+| Naturalness (first-pass corrected) | 2150 | 417 | $0.001632 |
+| **Total** | 4568 | 1038 | $0.004072 |
 
 ## mixed-gender-agreement-and-redundant-pronoun
 
@@ -2016,8 +2099,8 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Las ventanas estaban abiertas, y a mí me gusta el café.`
 - First-pass corrected text: `Las ventanas estaban abiertas, y a mí me gusta el café a mí.`
-- Naturalness on original text: Las ventanas estaban abierto -> Las ventanas estaban abiertas<br>y a mí me gusta el café a mí -> y a mí me gusta el café
-- Naturalness on first-pass corrected text: y a mí me gusta el café a mí -> y a mí me gusta el café
+- Naturalness on original text: estaban abierto -> estaban abiertas<br>y a mí me gusta el café a mí -> y a mí me gusta el café
+- Naturalness on first-pass corrected text: a mí me gusta el café a mí -> a mí me gusta el café
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
 - Final merged output: `Las ventanas estaban abiertas, y a mí me gusta el café.`
@@ -2026,10 +2109,11 @@ Verified estimated costs use:
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 888 | 172 | $0.000470 |
-| Naturalness (original) | 2423 | 457 | $0.002033 |
-| Naturalness (first-pass corrected) | 2184 | 384 | $0.001302 |
-| **Total** | 5495 | 1013 | $0.003805 |
+| First pass | 634 | 172 | $0.000470 |
+| Naturalness (original) | 2250 | 466 | $0.002122 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 2251 | — | — |
+| Naturalness (first-pass corrected) | 2151 | 405 | $0.001512 |
+| **Total** | 4402 | 1043 | $0.004105 |
 
 ## mixed-verb-agreement-and-missing-que
 
@@ -2040,20 +2124,21 @@ Verified estimated costs use:
 - Expected owner: first_pass
 - Expected corrected text: `Ellos estudian todas las noches, y creo que está bien terminar hoy.`
 - First-pass corrected text: `Ellos estudian todas las noches, y creo que está bien terminar hoy.`
-- Naturalness on original text: Ellos estudia todas las noches -> Ellos estudian todas las noches<br>creo está bien terminar hoy -> creo que está bien terminar hoy
-- Naturalness on first-pass corrected text: Ellos estudian -> Estudian<br>creo que está bien terminar hoy -> creo que podemos terminar hoy
+- Naturalness on original text: creo está bien -> creo que está bien
+- Naturalness on first-pass corrected text: Ellos estudian todas las noches, y creo que está bien terminar hoy. -> Ellos estudian todas las noches y creo que está bien que hoy terminen / y creo que hoy pueden terminar / y creo que hoy está bien que terminen.
 - Conflict (parallel merge had a skipped edit): true
 - Fallback used: true
-- Final merged output: `Estudian todas las noches, y creo que podemos terminar hoy.`
-- Final correction count: 2
+- Final merged output: `Ellos estudian todas las noches y creo que está bien que hoy terminen / y creo que hoy pueden terminar / y creo que hoy está bien que terminen.`
+- Final correction count: 1
 - Score: ambiguous
 
 | Phase | Latency (ms) | Total tokens | Est. cost (USD) |
 | --- | --- | --- | --- |
-| First pass | 643 | 173 | $0.000478 |
-| Naturalness (original) | 3621 | 468 | $0.002142 |
-| Naturalness (first-pass corrected) | 2544 | 479 | $0.002244 |
-| **Total** | 6808 | 1120 | $0.004864 |
+| First pass | 684 | 173 | $0.000478 |
+| Naturalness (original) | 1971 | 384 | $0.001302 |
+| Parallel phase wall-clock (first pass + naturalness, concurrent — issue #98) | 1972 | — | — |
+| Naturalness (first-pass corrected) | 2751 | 467 | $0.002124 |
+| **Total** | 4723 | 1024 | $0.003904 |
 
 ---
 
@@ -2061,17 +2146,17 @@ Verified estimated costs use:
 
 | Fixtures | Errors | Conflicts | Fallbacks used | Total latency (ms) | Total tokens | Total est. cost (USD) |
 | --- | --- | --- | --- | --- | --- | --- |
-| 85 | 0 | 48 | 48 | 332005 | 73848 | $0.217080 |
+| 85 | 0 | 51 | 51 | 286908 | 73994 | $0.218540 |
 
 ### Score summary
 
 | Score | Count |
 | --- | --- |
 | correct_fix | 56 |
-| partial_fix | 4 |
+| partial_fix | 3 |
 | overcorrection | 3 |
 | acceptable_no_change | 11 |
-| ambiguous | 11 |
+| ambiguous | 12 |
 
 ### Language point summary
 
@@ -2084,15 +2169,15 @@ Verified estimated costs use:
 | Ambiguous / Repeated Span Safety (Naturalness) | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
 | Gender / Number Agreement | 5 | 5 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Verb Agreement / Morphology | 5 | 5 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Required Prepositions | 5 | 5 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Required Prepositions | 5 | 4 | 0 | 0 | 0 | 0 | 1 | 0 |
 | Articles / Determiners | 5 | 3 | 1 | 0 | 0 | 0 | 1 | 0 |
 | Subjunctive / Mood | 5 | 4 | 0 | 0 | 0 | 0 | 1 | 0 |
 | Required Additions / Omissions | 5 | 5 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Unnecessary Extras / Deletions | 5 | 3 | 0 | 0 | 0 | 0 | 2 | 0 |
 | Ser / Estar / Haber | 5 | 3 | 0 | 0 | 0 | 2 | 0 | 0 |
 | Impersonal Haber / Se | 5 | 5 | 0 | 0 | 0 | 0 | 0 | 0 |
-| False Friends / Word Choice | 5 | 1 | 1 | 0 | 0 | 1 | 2 | 0 |
-| Phrase-Level Naturalness | 5 | 2 | 1 | 0 | 0 | 0 | 2 | 0 |
+| False Friends / Word Choice | 5 | 3 | 0 | 0 | 0 | 1 | 1 | 0 |
+| Phrase-Level Naturalness | 5 | 1 | 1 | 0 | 0 | 0 | 3 | 0 |
 | Valid Regional / Should Not Flag | 5 | 0 | 0 | 0 | 1 | 4 | 0 | 0 |
 | Already Correct / Do Not Tinker | 5 | 0 | 0 | 0 | 1 | 4 | 0 | 0 |
 | Mixed Operations | 5 | 2 | 1 | 0 | 0 | 0 | 2 | 0 |
@@ -2101,9 +2186,9 @@ Verified estimated costs use:
 
 | Operation type | Fixtures | correct_fix | partial_fix | missed_issue | overcorrection | acceptable_no_change | ambiguous | error |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| replacement | 46 | 38 | 2 | 0 | 0 | 0 | 6 | 0 |
+| replacement | 46 | 39 | 1 | 0 | 0 | 0 | 6 | 0 |
 | no_change | 14 | 0 | 0 | 0 | 3 | 11 | 0 | 0 |
-| insertion | 15 | 13 | 1 | 0 | 0 | 0 | 1 | 0 |
+| insertion | 15 | 12 | 1 | 0 | 0 | 0 | 2 | 0 |
 | deletion | 5 | 3 | 0 | 0 | 0 | 0 | 2 | 0 |
 | mixed | 5 | 2 | 1 | 0 | 0 | 0 | 2 | 0 |
 
@@ -2111,27 +2196,32 @@ Verified estimated costs use:
 
 | Expected owner | Fixtures | correct_fix | partial_fix | missed_issue | overcorrection | acceptable_no_change | ambiguous | error |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| first_pass | 54 | 45 | 2 | 0 | 0 | 0 | 7 | 0 |
-| naturalness | 6 | 3 | 1 | 0 | 0 | 0 | 2 | 0 |
-| either | 11 | 8 | 1 | 0 | 0 | 0 | 2 | 0 |
+| first_pass | 54 | 44 | 2 | 0 | 0 | 0 | 8 | 0 |
+| naturalness | 6 | 2 | 1 | 0 | 0 | 0 | 3 | 0 |
+| either | 11 | 10 | 0 | 0 | 0 | 0 | 1 | 0 |
 | no_change | 14 | 0 | 0 | 0 | 3 | 11 | 0 | 0 |
 
 ### Fallback / conflict summary
 
 | Metric | Count | Rate |
 | --- | --- | --- |
-| Conflicts | 48 | 56.5% |
-| Fallbacks used | 48 | 56.5% |
+| Conflicts | 51 | 60.0% |
+| Fallbacks used | 51 | 60.0% |
 
 ### Latency / cost outliers
 
-- Average latency: 3906 ms; average cost: $0.002554 (over 85 non-error fixture(s)).
+- Average latency: 3375 ms; average cost: $0.002571 (over 85 non-error fixture(s)).
 - Outlier threshold: 1.5x the average latency or cost.
 
 | Fixture | Latency (ms) | Est. cost (USD) |
 | --- | --- | --- |
-| ambiguous-naturalness-span | 5492 | $0.003933 |
-| naturalness-puedo-tener-cerveza | 5993 | $0.004275 |
-| mixed-preposition-and-redundant-pronoun | 5282 | $0.003954 |
-| mixed-personal-a-and-subjunctive | 6511 | $0.004422 |
-| mixed-verb-agreement-and-missing-que | 6808 | $0.004864 |
+| clean-grammar-only | 5488 | $0.003073 |
+| ambiguous-naturalness-span | 5278 | $0.003583 |
+| subj-enviara | 6006 | $0.003758 |
+| false-friend-atendio-universidad | 5092 | $0.003767 |
+| naturalness-puedo-tener-cerveza | 4570 | $0.004375 |
+| mixed-preposition-and-redundant-pronoun | 4820 | $0.004034 |
+| mixed-article-and-accent | 4833 | $0.004125 |
+| mixed-personal-a-and-subjunctive | 4568 | $0.004072 |
+| mixed-gender-agreement-and-redundant-pronoun | 4402 | $0.004105 |
+| mixed-verb-agreement-and-missing-que | 4723 | $0.003904 |
