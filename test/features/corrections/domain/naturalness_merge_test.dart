@@ -492,8 +492,7 @@ void main() {
   });
 
   group(
-    'span-breadth guard removed — regression coverage (issue #111 '
-    'review finding)',
+    'guards removed after review — regression coverage (issue #111)',
     () {
       test(
         'still applies a full-sentence naturalness fix where the whole '
@@ -561,127 +560,43 @@ void main() {
           expect(result.skippedEdits, isEmpty);
         },
       );
+
+      test(
+        'still applies a noun replacement that was once blocked by a '
+        'contentWordReplaced guard — "su parte" -> "su informe". That '
+        'guard tried to infer a meaning-changing rewrite from word shape '
+        'alone, with no semantic understanding of whether the '
+        'replacement was actually wrong; it was removed as not a '
+        'deterministically provable safety check, so this now applies '
+        'like any other single naturalness edit. This is a real, live '
+        'over-rewrite risk, but it belongs at the prompt-design/live-'
+        'evaluation level, not merge-layer guessing.',
+        () {
+          const issue = NaturalnessIssue(
+            span: 'su parte',
+            naturalReplacement: 'su informe',
+            explanation: '"Informe" reads as more concrete in context.',
+          );
+
+          final result = mergeNaturalnessReview(
+            originalText: 'placeholder',
+            firstPassCorrectedText: 'Era necesario que enviara su parte.',
+            naturalnessReview: const NaturalnessReview(
+              hasNaturalnessIssue: true,
+              issues: [issue],
+            ),
+          );
+
+          expect(
+            result.finalCorrectedText,
+            'Era necesario que enviara su informe.',
+          );
+          expect(result.appliedEdits, hasLength(1));
+          expect(result.skippedEdits, isEmpty);
+        },
+      );
     },
   );
-
-  group('content-word-replaced guard (issue #111)', () {
-    test(
-      'skips a wrapped-phrase span whose one content word is dropped '
-      'entirely for an unrelated, more specific noun the model invented — '
-      'the "su parte" -> "su informe" pattern observed live',
-      () {
-        const issue = NaturalnessIssue(
-          span: 'su parte',
-          naturalReplacement: 'su informe',
-          explanation: '"Informe" reads as more concrete in context.',
-        );
-
-        final result = mergeNaturalnessReview(
-          originalText: 'placeholder',
-          firstPassCorrectedText: 'Era necesario que enviara su parte.',
-          naturalnessReview: const NaturalnessReview(
-            hasNaturalnessIssue: true,
-            issues: [issue],
-          ),
-        );
-
-        expect(
-          result.finalCorrectedText,
-          'Era necesario que enviara su parte.',
-        );
-        expect(result.appliedEdits, isEmpty);
-        expect(result.skippedEdits, hasLength(1));
-        expect(result.skippedEdits.single.issue, same(issue));
-        expect(
-          result.skippedEdits.single.reason,
-          NaturalnessMergeSkipReason.contentWordReplaced,
-        );
-      },
-    );
-
-    test(
-      'still applies a preposition-anchored idiom fix even though the '
-      'preposition\'s content word vanishes from the replacement — '
-      'review finding: an earlier, broader function-word list treated '
-      '"para" as a mere wrapper, wrongly skipping "para atrás" -> '
-      '"luego" the same way as "su parte" -> "su informe"',
-      () {
-        const issue = NaturalnessIssue(
-          span: 'para atrás',
-          naturalReplacement: 'luego',
-          explanation: '"Llamar para atrás" is a calque for "call back".',
-        );
-
-        final result = mergeNaturalnessReview(
-          originalText: 'placeholder',
-          firstPassCorrectedText: 'Te llamo para atrás.',
-          naturalnessReview: const NaturalnessReview(
-            hasNaturalnessIssue: true,
-            issues: [issue],
-          ),
-        );
-
-        expect(result.finalCorrectedText, 'Te llamo luego.');
-        expect(result.appliedEdits, hasLength(1));
-        expect(result.skippedEdits, isEmpty);
-      },
-    );
-
-    test(
-      'still applies a legitimate single-bare-word false-friend fix — '
-      'a one-word span is exactly what naturalness is supposed to '
-      'correct, not a content-word substitution in disguise',
-      () {
-        const issue = NaturalnessIssue(
-          span: 'Atendió',
-          naturalReplacement: 'Asistió',
-          explanation: '"Atender" is a false friend for "attend".',
-        );
-
-        final result = mergeNaturalnessReview(
-          originalText: 'placeholder',
-          firstPassCorrectedText: 'Atendió la universidad en Madrid.',
-          naturalnessReview: const NaturalnessReview(
-            hasNaturalnessIssue: true,
-            issues: [issue],
-          ),
-        );
-
-        expect(
-          result.finalCorrectedText,
-          'Asistió la universidad en Madrid.',
-        );
-        expect(result.appliedEdits, hasLength(1));
-        expect(result.skippedEdits, isEmpty);
-      },
-    );
-
-    test(
-      'still applies a collocation fix whose content word is shared '
-      'between span and replacement, even though the wrapping word '
-      'changes too',
-      () {
-        const issue = NaturalnessIssue(
-          span: 'hace sentido',
-          naturalReplacement: 'tiene sentido',
-          explanation: '"Hacer sentido" is a calque for "make sense".',
-        );
-
-        final result = mergeNaturalnessReview(
-          originalText: 'placeholder',
-          firstPassCorrectedText: 'Esto hace sentido.',
-          naturalnessReview: const NaturalnessReview(
-            hasNaturalnessIssue: true,
-            issues: [issue],
-          ),
-        );
-
-        expect(result.finalCorrectedText, 'Esto tiene sentido.');
-        expect(result.appliedEdits, hasLength(1));
-        expect(result.skippedEdits, isEmpty);
-      },
-    );
-  });
 
   group('word-boundary span matching (issue #111)', () {
     test(

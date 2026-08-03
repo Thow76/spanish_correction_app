@@ -30,24 +30,6 @@ enum NaturalnessMergeSkipReason {
   /// is never applied — same "don't guess" precedent as every other skip
   /// reason here, just applied to the replacement text instead of the span.
   multiOptionReplacement,
-
-  /// `NaturalnessIssue.span` is a short phrase wrapping exactly one
-  /// content word (e.g. an article/possessive plus one noun) whose
-  /// content word does not appear anywhere in `naturalReplacement` (issue
-  /// #111). Observed live: `"su parte"` -> `"su informe"` — the model
-  /// invented a more specific noun ("informe") that was not in the
-  /// learner's text, rather than correcting how the existing content word
-  /// was phrased. Deliberately narrow: a *single bare word* being swapped
-  /// for a different word (e.g. a false-friend fix like `"Atendió"` ->
-  /// `"Asistió"`) is exactly what naturalness is supposed to do and is
-  /// not caught by this guard — only a wrapped phrase whose one content
-  /// word is dropped entirely is. "Wrapping" is deliberately limited to
-  /// articles and possessives (see [_spanishFunctionWords]) — an ordinary
-  /// preposition can itself be part of the idiom being corrected (e.g.
-  /// `"para atrás"` -> `"luego"`, a genuine calque fix), so treating every
-  /// preposition as a mere wrapper would misfire on exactly the kind of
-  /// replacement this guard must not catch.
-  contentWordReplaced,
 }
 
 /// One [NaturalnessIssue] the merge did not apply, with why.
@@ -118,10 +100,9 @@ class NaturalnessMergeResult {
 /// `resolveOccurrenceCorrections`/`CorrectionItem._anchorRange` use
 /// elsewhere in this app. An issue is applied only when its
 /// `naturalReplacement` is a single clean replacement (not a slash-joined
-/// menu of options, issue #108), its span is not a content-word
-/// substitution in disguise (issue #111), its span is unambiguous (found
-/// exactly once, at a real word boundary), and its resolved range does
-/// not overlap an edit already accepted from an
+/// menu of options, issue #108), its span is unambiguous (found exactly
+/// once, at a real word boundary), and its resolved range does not
+/// overlap an edit already accepted from an
 /// earlier (leftmost-starting) issue — see [NaturalnessMergeSkipReason]
 /// for why every other case is skipped rather than guessed. This is
 /// deliberately the minimum safe merge, not full conflict analysis — see
@@ -139,13 +120,6 @@ NaturalnessMergeResult mergeNaturalnessReview({
   for (final issue in naturalnessReview.issues) {
     if (_looksLikeMultipleOptions(issue.naturalReplacement)) {
       skipReasonByIssue[issue] = NaturalnessMergeSkipReason.multiOptionReplacement;
-      continue;
-    }
-    if (_replacesContentWordWithUnrelatedWord(
-      issue.span,
-      issue.naturalReplacement,
-    )) {
-      skipReasonByIssue[issue] = NaturalnessMergeSkipReason.contentWordReplaced;
       continue;
     }
     final spanGraphemes = issue.span.characters.toList();
@@ -237,77 +211,6 @@ NaturalnessMergeResult mergeNaturalnessReview({
 /// conceivable way a model could misbehave.
 bool _looksLikeMultipleOptions(String naturalReplacement) {
   return naturalReplacement.contains(' / ');
-}
-
-/// Spanish articles and possessives excluded from the "content word"
-/// check in [_replacesContentWordWithUnrelatedWord] — deliberately
-/// limited to words that only ever wrap a noun (determiners/possessives),
-/// not general function words. A review finding on this guard's own PR
-/// caught an earlier, broader version of this set that also excluded
-/// prepositions/conjunctions/object pronouns: that misfired on a genuine
-/// preposition-anchored idiom fix like `"para atrás"` -> `"luego"`
-/// (`"para"` is part of the calque being corrected, not a mere wrapper
-/// around an unrelated content word), skipping a legitimate replacement.
-/// Determiners and possessives don't have that problem — they only ever
-/// modify the noun they precede, never carry idiomatic meaning of their
-/// own.
-const Set<String> _spanishFunctionWords = {
-  'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
-  'mi', 'mis', 'tu', 'tus', 'su', 'sus',
-  'nuestro', 'nuestra', 'nuestros', 'nuestras',
-  'vuestro', 'vuestra', 'vuestros', 'vuestras',
-};
-
-/// Splits [text] into lowercase words with surrounding punctuation
-/// stripped, for the word-level comparisons in
-/// [_replacesContentWordWithUnrelatedWord].
-List<String> _wordsOf(String text) {
-  return text
-      .split(RegExp(r'\s+'))
-      .map(
-        (word) => word
-            .toLowerCase()
-            .replaceAll(RegExp(r'^[¿¡"“”‘’.,;:!?()]+|[¿¡"“”‘’.,;:!?()]+$'), ''),
-      )
-      .where((word) => word.isNotEmpty)
-      .toList();
-}
-
-/// Whether [span] is a short phrase wrapping exactly one content word
-/// (i.e. every other word in [span] is a function word from
-/// [_spanishFunctionWords]) whose content word does not appear anywhere
-/// in [naturalReplacement] (issue #111) — e.g. `"su parte"` ->
-/// `"su informe"`, where the only content word, "parte", is dropped
-/// entirely in favor of an unrelated, more specific noun the model
-/// invented rather than corrected.
-///
-/// Deliberately requires [span] to have at least two words: a *single
-/// bare word* being swapped for a completely different word (e.g. a
-/// false-friend fix like `"Atendió"` -> `"Asistió"`, or `"hace"` ->
-/// `"tiene"` inside a longer span that still shares its other content
-/// word) is exactly what naturalness is supposed to do, and must not be
-/// caught by this guard. Also requires exactly one content word in
-/// [span] — a phrase with two or more content words (e.g. `"importante
-/// hoy mismo"`) is a broader rewrite this function deliberately does not
-/// attempt to judge (an earlier, broader span-size guard tried and was
-/// removed — see the "Status update (issue #111)" section of
-/// `docs/two_pass_test_change_notes.md` for why).
-bool _replacesContentWordWithUnrelatedWord(
-  String span,
-  String naturalReplacement,
-) {
-  final spanWords = _wordsOf(span);
-  if (spanWords.length < 2) {
-    return false;
-  }
-  final spanContentWords = spanWords
-      .where((word) => !_spanishFunctionWords.contains(word))
-      .toList();
-  if (spanContentWords.length != 1) {
-    return false;
-  }
-  final replacementWords = _wordsOf(naturalReplacement).toSet();
-  return !replacementWords.contains(spanContentWords.single);
 }
 
 /// Whether the grapheme-cluster range `[start, start + length)` in
