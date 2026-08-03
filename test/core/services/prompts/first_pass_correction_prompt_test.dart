@@ -6,7 +6,10 @@ import '../../../model_comparison_harness.dart' as harness;
 // Pins the production first-pass prompt constants (issue #64) to the
 // harness constants they were copied from — same precedent as
 // naturalness_review_client_test.dart's prompt/schema pinning tests — so
-// the production and harness copies can never silently drift apart.
+// the production and harness copies can never silently drift apart. Issue
+// #109 later updated both sides of this pin together (v1 -> v2, adding
+// the worked-examples paragraph); this still pins production to whichever
+// wording the harness has already validated.
 void main() {
   test(
     'firstPassCorrectionSpanish is unchanged from the harness-validated '

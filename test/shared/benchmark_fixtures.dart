@@ -122,7 +122,13 @@ enum BoundaryType {
   collocation('collocation'),
   agreement('agreement'),
   omission('omission'),
-  serEstar('ser/estar');
+  serEstar('ser/estar'),
+  // Issue #109: a word that looks like an English cognate but means
+  // something else (e.g. "atender" vs "attend") — word choice, same as
+  // calque/collocation, but a distinct enough pattern (no calqued phrase,
+  // no wrong verb-noun pairing — just the wrong single word) to name on
+  // its own rather than folding into calque.
+  falseFriend('false_friend');
 
   const BoundaryType(this.reportLabel);
 
@@ -601,6 +607,61 @@ const BoundaryControlBenchmarkFixture boundaryCalqueLlamarParaAtras =
       isCalcsStyle: true,
     );
 
+const BoundaryControlBenchmarkFixture boundaryCorriendoTarde =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-corriendo-tarde-calque',
+      text: 'Estoy corriendo tarde para la reunión.',
+      expectedCorrectedText: 'Estoy corriendo tarde para la reunión.',
+      note:
+          'Word-choice/naturalness boundary control (issue #109): '
+          '"corriendo tarde" is a phrase-level calque whose minimal edit '
+          'looks like a single word ("corriendo" -> "llegando"), which is '
+          'exactly why this pattern is easy for the first pass to '
+          'mistake for a grammar/spelling fix rather than naturalness — '
+          'see docs/two_pass_prompt_contract_audit.md §7c.',
+      fixtureGroup: BoundaryFixtureGroup.wordChoiceBoundaryControl,
+      boundaryType: BoundaryType.calque,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isCalcsStyle: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryAtendioUniversidad =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-atendio-universidad-false-friend',
+      text: 'Atendió la universidad en Madrid.',
+      expectedCorrectedText: 'Atendió la universidad en Madrid.',
+      note:
+          'Word-choice/naturalness boundary control (issue #109): '
+          '"atendió" is a false friend for "attend" (the correct word is '
+          '"asistió"), but choosing the right word is word choice, not '
+          'grammar, spelling, or punctuation — this fixture asserts the '
+          'first pass leaves it for a later pass rather than fixing it '
+          'itself.',
+      fixtureGroup: BoundaryFixtureGroup.wordChoiceBoundaryControl,
+      boundaryType: BoundaryType.falseFriend,
+      expectedBehavior: BoundaryExpectedBehavior.unchanged,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+    );
+
+const BoundaryControlBenchmarkFixture boundaryCitaMedicoMultiArticle =
+    BoundaryControlBenchmarkFixture(
+      id: 'boundary-cita-medico-multi-article',
+      text: 'Tengo cita con médico mañana.',
+      expectedCorrectedText: 'Tengo una cita con el médico mañana.',
+      note:
+          'Grammar-boundary correction (issue #109): two articles are '
+          'missing in the same sentence ("una" before "cita", "el" before '
+          '"médico") — asserts the first pass corrects every missing '
+          'article it finds, not only the first one.',
+      fixtureGroup: BoundaryFixtureGroup.grammarBoundaryCorrection,
+      boundaryType: BoundaryType.omission,
+      expectedBehavior: BoundaryExpectedBehavior.corrected,
+      isOverCorrectionSensitive: true,
+      isAccentSensitive: true,
+    );
+
 const BoundaryControlBenchmarkFixture boundaryCollocationHacerDecision =
     BoundaryControlBenchmarkFixture(
       id: 'boundary-collocation-hacer-decision',
@@ -679,6 +740,9 @@ const List<BoundaryControlBenchmarkFixture> boundaryControlFirstPassFixtures = [
   boundaryRegionalCoger,
   boundaryRegionalPreterite,
   boundaryCalqueLlamarParaAtras,
+  boundaryCorriendoTarde,
+  boundaryAtendioUniversidad,
+  boundaryCitaMedicoMultiArticle,
   boundaryCollocationHacerDecision,
   boundaryGustarAgreement,
   boundaryMissingQue,

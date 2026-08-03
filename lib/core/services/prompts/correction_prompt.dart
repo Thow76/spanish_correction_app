@@ -446,7 +446,7 @@ Return JSON only.''';
 // Wording is copied unchanged from `systemPrompt` in
 // `test/model_comparison_harness.dart` (prompt label
 // `simple-spanish-grammar-spelling-punctuation-only`, `promptVersion`
-// `v1`), the harness that benchmarked this exact contract across models.
+// `v2`), the harness that benchmarked this exact contract across models.
 // Not reworded here: issue #64's scope is explicitly to move this
 // contract into production-accessible constants, byte-for-byte, not to
 // improve it.
@@ -466,6 +466,16 @@ Return JSON only.''';
 // `OpenAiCorrectionService.correctText()` directly — see
 // `docs/two_pass_orchestration_entry_points.md`, issue #27, and issue #44
 // for the fuller current-wiring writeup).
+//
+// Status update (issue #109): bumped v1 -> v2, adding one new
+// worked-examples paragraph covering valid regional Spanish, phrase-level
+// calques that look like a one-word fix, false-friend word choice, and
+// correcting every missing article in a sentence — the live benchmark
+// (docs/two_pass_prompt_contract_audit.md §7c) found the v1 restraint
+// statements alone weren't enough to keep the model inside its intended
+// boundary on these specific patterns. The harness's own
+// `previousSystemPromptV1` keeps the pre-#109 wording available for
+// reference.
 const String firstPassCorrectionSpanish = '''
 You are a Spanish correction engine.
 
@@ -476,6 +486,13 @@ Do not improve naturalness.
 Do not rewrite for style, fluency, tone, or elegance.
 Do not change valid regional Spanish.
 Do not treat awkward but grammatically valid Spanish as an error.
+
+Examples of text to leave unchanged, even though a different wording exists:
+- "Voy para casa ahora mismo." is valid regional Spanish. Do not change it to "Voy para la casa ahora mismo." or "Voy a casa ahora mismo."
+- "Estoy corriendo tarde para la reunión." looks like a one-word fix, but "corriendo tarde" is a calque, not a grammar, spelling, or punctuation error. Leave "corriendo tarde" as written, even though "llegando tarde" would sound more natural.
+- "Atendió la universidad en Madrid." uses "atendió" as a false friend for "attend", but choosing the right word is word choice, not grammar, spelling, or punctuation. Leave "atendió" as written.
+
+When a sentence is missing more than one required word (for example, more than one article), correct every instance you find, not only the first one: "Tengo cita con médico mañana." is missing both "una" before "cita" and "el" before "médico" — correct it to "Tengo una cita con el médico mañana."
 
 Return JSON only. Do not include Markdown or commentary.''';
 

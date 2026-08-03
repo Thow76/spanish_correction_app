@@ -219,7 +219,7 @@ void main() {
 
   group('boundaryControlFirstPassFixtures', () {
     test('exists with the required stable fixture ids', () {
-      expect(boundaryControlFirstPassFixtures, hasLength(10));
+      expect(boundaryControlFirstPassFixtures, hasLength(13));
       expect(boundaryControlFirstPassFixtures.map((fixture) => fixture.id), [
         'boundary-redundant-yo',
         'boundary-redundant-ellos',
@@ -227,6 +227,9 @@ void main() {
         'boundary-regional-coger',
         'boundary-regional-preterite',
         'boundary-calque-llamar-para-atras',
+        'boundary-corriendo-tarde-calque',
+        'boundary-atendio-universidad-false-friend',
+        'boundary-cita-medico-multi-article',
         'boundary-collocation-hacer-decision',
         'boundary-gustar-agreement',
         'boundary-missing-que',
@@ -291,7 +294,7 @@ void main() {
                 BoundaryFixtureGroup.wordChoiceBoundaryControl,
       );
 
-      expect(unchangedFixtures, hasLength(7));
+      expect(unchangedFixtures, hasLength(9));
       for (final fixture in unchangedFixtures) {
         expect(fixture.expectedBehavior, BoundaryExpectedBehavior.unchanged);
         expect(fixture.isControlCase, isTrue, reason: fixture.id);
@@ -307,7 +310,7 @@ void main() {
             BoundaryFixtureGroup.grammarBoundaryCorrection,
       );
 
-      expect(correctionFixtures, hasLength(3));
+      expect(correctionFixtures, hasLength(4));
       for (final fixture in correctionFixtures) {
         expect(fixture.expectedBehavior, BoundaryExpectedBehavior.corrected);
         expect(fixture.isCorrectionCase, isTrue, reason: fixture.id);

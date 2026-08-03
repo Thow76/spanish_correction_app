@@ -103,14 +103,38 @@ import 'shared/model_pricing.dart' as pricing;
 /// Bump this if the system prompt or user prompt template below ever
 /// changes, so historical reports stay attributable to the wording that
 /// produced them.
-const String promptVersion = 'v1';
+const String promptVersion = 'v2';
 
 /// Human-readable label for this narrow first-pass prompt. This is metadata
 /// only; changing it does not change prompt wording.
 const String promptLabel = 'simple-spanish-grammar-spelling-punctuation-only';
 
-/// Exact wording from the issue — the same system prompt every model in
-/// the comparison receives. Deliberately not reworded or reformatted.
+// v1 — the exact wording from the original issue, superseded by v2 below
+// (issue #109). Kept by value, not deleted, same precedent as
+// naturalness_model_comparison_harness.dart's previousNaturalnessSystemPromptV3.
+const String previousSystemPromptV1 =
+    'You are a Spanish correction engine.\n'
+    '\n'
+    'Correct only objective Spanish grammar, spelling, and punctuation '
+    'errors.\n'
+    '\n'
+    'Do not correct word choice.\n'
+    'Do not improve naturalness.\n'
+    'Do not rewrite for style, fluency, tone, or elegance.\n'
+    'Do not change valid regional Spanish.\n'
+    'Do not treat awkward but grammatically valid Spanish as an error.\n'
+    '\n'
+    'Return JSON only. Do not include Markdown or commentary.';
+
+// v2 (issue #109): adds one new worked-examples paragraph to v1 above —
+// everything else is byte-for-byte unchanged. The live benchmark
+// (docs/two_pass_prompt_contract_audit.md §7c,
+// docs/two_pass_live_language_point_benchmark_findings.md) found the v1
+// prompt's blanket "do not" restraint statements weren't enough on their
+// own to keep the model from crossing into naturalness/word-choice
+// territory or from leaving a second missing article uncorrected — the
+// new paragraph gives concrete worked examples for each recorded failure
+// pattern instead of relying on the restraint statements alone.
 const String systemPrompt =
     'You are a Spanish correction engine.\n'
     '\n'
@@ -122,6 +146,25 @@ const String systemPrompt =
     'Do not rewrite for style, fluency, tone, or elegance.\n'
     'Do not change valid regional Spanish.\n'
     'Do not treat awkward but grammatically valid Spanish as an error.\n'
+    '\n'
+    'Examples of text to leave unchanged, even though a different wording '
+    'exists:\n'
+    '- "Voy para casa ahora mismo." is valid regional Spanish. Do not '
+    'change it to "Voy para la casa ahora mismo." or "Voy a casa ahora '
+    'mismo."\n'
+    '- "Estoy corriendo tarde para la reunión." looks like a one-word fix, '
+    'but "corriendo tarde" is a calque, not a grammar, spelling, or '
+    'punctuation error. Leave "corriendo tarde" as written, even though '
+    '"llegando tarde" would sound more natural.\n'
+    '- "Atendió la universidad en Madrid." uses "atendió" as a false '
+    'friend for "attend", but choosing the right word is word choice, not '
+    'grammar, spelling, or punctuation. Leave "atendió" as written.\n'
+    '\n'
+    'When a sentence is missing more than one required word (for example, '
+    'more than one article), correct every instance you find, not only '
+    'the first one: "Tengo cita con médico mañana." is missing both "una" '
+    'before "cita" and "el" before "médico" — correct it to "Tengo una '
+    'cita con el médico mañana."\n'
     '\n'
     'Return JSON only. Do not include Markdown or commentary.';
 
@@ -1299,23 +1342,99 @@ void main() {
     }
   });
 
-  test('systemPrompt matches the issue wording exactly', () {
-    expect(
-      systemPrompt,
-      'You are a Spanish correction engine.\n'
-      '\n'
-      'Correct only objective Spanish grammar, spelling, and punctuation '
-      'errors.\n'
-      '\n'
-      'Do not correct word choice.\n'
-      'Do not improve naturalness.\n'
-      'Do not rewrite for style, fluency, tone, or elegance.\n'
-      'Do not change valid regional Spanish.\n'
-      'Do not treat awkward but grammatically valid Spanish as an error.\n'
-      '\n'
-      'Return JSON only. Do not include Markdown or commentary.',
-    );
-  });
+  test(
+    'systemPrompt (v2) keeps every v1 restraint statement unchanged, and '
+    'adds the issue #109 worked-examples paragraph',
+    () {
+      expect(promptVersion, 'v2');
+      for (final restraintLine in [
+        'You are a Spanish correction engine.',
+        'Correct only objective Spanish grammar, spelling, and punctuation '
+            'errors.',
+        'Do not correct word choice.',
+        'Do not improve naturalness.',
+        'Do not rewrite for style, fluency, tone, or elegance.',
+        'Do not change valid regional Spanish.',
+        'Do not treat awkward but grammatically valid Spanish as an error.',
+        'Return JSON only. Do not include Markdown or commentary.',
+      ]) {
+        expect(systemPrompt, contains(restraintLine));
+      }
+    },
+  );
+
+  test(
+    'systemPrompt (issue #109) gives a worked example for valid regional '
+    'Spanish that must not be normalized',
+    () {
+      expect(systemPrompt, contains('"Voy para casa ahora mismo."'));
+      expect(
+        systemPrompt,
+        contains('is valid regional Spanish. Do not change it'),
+      );
+    },
+  );
+
+  test(
+    'systemPrompt (issue #109) gives a worked example for a phrase-level '
+    'calque whose minimal edit looks like one word',
+    () {
+      expect(
+        systemPrompt,
+        contains('"Estoy corriendo tarde para la reunión."'),
+      );
+      expect(
+        systemPrompt,
+        contains(
+          '"corriendo tarde" is a calque, not a grammar, spelling, or '
+          'punctuation error',
+        ),
+      );
+    },
+  );
+
+  test(
+    'systemPrompt (issue #109) gives a worked example for a false friend '
+    'that is word choice, not first-pass scope',
+    () {
+      expect(systemPrompt, contains('"Atendió la universidad en Madrid."'));
+      expect(
+        systemPrompt,
+        contains(
+          '"atendió" as a false friend for "attend", but choosing the '
+          'right word is word choice',
+        ),
+      );
+    },
+  );
+
+  test(
+    'systemPrompt (issue #109) instructs correcting every missing article '
+    'in a sentence, not only the first one',
+    () {
+      expect(
+        systemPrompt,
+        contains('missing more than one required word'),
+      );
+      expect(systemPrompt, contains('"Tengo cita con médico mañana."'));
+      expect(
+        systemPrompt,
+        contains('"Tengo una cita con el médico mañana."'),
+      );
+    },
+  );
+
+  test(
+    'keeps the v1 prompt available for regression comparison, and '
+    'confirms it does not yet contain the v2 worked examples',
+    () {
+      expect(previousSystemPromptV1, isNot(contains('Examples of text to')));
+      expect(
+        previousSystemPromptV1,
+        contains('Do not treat awkward but grammatically valid Spanish'),
+      );
+    },
+  );
 
   test('buildUserPrompt matches the issue wording exactly', () {
     expect(
@@ -2213,7 +2332,7 @@ const String _expectedReportGolden =
 ## Run configuration
 
 - Prompt label: `simple-spanish-grammar-spelling-punctuation-only`
-- Prompt version: `v1`
+- Prompt version: `v2`
 - Models: `test-model-a`, `test-model-b`
 - Fixture case ids: `TEST-1`
 - Runs per model/fixture case: `1`
