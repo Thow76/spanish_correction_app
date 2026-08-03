@@ -526,7 +526,15 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     id: 'article-cita-medico',
     text: 'Tengo cita con médico mañana.',
     note: 'Missing indefinite article before "cita" and definite before '
-        '"médico".',
+        '"médico". Issue #112 target-variety note: "tengo cita con el '
+        'médico" (no "una") is used colloquially in some varieties, but '
+        'this project targets standard/prescriptive Spanish requiring '
+        'explicit articles here — this exact phrase was deliberately '
+        'added as a worked example in the first-pass prompt (issue '
+        '#109, "firstPassCorrectionSpanish" v2) specifically to teach '
+        'the model to add both articles. Kept strict rather than '
+        'loosened with an alternative, since loosening it would '
+        'contradict that prompt-engineering decision.',
     languagePoint: 'Articles / Determiners',
     operationType: TwoPassOperationType.insertion,
     expectedOwner: TwoPassExpectedOwner.firstPass,
@@ -635,26 +643,41 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
   TwoPassFixture(
     id: 'delete-repeated-yo-estudio',
     text: 'Yo trabajo mucho y yo estudio por las noches.',
-    note: 'Second "yo" is a redundant repeated subject pronoun.',
+    note: 'Second "yo" is a redundant repeated subject pronoun. Issue '
+        '#112: Spanish is pro-drop, so dropping BOTH subject pronouns '
+        '(not just the second) is equally valid and arguably more '
+        'natural absent any emphasis/contrast — accepted as an '
+        'alternative, matching the precedent already set by '
+        '"delete-repeated-yo-compre" below, whose primary expectation '
+        'already drops both.',
     languagePoint: 'Unnecessary Extras / Deletions',
     operationType: TwoPassOperationType.deletion,
     expectedOwner: TwoPassExpectedOwner.firstPass,
     expectedCorrectedText: 'Yo trabajo mucho y estudio por las noches.',
+    acceptableAlternatives: ['Trabajo mucho y estudio por las noches.'],
   ),
   TwoPassFixture(
     id: 'delete-repeated-ellos-visitaron',
     text: 'Ellos viajaron a México y ellos visitaron varias ciudades.',
-    note: 'Second "ellos" is a redundant repeated subject pronoun.',
+    note: 'Second "ellos" is a redundant repeated subject pronoun. Issue '
+        '#112: dropping both pro-drop pronouns is also valid — see '
+        '"delete-repeated-yo-estudio" above for the same reasoning.',
     languagePoint: 'Unnecessary Extras / Deletions',
     operationType: TwoPassOperationType.deletion,
     expectedOwner: TwoPassExpectedOwner.firstPass,
     expectedCorrectedText:
         'Ellos viajaron a México y visitaron varias ciudades.',
+    acceptableAlternatives: [
+      'Viajaron a México y visitaron varias ciudades.',
+    ],
   ),
   TwoPassFixture(
     id: 'delete-repeated-a-mi',
     text: 'A mí me gusta el café a mí.',
-    note: 'Trailing "a mí" repeats the fronted emphatic pronoun.',
+    note: 'Trailing "a mí" repeats the fronted emphatic pronoun. Not a '
+        'pro-drop case like the "yo"/"ellos"/"nosotros" fixtures below '
+        '— "a mí" here is emphatic dative clitic doubling, not an '
+        'optional subject pronoun, so no alternative added.',
     languagePoint: 'Unnecessary Extras / Deletions',
     operationType: TwoPassOperationType.deletion,
     expectedOwner: TwoPassExpectedOwner.firstPass,
@@ -663,7 +686,10 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
   TwoPassFixture(
     id: 'delete-repeated-yo-compre',
     text: 'Yo fui al mercado y yo compré pan.',
-    note: 'Second "yo" is a redundant repeated subject pronoun.',
+    note: 'Second "yo" is a redundant repeated subject pronoun. Already '
+        'expects full pro-drop (both pronouns removed) as the primary '
+        'answer — the precedent the other pro-drop fixtures above now '
+        'match via acceptableAlternatives (issue #112).',
     languagePoint: 'Unnecessary Extras / Deletions',
     operationType: TwoPassOperationType.deletion,
     expectedOwner: TwoPassExpectedOwner.firstPass,
@@ -672,11 +698,14 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
   TwoPassFixture(
     id: 'delete-repeated-nosotros',
     text: 'Nosotros salimos temprano y nosotros llegamos a tiempo.',
-    note: 'Second "nosotros" is a redundant repeated subject pronoun.',
+    note: 'Second "nosotros" is a redundant repeated subject pronoun. '
+        'Issue #112: dropping both pro-drop pronouns is also valid — '
+        'see "delete-repeated-yo-estudio" above for the same reasoning.',
     languagePoint: 'Unnecessary Extras / Deletions',
     operationType: TwoPassOperationType.deletion,
     expectedOwner: TwoPassExpectedOwner.firstPass,
     expectedCorrectedText: 'Nosotros salimos temprano y llegamos a tiempo.',
+    acceptableAlternatives: ['Salimos temprano y llegamos a tiempo.'],
   ),
 
   // --- 9. Ser / Estar / Haber — expected owner: first pass ---
@@ -835,11 +864,17 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     id: 'false-friend-aplico-trabajo',
     text: 'Aplicó para un trabajo.',
     note: '"aplicar para" is a false friend for "apply for"; needs '
-        '"solicitar".',
+        '"solicitar". Issue #112: "postularse a" is also genuinely '
+        'natural, especially in Latin American varieties (Mexico, the '
+        'Southern Cone) — accepted as an alternative rather than '
+        'replacing "solicitó un trabajo" as the primary expectation, '
+        'since the latter reads naturally across all varieties and the '
+        'former is somewhat variety-marked.',
     languagePoint: 'False Friends / Word Choice',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
     expectedCorrectedText: 'Solicitó un trabajo.',
+    acceptableAlternatives: ['Se postuló a un trabajo.'],
   ),
   TwoPassFixture(
     id: 'false-friend-realice',
@@ -855,11 +890,18 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     id: 'false-friend-embarazado',
     text: 'Estoy embarazado por llegar tarde.',
     note: '"embarazado" is a false friend for "embarrassed"; needs "me da '
-        'vergüenza".',
+        'vergüenza". Issue #112: "avergonzado" is also a genuinely valid '
+        'minimal fix — a plain adjective swap ("embarazado" -> '
+        '"avergonzado") that keeps the original sentence structure, is '
+        'not regionally marked the way "apenado" (more Latin American) '
+        'vs. "avergonzado" (pan-Hispanic) can be, and is accepted as an '
+        'alternative alongside the more idiomatic impersonal '
+        'restructuring.',
     languagePoint: 'False Friends / Word Choice',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
     expectedCorrectedText: 'Me da vergüenza llegar tarde.',
+    acceptableAlternatives: ['Estoy avergonzado por llegar tarde.'],
   ),
   TwoPassFixture(
     id: 'false-friend-actualmente-control',
@@ -1050,14 +1092,26 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
   ),
   TwoPassFixture(
     id: 'mixed-personal-a-and-subjunctive',
-    text: 'Vi mi profesor en la estación, y es importante que estudias.',
+    text: 'Vi mi profesor en la estación, y recordé que es importante '
+        'que estudio.',
     note: 'Combines a missing personal-"a" insertion with a subjunctive-'
-        'mood replacement ("estudias" -> "estudies").',
+        'mood replacement ("estudio" -> "estudie"). Issue #112: '
+        'rewritten from the original "...y es importante que estudias." '
+        '— that version paired a first-person "vi" clause with a '
+        'dangling second-person "estudias" that had no clear referent, '
+        'which repeatedly invited the naturalness/fallback pass to '
+        '"repair" the incoherence by inventing new content (e.g. adding '
+        '"me dijo que"), a fixture-design problem rather than a model '
+        'failure (see docs/two_pass_test_change_notes.md). This version '
+        'is single-subject and self-contained ("I saw my professor, and '
+        'I remembered that it\'s important that I study") so there is '
+        'no coherence gap left to invite a rewrite.',
     languagePoint: 'Mixed Operations',
     operationType: TwoPassOperationType.mixed,
     expectedOwner: TwoPassExpectedOwner.firstPass,
     expectedCorrectedText:
-        'Vi a mi profesor en la estación, y es importante que estudies.',
+        'Vi a mi profesor en la estación, y recordé que es importante '
+        'que estudie.',
   ),
   TwoPassFixture(
     id: 'mixed-gender-agreement-and-redundant-pronoun',
@@ -1072,15 +1126,28 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
   ),
   TwoPassFixture(
     id: 'mixed-verb-agreement-and-missing-que',
-    text: 'Ellos estudia todas las noches, y creo está bien terminar hoy.',
+    text: 'Ellos estudia todas las noches, y creo está bien terminar de '
+        'estudiar hoy.',
     note: 'Combines a verb-agreement replacement ("estudia" -> "estudian") '
-        'with a missing-connector insertion ("creo que").',
+        'with a missing-connector insertion ("creo que"). Issue #112: '
+        'rewritten from the original "...y creo está bien terminar '
+        'hoy." — "terminar" had no explicit object there ("finish '
+        'today" — finish what?), which repeatedly invited the '
+        'naturalness/fallback pass to "repair" the ambiguity by '
+        'rewording the whole second clause (e.g. dropping "Ellos", '
+        'changing to "podemos terminar hoy"), a fixture-design problem '
+        'rather than a model failure (see '
+        'docs/two_pass_test_change_notes.md). Adding "de estudiar" ties '
+        '"terminar" directly to the first clause\'s "estudia[n]" '
+        '("they study every night, and I think it\'s fine to stop '
+        'studying today") — coherent and self-contained, minimal '
+        'change from the original, same two intended fixes.',
     languagePoint: 'Mixed Operations',
     operationType: TwoPassOperationType.mixed,
     expectedOwner: TwoPassExpectedOwner.firstPass,
     expectedCorrectedText:
         'Ellos estudian todas las noches, y creo que está bien terminar '
-        'hoy.',
+        'de estudiar hoy.',
   ),
 ];
 
