@@ -27,10 +27,10 @@
 // Run offline (fixture/logic sanity only, no API calls):
 //   flutter test test/two_pass_fallback_pipeline_comparison_harness.dart --exclude-tags live
 //
-// Run live deliberately (costs real API calls — 10 fixtures, first pass +
-// naturalness-on-original always (20 calls), plus up to 2 fallback calls
+// Run live deliberately (costs real API calls — 17 fixtures, first pass +
+// naturalness-on-original always (34 calls), plus up to 2 fallback calls
 // per fixture only when a conflict is genuinely triggered — expect on the
-// order of 30-40 total calls, well under a full benchmark run):
+// order of 50-68 total calls, well under a full benchmark run):
 //   OPENAI_API_KEY=sk-... \
 //   FALLBACK_PIPELINE_COMPARISON_LIVE=true \
 //   flutter test test/two_pass_fallback_pipeline_comparison_harness.dart --tags live --timeout none
@@ -108,14 +108,30 @@ const String candidateFallbackPrompt =
 
 /// The curated test set (issue #117's own "Test Set" section) — ids drawn
 /// from the real language-point benchmark (`allTwoPassFixtures`,
-/// issue #82), chosen for known, previously-observed fallback behavior:
-/// clean grammar-only cases that triggered fallback, already-correct
-/// do-not-touch cases, true naturalness cases, mixed/coherence cases
-/// (reported separately, per the issue's own instruction — see each
-/// fixture's `languagePoint`), a false-friend re-edit case, and a
-/// subjunctive/mood case. Reusing real fixtures (not hand-typed inputs)
-/// means expected outputs and language-point grouping stay identical to
-/// every other benchmark report.
+/// issue #82). Issue #117 asked to use the previous live benchmark
+/// (`docs/two_pass_live_language_point_benchmark_issue_log.md`) as the
+/// base, including every phrase where fallback triggered, changed text,
+/// or caused a fail there — not just a small sample of them. This list
+/// covers: clean grammar-only cases, already-correct do-not-touch cases,
+/// true naturalness cases, mixed/coherence cases (reported separately,
+/// per the issue's own instruction — see each fixture's `languagePoint`),
+/// false-friend cases, a subjunctive/mood case, and every known
+/// fallback-changed/fail case from that prior log:
+/// - `ambiguous-naturalness-span`: the repeated-span rewrite fail
+///   ("Vi mucho tráfico, y luego vi más tráfico.").
+/// - `article-la-tienda`: the article-duplication fail ("la la tienda").
+/// - `false-friend-aplico-trabajo`, `false-friend-embarazado`: the two
+///   other false-friend fails from that log (only `atendio-universidad`
+///   was covered before).
+/// - `naturalness-pasar-buen-tiempo`, `naturalness-puedo-tener-cerveza`:
+///   the slash-alternative naturalness fails.
+/// - `mixed-preposition-and-redundant-pronoun`: the other mixed-operation
+///   fail (only the personal-a/subjunctive and verb-agreement/que mixed
+///   cases were covered before).
+///
+/// Reusing real fixtures (not hand-typed inputs) means expected outputs
+/// and language-point grouping stay identical to every other benchmark
+/// report.
 const List<String> fallbackPipelineComparisonFixtureIds = [
   'clean-grammar-only',
   'correct-tomar-foto',
@@ -127,6 +143,13 @@ const List<String> fallbackPipelineComparisonFixtureIds = [
   'mixed-verb-agreement-and-missing-que',
   'false-friend-atendio-universidad',
   'subj-enviara',
+  'ambiguous-naturalness-span',
+  'article-la-tienda',
+  'false-friend-aplico-trabajo',
+  'false-friend-embarazado',
+  'naturalness-pasar-buen-tiempo',
+  'naturalness-puedo-tener-cerveza',
+  'mixed-preposition-and-redundant-pronoun',
 ];
 
 List<TwoPassFixture> get fallbackPipelineComparisonFixtures =>
@@ -259,10 +282,14 @@ String _reasonFor({
 }) {
   final score = _score(fixture, finalCorrectedText);
   if (isPassingScore(score)) {
-    return finalCorrectedText == firstPassCorrectedText
-        ? 'Matches expected output; already-correct first-pass text was '
-              'left unchanged.'
-        : 'Matches expected output after the fallback edit was applied.';
+    if (finalCorrectedText == firstPassCorrectedText) {
+      return 'Matches expected output; already-correct first-pass text was '
+          'left unchanged.';
+    }
+    return fallbackTriggered
+        ? 'Matches expected output after the fallback edit was applied.'
+        : 'Matches expected output after the parallel naturalness edit '
+              'was applied.';
   }
   if (!fallbackTriggered) {
     return 'Fallback was never triggered (no conflict), but the parallel '
@@ -454,10 +481,23 @@ String buildFallbackPipelineComparisonReport({
   }
 
   final triggeredResults = results.where((r) => r.hadConflict).toList();
+  final untriggeredResults = results.where((r) => !r.hadConflict).toList();
   final currentPassCount = results
       .where((r) => isPassingScore(r.current.score))
       .length;
   final candidatePassCount = results
+      .where((r) => isPassingScore(r.candidate.score))
+      .length;
+  final currentTriggeredPassCount = triggeredResults
+      .where((r) => isPassingScore(r.current.score))
+      .length;
+  final candidateTriggeredPassCount = triggeredResults
+      .where((r) => isPassingScore(r.candidate.score))
+      .length;
+  final currentUntriggeredPassCount = untriggeredResults
+      .where((r) => isPassingScore(r.current.score))
+      .length;
+  final candidateUntriggeredPassCount = untriggeredResults
       .where((r) => isPassingScore(r.candidate.score))
       .length;
 
@@ -466,17 +506,44 @@ String buildFallbackPipelineComparisonReport({
     ..writeln()
     ..writeln('## Overall summary')
     ..writeln()
+    ..writeln(
+      'Both variants score identically on every fixture where fallback '
+      'was never triggered, since neither variant\'s fallback call runs '
+      'in that case — the "all fixtures" rate below is diluted by those '
+      'shared results and is not the number that speaks to the fallback '
+      'prompt itself. The "fallback-triggered fixtures only" rate is the '
+      'one that actually compares the two prompts.',
+    )
+    ..writeln()
     ..writeln('| Metric | Value |')
     ..writeln('| --- | --- |')
     ..writeln('| Fixtures | ${results.length} |')
     ..writeln('| Fixtures where fallback triggered | '
         '${triggeredResults.length} |')
+    ..writeln('| Fixtures where fallback did not trigger | '
+        '${untriggeredResults.length} |')
     ..writeln(
-      '| Current pass rate (correct_fix + acceptable_no_change) | '
+      '| Current pass rate, fallback-triggered fixtures only | '
+      '$currentTriggeredPassCount/${triggeredResults.length} |',
+    )
+    ..writeln(
+      '| Candidate pass rate, fallback-triggered fixtures only | '
+      '$candidateTriggeredPassCount/${triggeredResults.length} |',
+    )
+    ..writeln(
+      '| Current pass rate, non-triggered fixtures only | '
+      '$currentUntriggeredPassCount/${untriggeredResults.length} |',
+    )
+    ..writeln(
+      '| Candidate pass rate, non-triggered fixtures only | '
+      '$candidateUntriggeredPassCount/${untriggeredResults.length} |',
+    )
+    ..writeln(
+      '| Current pass rate, all fixtures (diluted, see note above) | '
       '$currentPassCount/${results.length} |',
     )
     ..writeln(
-      '| Candidate pass rate (correct_fix + acceptable_no_change) | '
+      '| Candidate pass rate, all fixtures (diluted, see note above) | '
       '$candidatePassCount/${results.length} |',
     );
 
