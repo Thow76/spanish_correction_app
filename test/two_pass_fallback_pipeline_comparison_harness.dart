@@ -27,7 +27,8 @@
 // Run offline (fixture/logic sanity only, no API calls):
 //   flutter test test/two_pass_fallback_pipeline_comparison_harness.dart --exclude-tags live
 //
-// Run live deliberately (costs real API calls — 27 fixtures, first pass +
+// Run live deliberately (costs real API calls — default mode is the
+// 27-fixture comparison set, one run each: first pass +
 // naturalness-on-original always (54 calls), plus up to 2 fallback calls
 // per fixture only when a conflict is genuinely triggered — expect on the
 // order of 80-108 total calls, well under a full benchmark run):
@@ -35,13 +36,34 @@
 //   FALLBACK_PIPELINE_COMPARISON_LIVE=true \
 //   flutter test test/two_pass_fallback_pipeline_comparison_harness.dart --tags live --timeout none
 //
+// Run the all-fixtures, repeated-run mode (issue #122) — every fixture in
+// allTwoPassFixtures (85 as of this writing), 5 runs each, to make live
+// model variance visible rather than trusting a single-run result. This
+// is expensive: up to 85 * 5 * 4 = 1700 calls in the worst case (every
+// run triggering fallback). Use FALLBACK_PIPELINE_RUNS_PER_FIXTURE=1 with
+// FALLBACK_PIPELINE_FIXTURE_SET=all first if you just want broader
+// coverage without the repeat-run cost:
+//   OPENAI_API_KEY=sk-... \
+//   FALLBACK_PIPELINE_COMPARISON_LIVE=true \
+//   FALLBACK_PIPELINE_FIXTURE_SET=all \
+//   FALLBACK_PIPELINE_RUNS_PER_FIXTURE=5 \
+//   flutter test test/two_pass_fallback_pipeline_comparison_harness.dart --tags live --timeout none
+//
 // Optional runtime controls:
 // - FALLBACK_PIPELINE_FIRST_PASS_MODEL: defaults to gpt-4.1.
 // - FALLBACK_PIPELINE_NATURALNESS_MODEL: defaults to gpt-5.1.
 // - FALLBACK_PIPELINE_OUTPUT: report path, defaults to
 //   docs/two_pass_fallback_pipeline_comparison.md.
-// - FALLBACK_PIPELINE_CALL_DELAY_MS: delay between fixtures, defaults to
-//   750.
+// - FALLBACK_PIPELINE_CALL_DELAY_MS: delay between fixture runs, defaults
+//   to 750.
+// - FALLBACK_PIPELINE_FIXTURE_SET (issue #122): "comparison" (default —
+//   the curated 27-fixture set below) or "all" (every fixture in
+//   allTwoPassFixtures).
+// - FALLBACK_PIPELINE_RUNS_PER_FIXTURE (issue #122): how many times to
+//   run each selected fixture with the exact same submitted text, so a
+//   repeated live failure can be told apart from a one-off stochastic
+//   result — same convention as TWO_PASS_RUNS_PER_FIXTURE (issue #107).
+//   Defaults to 1.
 
 import 'dart:async';
 import 'dart:convert';
@@ -223,6 +245,73 @@ int callDelayMsFrom(Map<String, String> environment) {
   return int.tryParse(raw) ?? 750;
 }
 
+/// Default `FALLBACK_PIPELINE_FIXTURE_SET` value (issue #122) — the
+/// existing curated 27-fixture comparison set, unchanged from before this
+/// existed.
+const String defaultFallbackPipelineFixtureSet = 'comparison';
+
+/// Which fixtures `fixtureSet` selects (issue #122): `"comparison"` (the
+/// curated set issue #117 built, [fallbackPipelineComparisonFixtures]) or
+/// `"all"` (every fixture in [allTwoPassFixtures], for broader coverage
+/// than the curated set alone can offer). Throws [ArgumentError] for
+/// anything else, same "fail fast rather than silently run the wrong
+/// thing" precedent as [fallbackPipelineRunsPerFixtureFrom] and
+/// `two_pass_integration_harness.dart`'s own `selectFixtures`.
+List<TwoPassFixture> fallbackPipelineFixturesFor(String fixtureSet) {
+  switch (fixtureSet) {
+    case 'comparison':
+      return fallbackPipelineComparisonFixtures;
+    case 'all':
+      return allTwoPassFixtures;
+    default:
+      throw ArgumentError(
+        'Unknown FALLBACK_PIPELINE_FIXTURE_SET "$fixtureSet" — expected '
+        '"comparison" or "all".',
+      );
+  }
+}
+
+/// Reads `FALLBACK_PIPELINE_FIXTURE_SET` from a real environment (issue
+/// #122), same real-environment-variable convention as [callDelayMsFrom].
+List<TwoPassFixture> fallbackPipelineFixturesFrom(
+  Map<String, String> environment,
+) {
+  return fallbackPipelineFixturesFor(
+    _runtimeString(
+      environment: environment,
+      key: 'FALLBACK_PIPELINE_FIXTURE_SET',
+      defaultValue: defaultFallbackPipelineFixtureSet,
+    ),
+  );
+}
+
+/// Default number of times to run each selected fixture (issue #122) —
+/// unchanged single-run behavior from before this existed.
+const int defaultFallbackPipelineRunsPerFixture = 1;
+
+/// Reads `FALLBACK_PIPELINE_RUNS_PER_FIXTURE` from a real environment
+/// (issue #122) — how many times to run each selected fixture with the
+/// exact same submitted text, so a repeated live failure (or a repeated
+/// candidate win) can be told apart from a one-off stochastic result.
+/// Same convention as `two_pass_integration_harness.dart`'s
+/// `TWO_PASS_RUNS_PER_FIXTURE` (issue #107), including throwing
+/// [ArgumentError] for a zero or negative value rather than silently
+/// running every selected fixture zero times.
+int fallbackPipelineRunsPerFixtureFrom(Map<String, String> environment) {
+  final raw =
+      environment['FALLBACK_PIPELINE_RUNS_PER_FIXTURE']?.trim() ?? '';
+  final runsPerFixture =
+      int.tryParse(raw) ?? defaultFallbackPipelineRunsPerFixture;
+  if (runsPerFixture < 1) {
+    throw ArgumentError(
+      'FALLBACK_PIPELINE_RUNS_PER_FIXTURE must be >= 1 (was '
+      '$runsPerFixture) — 0 or negative would silently run every '
+      'selected fixture zero times.',
+    );
+  }
+  return runsPerFixture;
+}
+
 /// One prompt variant's outcome for one fixture, within the real pipeline.
 class FallbackVariantOutcome {
   const FallbackVariantOutcome({
@@ -253,6 +342,7 @@ class FallbackPipelineComparisonResult {
     required this.hadConflict,
     required this.current,
     required this.candidate,
+    this.runIndex = 1,
   });
 
   final TwoPassFixture fixture;
@@ -267,6 +357,12 @@ class FallbackPipelineComparisonResult {
 
   final FallbackVariantOutcome current;
   final FallbackVariantOutcome candidate;
+
+  /// 1-based index of this run among a fixture's repeated runs (issue
+  /// #122) — same convention as `two_pass_integration_harness.dart`'s
+  /// `FixtureResult.runIndex` (issue #107). Defaults to 1, unchanged
+  /// single-run behavior from before repeated runs existed.
+  final int runIndex;
 }
 
 String _describeReview(NaturalnessReview review) {
@@ -337,6 +433,7 @@ Future<FallbackPipelineComparisonResult> runFallbackPipelineComparison({
   required String firstPassModel,
   required String naturalnessModel,
   required TwoPassFixture fixture,
+  int runIndex = 1,
 }) async {
   final firstPassFuture = callFirstPassCorrection(
     client: client,
@@ -421,85 +518,246 @@ Future<FallbackPipelineComparisonResult> runFallbackPipelineComparison({
     hadConflict: hadConflict,
     current: currentOutcome,
     candidate: candidateOutcome,
+    runIndex: runIndex,
   );
 }
 
 /// Builds the comparison report, grouped by language point (issue #117's
 /// own "grouped by case type" requirement) so mixed/coherence cases don't
 /// distort clean do-not-touch cases in the reader's impression.
+/// Distinct `selector(run)` values across [runs], in first-seen order —
+/// used to show how much a variant's output actually varies across
+/// repeated runs of the same fixture (issue #122).
+List<String> _distinctOutputs(
+  List<FallbackPipelineComparisonResult> runs,
+  String Function(FallbackPipelineComparisonResult) selector,
+) {
+  final seen = <String>[];
+  for (final run in runs) {
+    final text = selector(run);
+    if (!seen.contains(text)) {
+      seen.add(text);
+    }
+  }
+  return seen;
+}
+
+String _formatOutputList(List<String> outputs) {
+  return outputs.map((text) => '`$text`').join('; ');
+}
+
+/// Which prompt "won" one run, by pass/fail score comparison (issue
+/// #122) — a candidate win is a run the candidate prompt passed and the
+/// current prompt did not; a current win (a regression for the
+/// candidate) is the reverse; anything else (both pass, both fail, or
+/// fallback never triggered so both variants are identical by
+/// construction) is a tie.
+enum _RunOutcome { candidateWin, currentWin, tie }
+
+_RunOutcome _classifyRun(FallbackPipelineComparisonResult result) {
+  final currentPass = isPassingScore(result.current.score);
+  final candidatePass = isPassingScore(result.candidate.score);
+  if (candidatePass && !currentPass) {
+    return _RunOutcome.candidateWin;
+  }
+  if (currentPass && !candidatePass) {
+    return _RunOutcome.currentWin;
+  }
+  return _RunOutcome.tie;
+}
+
+/// Builds the comparison report, grouped by language point (issue #117's
+/// own "grouped by case type" requirement) then by fixture, with each
+/// fixture's repeated runs (issue #122) rolled up into a summary plus one
+/// subsection per run, so mixed/coherence cases don't distort clean
+/// do-not-touch cases and repeated-run variance isn't collapsed into a
+/// single misleading result.
 String buildFallbackPipelineComparisonReport({
   required String firstPassModel,
   required String naturalnessModel,
   required List<FallbackPipelineComparisonResult> results,
   required DateTime generatedAt,
 }) {
+  final byFixtureId = <String, List<FallbackPipelineComparisonResult>>{};
+  final fixtureOrder = <String>[];
+  for (final result in results) {
+    final key = result.fixture.id;
+    if (!byFixtureId.containsKey(key)) {
+      fixtureOrder.add(key);
+    }
+    (byFixtureId[key] ??= []).add(result);
+  }
+  for (final runs in byFixtureId.values) {
+    runs.sort((a, b) => a.runIndex.compareTo(b.runIndex));
+  }
+  final distinctFixtureCount = fixtureOrder.length;
+
   final buffer = StringBuffer()
-    ..writeln('# Two-Pass Fallback Prompt Comparison: Full Pipeline (issue #117)')
+    ..writeln(
+      '# Two-Pass Fallback Prompt Comparison: Full Pipeline (issues '
+      '#117, #122)',
+    )
     ..writeln()
     ..writeln('## Run configuration')
     ..writeln()
     ..writeln('- First-pass model: `$firstPassModel`')
     ..writeln('- Naturalness model: `$naturalnessModel`')
-    ..writeln('- Fixture count: `${results.length}`')
+    ..writeln('- Fixtures: `$distinctFixtureCount`')
+    ..writeln('- Total runs: `${results.length}`')
     ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
     ..writeln()
     ..writeln(
       'Pass 1 and the parallel naturalness call are run once per fixture '
-      'and shared between both variants below — only the fallback call '
-      'itself (run once per variant, only when the real conflict logic '
-      'in `mergeNaturalnessReview` actually triggers it) differs.',
+      'run and shared between both variants below — only the fallback '
+      'call itself (run once per variant, only when the real conflict '
+      'logic in `mergeNaturalnessReview` actually triggers it) differs.',
     )
     ..writeln();
 
-  final byLanguagePoint = <String, List<FallbackPipelineComparisonResult>>{};
-  final order = <String>[];
-  for (final result in results) {
-    final key = result.fixture.languagePoint;
+  buffer
+    ..writeln('## Per-fixture summary')
+    ..writeln()
+    ..writeln(
+      'Pass counts are `passed/runs`; "distinct outputs" lists every '
+      'unique final output a variant produced across this fixture\'s '
+      'runs — more than one entry means the model was not stable for '
+      'that fixture.',
+    )
+    ..writeln()
+    ..writeln(
+      '| Fixture | Runs | Fallback triggered | Current pass | Candidate '
+      'pass | Distinct current outputs | Distinct candidate outputs |',
+    )
+    ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
+  for (final fixtureId in fixtureOrder) {
+    final runs = byFixtureId[fixtureId]!;
+    final triggeredCount = runs.where((r) => r.hadConflict).length;
+    final currentPassCount = runs
+        .where((r) => isPassingScore(r.current.score))
+        .length;
+    final candidatePassCount = runs
+        .where((r) => isPassingScore(r.candidate.score))
+        .length;
+    final distinctCurrent = _distinctOutputs(
+      runs,
+      (r) => r.current.finalCorrectedText,
+    );
+    final distinctCandidate = _distinctOutputs(
+      runs,
+      (r) => r.candidate.finalCorrectedText,
+    );
+    buffer.writeln(
+      '| $fixtureId | ${runs.length} | $triggeredCount/${runs.length} | '
+      '$currentPassCount/${runs.length} | '
+      '$candidatePassCount/${runs.length} | '
+      '${_formatOutputList(distinctCurrent)} | '
+      '${_formatOutputList(distinctCandidate)} |',
+    );
+  }
+  buffer.writeln();
+
+  final byLanguagePoint = <String, List<String>>{};
+  final languagePointOrder = <String>[];
+  for (final fixtureId in fixtureOrder) {
+    final key = byFixtureId[fixtureId]!.first.fixture.languagePoint;
     if (!byLanguagePoint.containsKey(key)) {
-      order.add(key);
+      languagePointOrder.add(key);
     }
-    (byLanguagePoint[key] ??= []).add(result);
+    (byLanguagePoint[key] ??= []).add(fixtureId);
   }
 
-  for (final languagePoint in order) {
+  for (final languagePoint in languagePointOrder) {
     buffer
       ..writeln('## $languagePoint')
       ..writeln();
-    for (final result in byLanguagePoint[languagePoint]!) {
+    for (final fixtureId in byLanguagePoint[languagePoint]!) {
+      final runs = byFixtureId[fixtureId]!;
+      final fixture = runs.first.fixture;
+      final triggeredCount = runs.where((r) => r.hadConflict).length;
+      final currentPassCount = runs
+          .where((r) => isPassingScore(r.current.score))
+          .length;
+      final candidatePassCount = runs
+          .where((r) => isPassingScore(r.candidate.score))
+          .length;
+
       buffer
-        ..writeln('### ${result.fixture.id}')
+        ..writeln('### $fixtureId')
         ..writeln()
-        ..writeln('- Original text: `${result.fixture.text}`')
+        ..writeln('- Original text: `${fixture.text}`')
         ..writeln(
-          '- Expected corrected text: '
-          '`${result.fixture.expectedCorrectedText}`',
+          '- Expected corrected text: `${fixture.expectedCorrectedText}`',
+        )
+        ..writeln('- Runs: ${runs.length}')
+        ..writeln(
+          '- Fallback triggered: $triggeredCount/${runs.length}',
+        )
+        ..writeln('- Current pass: $currentPassCount/${runs.length}')
+        ..writeln('- Candidate pass: $candidatePassCount/${runs.length}')
+        ..writeln(
+          '- Distinct current outputs: '
+          '${_formatOutputList(_distinctOutputs(runs, (r) => r.current.finalCorrectedText))}',
         )
         ..writeln(
-          '- Pass 1 (first-pass corrected text): '
-          '`${result.firstPassCorrectedText}`',
-        )
-        ..writeln(
-          '- Pass 2 (naturalness on original): '
-          '${result.naturalnessOnOriginalDescription}',
-        )
-        ..writeln('- Fallback triggered: ${result.hadConflict}')
-        ..writeln()
-        ..writeln('| Variant | Fallback output | Final output | Score | Reason |')
-        ..writeln('| --- | --- | --- | --- | --- |')
-        ..writeln(
-          '| Current (reused prompt) | '
-          '${result.current.fallbackReviewDescription ?? '(fallback not triggered)'} | '
-          '`${result.current.finalCorrectedText}` | '
-          '${result.current.score.reportLabel} | ${result.current.reason} |',
-        )
-        ..writeln(
-          '| Candidate (fallback-specific) | '
-          '${result.candidate.fallbackReviewDescription ?? '(fallback not triggered)'} | '
-          '`${result.candidate.finalCorrectedText}` | '
-          '${result.candidate.score.reportLabel} | '
-          '${result.candidate.reason} |',
+          '- Distinct candidate outputs: '
+          '${_formatOutputList(_distinctOutputs(runs, (r) => r.candidate.finalCorrectedText))}',
         )
         ..writeln();
+
+      void writeVariantTable(FallbackPipelineComparisonResult result) {
+        buffer
+          ..writeln(
+            '| Variant | Fallback output | Final output | Score | '
+            'Reason |',
+          )
+          ..writeln('| --- | --- | --- | --- | --- |')
+          ..writeln(
+            '| Current (reused prompt) | '
+            '${result.current.fallbackReviewDescription ?? '(fallback not triggered)'} | '
+            '`${result.current.finalCorrectedText}` | '
+            '${result.current.score.reportLabel} | ${result.current.reason} |',
+          )
+          ..writeln(
+            '| Candidate (fallback-specific) | '
+            '${result.candidate.fallbackReviewDescription ?? '(fallback not triggered)'} | '
+            '`${result.candidate.finalCorrectedText}` | '
+            '${result.candidate.score.reportLabel} | '
+            '${result.candidate.reason} |',
+          )
+          ..writeln();
+      }
+
+      if (runs.length == 1) {
+        final result = runs.single;
+        buffer
+          ..writeln(
+            '- Pass 1 (first-pass corrected text): '
+            '`${result.firstPassCorrectedText}`',
+          )
+          ..writeln(
+            '- Pass 2 (naturalness on original): '
+            '${result.naturalnessOnOriginalDescription}',
+          )
+          ..writeln();
+        writeVariantTable(result);
+      } else {
+        for (final result in runs) {
+          buffer
+            ..writeln('#### Run ${result.runIndex} of ${runs.length}')
+            ..writeln()
+            ..writeln(
+              '- Pass 1 (first-pass corrected text): '
+              '`${result.firstPassCorrectedText}`',
+            )
+            ..writeln(
+              '- Pass 2 (naturalness on original): '
+              '${result.naturalnessOnOriginalDescription}',
+            )
+            ..writeln('- Fallback triggered: ${result.hadConflict}')
+            ..writeln();
+          writeVariantTable(result);
+        }
+      }
     }
   }
 
@@ -524,51 +782,72 @@ String buildFallbackPipelineComparisonReport({
       .where((r) => isPassingScore(r.candidate.score))
       .length;
 
+  final triggeredOutcomes = triggeredResults.map(_classifyRun).toList();
+  final candidateWins = triggeredOutcomes
+      .where((o) => o == _RunOutcome.candidateWin)
+      .length;
+  final currentWins = triggeredOutcomes
+      .where((o) => o == _RunOutcome.currentWin)
+      .length;
+  final ties = triggeredOutcomes
+      .where((o) => o == _RunOutcome.tie)
+      .length;
+
   buffer
     ..writeln('---')
     ..writeln()
     ..writeln('## Overall summary')
     ..writeln()
     ..writeln(
-      'Both variants score identically on every fixture where fallback '
-      'was never triggered, since neither variant\'s fallback call runs '
-      'in that case — the "all fixtures" rate below is diluted by those '
-      'shared results and is not the number that speaks to the fallback '
-      'prompt itself. The "fallback-triggered fixtures only" rate is the '
-      'one that actually compares the two prompts.',
+      'Both variants score identically on every run where fallback was '
+      'never triggered, since neither variant\'s fallback call runs in '
+      'that case — the "all runs" rate below is diluted by those shared '
+      'results and is not the number that speaks to the fallback prompt '
+      'itself. The "fallback-triggered runs only" rate, and the win/tie/'
+      'regression breakdown below it, are what actually compare the two '
+      'prompts.',
     )
     ..writeln()
     ..writeln('| Metric | Value |')
     ..writeln('| --- | --- |')
-    ..writeln('| Fixtures | ${results.length} |')
-    ..writeln('| Fixtures where fallback triggered | '
+    ..writeln('| Fixtures | $distinctFixtureCount |')
+    ..writeln('| Total runs | ${results.length} |')
+    ..writeln('| Runs where fallback triggered | '
         '${triggeredResults.length} |')
-    ..writeln('| Fixtures where fallback did not trigger | '
+    ..writeln('| Runs where fallback did not trigger | '
         '${untriggeredResults.length} |')
     ..writeln(
-      '| Current pass rate, fallback-triggered fixtures only | '
+      '| Current pass rate, fallback-triggered runs only | '
       '$currentTriggeredPassCount/${triggeredResults.length} |',
     )
     ..writeln(
-      '| Candidate pass rate, fallback-triggered fixtures only | '
+      '| Candidate pass rate, fallback-triggered runs only | '
       '$candidateTriggeredPassCount/${triggeredResults.length} |',
     )
     ..writeln(
-      '| Current pass rate, non-triggered fixtures only | '
+      '| Current pass rate, non-triggered runs only | '
       '$currentUntriggeredPassCount/${untriggeredResults.length} |',
     )
     ..writeln(
-      '| Candidate pass rate, non-triggered fixtures only | '
+      '| Candidate pass rate, non-triggered runs only | '
       '$candidateUntriggeredPassCount/${untriggeredResults.length} |',
     )
     ..writeln(
-      '| Current pass rate, all fixtures (diluted, see note above) | '
+      '| Current pass rate, all runs (diluted, see note above) | '
       '$currentPassCount/${results.length} |',
     )
     ..writeln(
-      '| Candidate pass rate, all fixtures (diluted, see note above) | '
+      '| Candidate pass rate, all runs (diluted, see note above) | '
       '$candidatePassCount/${results.length} |',
-    );
+    )
+    ..writeln(
+      '| Candidate wins (fallback-triggered runs only) | $candidateWins |',
+    )
+    ..writeln(
+      '| Current wins / candidate regressions (fallback-triggered runs '
+      'only) | $currentWins |',
+    )
+    ..writeln('| Ties (fallback-triggered runs only) | $ties |');
 
   return buffer.toString();
 }
@@ -614,6 +893,78 @@ void main() {
       expect(callDelayMsFrom(const {}), 750);
     });
 
+    group('fixture-set selection (issue #122)', () {
+      test('"comparison" returns the curated 27-fixture comparison set', () {
+        expect(
+          fallbackPipelineFixturesFor('comparison'),
+          fallbackPipelineComparisonFixtures,
+        );
+      });
+
+      test('"all" returns every fixture in allTwoPassFixtures', () {
+        expect(fallbackPipelineFixturesFor('all'), allTwoPassFixtures);
+      });
+
+      test('an unrecognized fixture set throws', () {
+        expect(
+          () => fallbackPipelineFixturesFor('bogus'),
+          throwsArgumentError,
+        );
+      });
+
+      test(
+        'fallbackPipelineFixturesFrom reads FALLBACK_PIPELINE_FIXTURE_SET '
+        'from a real environment, defaulting to "comparison" when unset',
+        () {
+          expect(
+            fallbackPipelineFixturesFrom(const {}),
+            fallbackPipelineComparisonFixtures,
+          );
+          expect(
+            fallbackPipelineFixturesFrom(const {
+              'FALLBACK_PIPELINE_FIXTURE_SET': 'all',
+            }),
+            allTwoPassFixtures,
+          );
+        },
+      );
+    });
+
+    group('repeat-count parsing (issue #122)', () {
+      test(
+        'fallbackPipelineRunsPerFixtureFrom defaults to 1 and reads a '
+        'real environment variable',
+        () {
+          expect(fallbackPipelineRunsPerFixtureFrom(const {}), 1);
+          expect(
+            fallbackPipelineRunsPerFixtureFrom(const {
+              'FALLBACK_PIPELINE_RUNS_PER_FIXTURE': '5',
+            }),
+            5,
+          );
+        },
+      );
+
+      test(
+        'fallbackPipelineRunsPerFixtureFrom throws for a zero or negative '
+        'value instead of silently running every fixture zero times',
+        () {
+          expect(
+            () => fallbackPipelineRunsPerFixtureFrom(const {
+              'FALLBACK_PIPELINE_RUNS_PER_FIXTURE': '0',
+            }),
+            throwsArgumentError,
+          );
+          expect(
+            () => fallbackPipelineRunsPerFixtureFrom(const {
+              'FALLBACK_PIPELINE_RUNS_PER_FIXTURE': '-3',
+            }),
+            throwsArgumentError,
+          );
+        },
+      );
+    });
+
     test(
       'buildFallbackPipelineComparisonReport groups fixtures by language '
       'point and renders both variants',
@@ -654,6 +1005,107 @@ void main() {
         expect(report, contains('Current (reused prompt)'));
         expect(report, contains('Candidate (fallback-specific)'));
         expect(report, contains('| Current pass rate'));
+      },
+    );
+
+    test(
+      'buildFallbackPipelineComparisonReport (issue #122) renders per-run '
+      'subsections, a per-fixture pass-count/distinct-output summary, '
+      'and a candidate-win/current-win/tie breakdown across repeated runs',
+      () {
+        final fixture = allTwoPassFixtures.firstWhere(
+          (f) => f.id == 'clean-grammar-only',
+        );
+
+        FallbackVariantOutcome outcome(String text, TwoPassScoreLabel score) {
+          return FallbackVariantOutcome(
+            fallbackTriggered: true,
+            fallbackReviewDescription: 'span -> $text',
+            finalCorrectedText: text,
+            score: score,
+            reason: 'Synthetic test outcome.',
+          );
+        }
+
+        final results = [
+          // Run 1: candidate wins (candidate passes, current fails).
+          FallbackPipelineComparisonResult(
+            fixture: fixture,
+            firstPassCorrectedText: fixture.expectedCorrectedText,
+            naturalnessOnOriginalDescription: '(none)',
+            hadConflict: true,
+            current: outcome('Había mucho tráfico ayer.', TwoPassScoreLabel.ambiguous),
+            candidate: outcome(
+              fixture.expectedCorrectedText,
+              TwoPassScoreLabel.correctFix,
+            ),
+            runIndex: 1,
+          ),
+          // Run 2: tie (both fail, different outputs).
+          FallbackPipelineComparisonResult(
+            fixture: fixture,
+            firstPassCorrectedText: fixture.expectedCorrectedText,
+            naturalnessOnOriginalDescription: '(none)',
+            hadConflict: true,
+            current: outcome('Había mucho tráfico ayer.', TwoPassScoreLabel.ambiguous),
+            candidate: outcome('Hubo mucho tráfico ayer.', TwoPassScoreLabel.ambiguous),
+            runIndex: 2,
+          ),
+          // Run 3: current wins / candidate regresses.
+          FallbackPipelineComparisonResult(
+            fixture: fixture,
+            firstPassCorrectedText: fixture.expectedCorrectedText,
+            naturalnessOnOriginalDescription: '(none)',
+            hadConflict: true,
+            current: outcome(
+              fixture.expectedCorrectedText,
+              TwoPassScoreLabel.correctFix,
+            ),
+            candidate: outcome('Hubo mucho tráfico ayer.', TwoPassScoreLabel.ambiguous),
+            runIndex: 3,
+          ),
+        ];
+
+        final report = buildFallbackPipelineComparisonReport(
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          results: results,
+          generatedAt: DateTime.utc(2026, 1, 1),
+        );
+
+        // Per-fixture summary table: 3 runs, all triggered, 1/3 pass each,
+        // 2 distinct outputs for each variant (fixture.expectedCorrectedText
+        // appears twice for current, but only 2 unique texts total).
+        expect(
+          report,
+          contains(
+            '| clean-grammar-only | 3 | 3/3 | 1/3 | 1/3 | '
+            '`Había mucho tráfico ayer.`; `${fixture.expectedCorrectedText}` | '
+            '`${fixture.expectedCorrectedText}`; `Hubo mucho tráfico ayer.` |',
+          ),
+        );
+
+        // Per-run subsections, not collapsed into one result.
+        expect(report, contains('#### Run 1 of 3'));
+        expect(report, contains('#### Run 2 of 3'));
+        expect(report, contains('#### Run 3 of 3'));
+
+        // Win/tie/regression breakdown.
+        expect(
+          report,
+          contains('| Candidate wins (fallback-triggered runs only) | 1 |'),
+        );
+        expect(
+          report,
+          contains(
+            '| Current wins / candidate regressions (fallback-triggered '
+            'runs only) | 1 |',
+          ),
+        );
+        expect(
+          report,
+          contains('| Ties (fallback-triggered runs only) | 1 |'),
+        );
       },
     );
 
@@ -802,6 +1254,8 @@ void main() {
         defaultValue: defaultFallbackPipelineOutputPath,
       );
       final callDelayMs = callDelayMsFrom(environment);
+      final fixtures = fallbackPipelineFixturesFrom(environment);
+      final runsPerFixture = fallbackPipelineRunsPerFixtureFrom(environment);
       final httpClient = HttpClient();
       final client = OpenAiChatCompletionsClient(
         apiKey: apiKey,
@@ -809,23 +1263,27 @@ void main() {
       );
 
       final results = <FallbackPipelineComparisonResult>[];
-      for (final fixture in fallbackPipelineComparisonFixtures) {
-        final result = await runFallbackPipelineComparison(
-          client: client,
-          firstPassModel: firstPassModel,
-          naturalnessModel: naturalnessModel,
-          fixture: fixture,
-        );
-        results.add(result);
-        // ignore: avoid_print
-        print(
-          '=== ${fixture.id} === conflict=${result.hadConflict} '
-          'current="${result.current.finalCorrectedText}" '
-          '(${result.current.score.reportLabel}) '
-          'candidate="${result.candidate.finalCorrectedText}" '
-          '(${result.candidate.score.reportLabel})',
-        );
-        await Future<void>.delayed(Duration(milliseconds: callDelayMs));
+      for (final fixture in fixtures) {
+        for (var runIndex = 1; runIndex <= runsPerFixture; runIndex++) {
+          final result = await runFallbackPipelineComparison(
+            client: client,
+            firstPassModel: firstPassModel,
+            naturalnessModel: naturalnessModel,
+            fixture: fixture,
+            runIndex: runIndex,
+          );
+          results.add(result);
+          // ignore: avoid_print
+          print(
+            '=== ${fixture.id} (run $runIndex/$runsPerFixture) === '
+            'conflict=${result.hadConflict} '
+            'current="${result.current.finalCorrectedText}" '
+            '(${result.current.score.reportLabel}) '
+            'candidate="${result.candidate.finalCorrectedText}" '
+            '(${result.candidate.score.reportLabel})',
+          );
+          await Future<void>.delayed(Duration(milliseconds: callDelayMs));
+        }
       }
 
       final report = buildFallbackPipelineComparisonReport(
