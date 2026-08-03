@@ -12,18 +12,21 @@ prompt design.** No production prompt change is made as part of this
 issue; this document is the evidence and recommendation issue #117 asks
 for.
 
-**Revision note**: an earlier version of this document, based on a
-10-fixture run, recommended adopting the candidate prompt. That fixture
-set omitted several known fallback-changed/fail cases from the prior
-live benchmark (`docs/two_pass_live_language_point_benchmark_issue_log.md`)
-— repeated-span rewrite, article duplication, two of three false-friend
-fails, both slash-alternative naturalness fails, and one mixed-operation
-fail — so it did not actually cover what issue #117 asked for ("use the
-previous live benchmark as the base, including all phrases where
-fallback triggered, changed text, or caused a fail"). The fixture set
-below adds all of those back in (17 fixtures total), and the conclusion
-has changed as a result: **this document no longer recommends adopting
-the candidate prompt.** See "What Changed From The First Run" below.
+**Revision note (second)**: two earlier versions of this document (10
+and 17 fixtures) recommended, respectively, adopting and not-yet-adopting
+the candidate prompt, each based on partial coverage of the prior live
+benchmark log. Code review caught that both still omitted rows —
+including `grammar-overlaps-naturalness`, the fixture whose own doc
+comment calls it "the case the fallback exists for." The fixture set
+below is complete: **it includes every row in
+`docs/two_pass_live_language_point_benchmark_issue_log.md` marked
+`Fallback pass: Changed`** (both `Pass` and `Fail` outcomes), plus two
+`Unchanged` baseline rows kept for already-correct/regional coverage —
+27 fixtures total, 11 of which triggered fallback in this run. The
+conclusion is unchanged from the previous revision (do not adopt), but
+the evidence behind it is now materially different and, if anything,
+weaker for the candidate: see "Results" and "Cross-Run Volatility"
+below.
 
 ## What Was Built And Run
 
@@ -43,137 +46,118 @@ that runs the *real* pipeline sequence:
    vs. the candidate fallback-specific prompt from #110), against the
    exact same `firstPassCorrectedText`.
 
-Seventeen fixtures, drawn from the real language-point benchmark
-(`allTwoPassFixtures`, issue #82) rather than hand-typed, chosen to cover
-every case type issue #117 asked for: clean grammar-only, already-correct
-do-not-touch, valid-regional, true-naturalness, mixed/coherence
-(reported separately), false-friend, and subjunctive/mood cases — **plus
-every known fallback-changed or fallback-caused-fail case from the prior
-live benchmark log**: repeated-span rewrite (`ambiguous-naturalness-span`),
-article duplication (`article-la-tienda`), the two previously-omitted
-false-friend fails (`false-friend-aplico-trabajo`,
-`false-friend-embarazado`), both slash-alternative naturalness fails
-(`naturalness-pasar-buen-tiempo`, `naturalness-puedo-tener-cerveza`), and
-the previously-omitted mixed-operation fail
-(`mixed-preposition-and-redundant-pronoun`). All 17 ids were verified to
-resolve to exactly one fixture in `allTwoPassFixtures` before the live
-run.
-
 Full per-fixture detail: `docs/two_pass_fallback_pipeline_comparison.md`.
 
 ## Results
 
-**Fallback genuinely triggered on 6 of the 17 fixtures.** The other 11
+**Fallback genuinely triggered on 11 of the 27 fixtures.** The other 16
 share an identical result for both variants (no fallback call was made
-for either) — expected, since those fixtures never exercise the
-fallback prompt at all. Per your instruction, the two groups are kept
-separate rather than blended into one pass rate.
+for either) — 9/16 pass for both, out of scope for this comparison since
+neither variant's fallback prompt ever runs on them.
 
 ### Fallback-triggered fixtures (the only ones that test the two prompts)
 
 | Fixture | Current outcome | Candidate outcome | Winner |
 | --- | --- | --- | --- |
-| `clean-grammar-only` | `ambiguous` ("Había...") | `ambiguous` (identical: "Había...") | Tie (both wrong) |
-| `mixed-personal-a-and-subjunctive` | `ambiguous` (added "me dijo que") | `ambiguous` (split into two sentences, dropped a clause) | Tie (both wrong, differently) |
-| `mixed-verb-agreement-and-missing-que` | `ambiguous` (dropped subject "Ellos", reworded "por hoy") | `ambiguous` (kept "Ellos", reworded "hoy" only) | Tie (both wrong, candidate closer but still not exact) |
-| `mixed-preposition-and-redundant-pronoun` | `partial_fix` (changed "y" to ";") | `partial_fix` (kept "y", dropped only the repeated "yo") | Tie (both partial, candidate arguably tidier) |
-| `false-friend-aplico-trabajo` | `ambiguous` ("Se postuló a un trabajo.") | **`correct_fix`** (exact match: "Solicitó un trabajo.") | **Candidate** |
-| `subj-enviara` | `ambiguous` ("su informe") | `ambiguous` (identical: "su informe") | Tie (both wrong, identical) |
+| `clean-grammar-only` | `ambiguous` ("Había...") | `ambiguous` (identical) | Tie (both wrong) |
+| `mixed-personal-a-and-subjunctive` | `ambiguous` (added "me dijo que era") | **`correct_fix`** (left correct first-pass text alone) | **Candidate** |
+| `mixed-verb-agreement-and-missing-que` | `ambiguous` (reworded, added "ya") | `ambiguous` (reworded differently) | Tie (both wrong) |
+| `mixed-preposition-and-redundant-pronoun` | `partial_fix` | `partial_fix` (identical) | Tie (both partial) |
+| `mixed-gender-agreement-and-redundant-pronoun` | `correct_fix` | `correct_fix` | Tie (both correct) |
+| `false-friend-aplico-trabajo` | **`correct_fix`** (exact match: "Solicitó un trabajo.") | `ambiguous` ("Se postuló a un trabajo.") | **Current** |
+| `subj-enviara` | `ambiguous` ("su informe") | `ambiguous` (identical) | Tie (both wrong) |
+| `grammar-overlaps-naturalness` | `correct_fix` | `correct_fix` | Tie (both correct — the flagship case; both prompts handle it) |
+| `collocation-hace-sentido` | `correct_fix` (fallback found no issue) | `correct_fix` (fallback found no issue) | Tie (both correct) |
+| `prep-empresa-en-la-que` | `ambiguous` | `ambiguous` (identical) | Tie (both wrong) |
+| `delete-repeated-ellos-visitaron` | `correct_fix` (fallback found no issue) | `correct_fix` (fallback found no issue) | Tie (both correct) |
 
-**Fallback-triggered pass rate**: current **0/6**, candidate **1/6**.
-**Zero regressions**: no fixture where the candidate scored worse than
-the current prompt. But only one clear win, and it is the only passing
-result either variant achieves on this subset.
+**Fallback-triggered pass rate: current 5/11, candidate 5/11 — exactly
+tied.** One win each: the candidate wins `mixed-personal-a-and-subjunctive`
+(correctly declining to re-edit an already-correct first-pass fix); the
+current prompt wins `false-friend-aplico-trabajo` (the candidate
+introduces a wording drift the current prompt this run did not). **This
+is the first run of this evaluation to show the candidate prompt
+producing a worse output than the current prompt on a genuinely
+triggered fixture** — the "zero regressions" finding from the two
+earlier, partial-coverage runs of this same evaluation does not hold
+once the fixture set covers every known `Changed` row.
 
-### Non-triggered fixtures (fallback never runs — not informative about the prompt)
+## Cross-Run Volatility
 
-Current and candidate are identical on all 11, as expected: **6/11**
-pass rate for both. Failures here (`correct-tomar-foto`,
-`naturalness-corriendo-tarde`, `false-friend-atendio-universidad`,
-`ambiguous-naturalness-span`, `article-la-tienda`) are all first-pass or
-parallel-naturalness-pass behavior, out of scope for this comparison.
+This is now the third live run of a comparison over some or all of
+these fixtures, and specific fixtures have flipped outcome class between
+runs with no code, prompt, or fixture changes in between:
 
-### All fixtures (diluted — not the number that answers this question)
+| Fixture | Run 1 (10 fixtures) | Run 2 (17 fixtures) | Run 3 (27 fixtures, this doc) |
+| --- | --- | --- | --- |
+| `mixed-personal-a-and-subjunctive` | Candidate wins (exact match) | Tie (both `ambiguous`) | Candidate wins (exact match) |
+| `mixed-verb-agreement-and-missing-que` | Candidate wins (exact match) | Tie (both `ambiguous`) | Tie (both `ambiguous`) |
+| `false-friend-aplico-trabajo` | *(not in fixture set)* | Candidate wins (exact match) | **Current wins** (candidate regresses) |
 
-Current 6/17, candidate 7/17 — included only for completeness; per the
-note in the generated report, this number is diluted by the 11 shared
-non-triggered results and should not be read as evidence about the
-fallback prompt.
-
-## What Changed From The First Run
-
-The first version of this evaluation ran only 10 fixtures and found the
-candidate winning 2 of 4 triggered cases outright
-(`mixed-personal-a-and-subjunctive` and
-`mixed-verb-agreement-and-missing-que` both became exact matches). This
-expanded, 17-fixture run includes the same two fixtures — **and this
-time, both of them came back as ties, with both variants failing** (the
-candidate no longer produces an exact match for either). Nothing about
-the harness or the fixtures changed between the two observations of
-these two cases; only the live model call did.
-
-This is a materially different — and more informative — result than
-simply "more coverage." It demonstrates directly that **a single live
-run of either variant is not a stable measurement**, for the same reason
-the original #110 isolated-call comparison shouldn't have been treated
-as proof: gpt-5.1's naturalness/fallback output is not deterministic
-run to run for at least some of these inputs, and a prompt that "wins"
-in one run can tie-in-failure in the next. The one new, previously
-untested case — `false-friend-aplico-trabajo` — did produce a clear,
-single-run candidate win this time, but given what just happened with
-the other two mixed cases, it would be a mistake to treat that as
-settled without a repeat.
+The `false-friend-aplico-trabajo` flip is the most important row in that
+table: run 2 showed it as the single clearest evidence for adopting the
+candidate; run 3, on the identical fixture and identical prompts, shows
+the current prompt winning instead. Neither run's result should be
+treated as the "true" one — both are single, independent live samples of
+a non-deterministic model, and this evaluation's own data across three
+runs now shows that any individual fixture's outcome can flip in either
+direction from one run to the next.
 
 ## Recommendation
 
-**Do not adopt the candidate fallback-specific prompt yet.** Per your
-instruction not to recommend adoption unless the fallback-triggered
-results clearly support it: they don't. Zero regressions across 6
-triggered fixtures is a genuinely good sign — the candidate has never
-been observed to make a fallback-triggered case worse than the current
-prompt, across either this run or the first 10-fixture run (10 total
-triggered observations, 0 losses) — but a 1/6 pass rate, combined with
-direct evidence that two "wins" from the previous run didn't reproduce,
-is not enough to say the candidate reliably improves final outputs.
+**Do not adopt the candidate fallback-specific prompt.** The
+fallback-triggered pass rate is now exactly tied (5/11 each) on the most
+complete fixture set run so far, with one win apiece — and the win that
+had been the strongest single data point for the candidate
+(`false-friend-aplico-trabajo`) did not reproduce; it reversed. Combined
+with the cross-run volatility observed on two other fixtures, the honest
+conclusion is that **this evaluation, across three live runs, has not
+produced evidence that the candidate prompt is either better or worse
+than the current prompt** — the two are statistically indistinguishable
+at this sample size and this level of run-to-run noise.
 
-This does not mean the candidate is a bad prompt or that the project
-should quietly forget it — it means **this issue's evidence bar
-("improves final outputs without introducing meaningful regressions")
-isn't met by a single run**, in either direction. The honest state of
-the evidence is: promising (no downside seen anywhere yet), unproven
-(only one clear upside, and no case has yet been observed to repeat a
-win across two runs).
+This does not rule out the candidate prompt working better in practice —
+it means **single-run (or even triple-single-run) live comparisons of a
+non-deterministic model are not a reliable way to decide this question**,
+and no further single run should be expected to settle it either.
 
 ### Suggested follow-up (not done here, to keep this issue's own live cost bounded)
 
-1. Run issue #107's repeated-run mode (e.g. 5x) specifically on the 6
-   fallback-triggered fixtures identified here, for both variants, to
-   get a stable per-fixture pass rate instead of a single noisy sample.
-2. Only recommend a production prompt change once a repeated-run result
-   shows the candidate winning (or tying) on a clear majority of runs
-   per fixture, with continued zero regressions.
-3. If repeated runs confirm the pattern above, implement as a dedicated
-   fallback-specific system prompt (not a reuse of
-   `naturalnessReviewSpanish`) in `two_pass_correction_pipeline.dart`,
-   pinned to its own harness-validated source per this codebase's
-   existing prompt convention.
+1. Run issue #107's repeated-run mode (e.g. 5-10x) on the 11
+   fallback-triggered fixtures identified here, for both variants, and
+   compare aggregate pass rates with a large enough sample that
+   fixture-level noise averages out.
+2. Only recommend a production prompt change if a repeated-run result
+   shows the candidate winning on a clear, consistent majority of runs,
+   with no more losses than the current prompt.
+3. If that bar is met, implement as a dedicated fallback-specific system
+   prompt in `two_pass_correction_pipeline.dart`, pinned to its own
+   harness-validated source per this codebase's existing prompt
+   convention.
 
 ## Caveats
 
-- **Non-determinism is now the headline finding, not a footnote.** Two
-  of six fallback-triggered fixtures changed outcome class between this
-  run and the previous one for the exact same inputs and prompts. Any
-  future comparison should assume single-run results are unreliable
-  signal until repeated-run data says otherwise.
+- **Non-determinism is the dominant finding of this evaluation**, not a
+  minor caveat. Three separate fixtures have now been observed to flip
+  outcome class across runs with nothing else changing. Any future
+  fallback-prompt comparison should assume single-run results are
+  unreliable until repeated-run data says otherwise.
+- **Fixture coverage is now complete against the "Changed" filter**:
+  every row in the prior live benchmark log marked
+  `Fallback pass: Changed` (25 rows, both `Pass` and `Fail`) is
+  represented among these 27 fixtures, plus two `Unchanged` baseline
+  rows kept for already-correct/regional coverage. This document no
+  longer claims partial coverage as if it were complete, and no longer
+  needs to, since coverage is complete.
 - **Non-fallback-triggered fixtures remain silent on this question** —
-  11 of 17 fixtures never exercised the fallback prompt this run. A
-  different run could see a different subset trigger fallback, since
-  which fixtures trigger a conflict depends on the parallel naturalness
-  pass's own (also non-deterministic) output.
-- **This is still a curated fixture set** (17, chosen from the prior
-  live benchmark's known-relevant cases), not the full 85-fixture
-  benchmark — proportionate to a decision-support run, not a full
-  confirmation study.
+  16 of 27 fixtures never exercised the fallback prompt this run, and
+  which fixtures trigger a conflict can itself vary run to run, since it
+  depends on the parallel naturalness pass's own non-deterministic
+  output.
+- **This is a curated 27-fixture set** drawn from the prior live
+  benchmark's specific phrases, not the full 85-fixture benchmark —
+  proportionate to a decision-support run, not a full confirmation
+  study.
 
 ## Files In Scope
 

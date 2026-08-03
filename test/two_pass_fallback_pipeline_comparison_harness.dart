@@ -27,10 +27,10 @@
 // Run offline (fixture/logic sanity only, no API calls):
 //   flutter test test/two_pass_fallback_pipeline_comparison_harness.dart --exclude-tags live
 //
-// Run live deliberately (costs real API calls — 17 fixtures, first pass +
-// naturalness-on-original always (34 calls), plus up to 2 fallback calls
+// Run live deliberately (costs real API calls — 27 fixtures, first pass +
+// naturalness-on-original always (54 calls), plus up to 2 fallback calls
 // per fixture only when a conflict is genuinely triggered — expect on the
-// order of 50-68 total calls, well under a full benchmark run):
+// order of 80-108 total calls, well under a full benchmark run):
 //   OPENAI_API_KEY=sk-... \
 //   FALLBACK_PIPELINE_COMPARISON_LIVE=true \
 //   flutter test test/two_pass_fallback_pipeline_comparison_harness.dart --tags live --timeout none
@@ -111,23 +111,36 @@ const String candidateFallbackPrompt =
 /// issue #82). Issue #117 asked to use the previous live benchmark
 /// (`docs/two_pass_live_language_point_benchmark_issue_log.md`) as the
 /// base, including every phrase where fallback triggered, changed text,
-/// or caused a fail there — not just a small sample of them. This list
-/// covers: clean grammar-only cases, already-correct do-not-touch cases,
-/// true naturalness cases, mixed/coherence cases (reported separately,
-/// per the issue's own instruction — see each fixture's `languagePoint`),
-/// false-friend cases, a subjunctive/mood case, and every known
-/// fallback-changed/fail case from that prior log:
-/// - `ambiguous-naturalness-span`: the repeated-span rewrite fail
-///   ("Vi mucho tráfico, y luego vi más tráfico.").
-/// - `article-la-tienda`: the article-duplication fail ("la la tienda").
-/// - `false-friend-aplico-trabajo`, `false-friend-embarazado`: the two
-///   other false-friend fails from that log (only `atendio-universidad`
-///   was covered before).
+/// or caused a fail there.
+///
+/// This list includes every row in that log marked `Fallback pass:
+/// Changed` — both the `Fail` rows (the ones that motivated this
+/// evaluation in the first place) and the `Pass` rows (changed-but-
+/// correct cases, included so the comparison isn't skewed toward only
+/// failure cases) — plus a handful of `Unchanged` baseline rows
+/// (`correct-buenos-dias`, `regional-voy-para-casa`) kept from the
+/// original curated set to cover already-correct do-not-touch and
+/// valid-regional behavior, which the "Changed" filter alone wouldn't
+/// surface. Notable individual entries:
+/// - `grammar-overlaps-naturalness`: documented in its own fixture note
+///   as "the case the fallback exists for" (a first-pass fix landing
+///   inside a naturalness calque span) — the single most load-bearing
+///   fixture for this evaluation's question, previously omitted.
+/// - `ambiguous-naturalness-span`, `article-la-tienda`: the repeated-
+///   span rewrite and article-duplication fails.
+/// - `false-friend-aplico-trabajo`, `false-friend-embarazado`: false-
+///   friend fails beyond `atendio-universidad`.
 /// - `naturalness-pasar-buen-tiempo`, `naturalness-puedo-tener-cerveza`:
 ///   the slash-alternative naturalness fails.
-/// - `mixed-preposition-and-redundant-pronoun`: the other mixed-operation
-///   fail (only the personal-a/subjunctive and verb-agreement/que mixed
-///   cases were covered before).
+/// - `mixed-preposition-and-redundant-pronoun`,
+///   `mixed-gender-agreement-and-redundant-pronoun`: mixed-operation
+///   cases beyond the personal-a/subjunctive and verb-agreement/que ones.
+/// - `delete-repeated-yo-estudio`, `delete-repeated-ellos-visitaron`,
+///   `delete-repeated-yo-compre`, `delete-repeated-nosotros`: the
+///   redundant-repeated-pronoun deletion cases (both Pass and Fail).
+/// - `collocation-hacer-paseo`, `collocation-hace-sentido`,
+///   `prep-empresa-en-la-que`, `naturalness-llamar-para-atras`: the
+///   remaining changed-but-correct naturalness/preposition cases.
 ///
 /// Reusing real fixtures (not hand-typed inputs) means expected outputs
 /// and language-point grouping stay identical to every other benchmark
@@ -150,6 +163,16 @@ const List<String> fallbackPipelineComparisonFixtureIds = [
   'naturalness-pasar-buen-tiempo',
   'naturalness-puedo-tener-cerveza',
   'mixed-preposition-and-redundant-pronoun',
+  'grammar-overlaps-naturalness',
+  'collocation-hacer-paseo',
+  'collocation-hace-sentido',
+  'prep-empresa-en-la-que',
+  'delete-repeated-yo-estudio',
+  'delete-repeated-ellos-visitaron',
+  'delete-repeated-yo-compre',
+  'delete-repeated-nosotros',
+  'naturalness-llamar-para-atras',
+  'mixed-gender-agreement-and-redundant-pronoun',
 ];
 
 List<TwoPassFixture> get fallbackPipelineComparisonFixtures =>
