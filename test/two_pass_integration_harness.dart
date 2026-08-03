@@ -81,6 +81,18 @@
 //   An unrecognized value, or a selection that matches no fixtures at
 //   all, fails fast with a clear error rather than silently running an
 //   empty (or the wrong) set — see selectFixtures's own doc comment.
+// - TWO_PASS_RUNS_PER_FIXTURE (issue #107): how many times to run each
+//   selected fixture with the exact same submitted text, defaults to 1.
+//   Lets a single fixture (or small set — combine with TWO_PASS_FIXTURE_SET
+//   above, e.g. fixture_id or language_point) be repeated to tell a stable,
+//   deterministic failure apart from one-off model variance, without
+//   editing any fixture list by hand. Multiplies the call count for every
+//   fixture it applies to (5 runs = 5x that fixture's own API calls); a
+//   zero or negative value fails fast rather than silently running nothing
+//   — see runsPerFixtureFrom's own doc comment. The generated report gets
+//   a "Repeated-run summary" section whenever any fixture ran more than
+//   once, showing an X/N pass rate and every distinct final output
+//   produced.
 
 import 'dart:async' show runZonedGuarded;
 import 'dart:io';
@@ -1130,6 +1142,32 @@ const String defaultFixtureSet = 'all';
 /// Default fixtures-per-language-point cap for the `sample` fixture set.
 const int defaultSampleSizePerLanguagePoint = 1;
 
+/// Default number of times to run each selected fixture (issue #107).
+const int defaultRunsPerFixture = 1;
+
+/// Reads `TWO_PASS_RUNS_PER_FIXTURE` from a real environment (issue #107)
+/// — how many times to run each selected fixture with the exact same
+/// submitted text, so a repeated live failure can be told apart from a
+/// one-off stochastic result. Defaults to 1 — ordinary single-run
+/// behavior, unchanged from before this existed.
+///
+/// Throws [ArgumentError] for a zero or negative value, same "fail fast
+/// rather than silently do nothing" precedent as [selectFixtures]'s own
+/// `sampleSizePerLanguagePoint` guard (issue #85's review fix) — a zero
+/// value here would silently run every selected fixture zero times and
+/// produce an empty report rather than a clear error.
+int runsPerFixtureFrom(Map<String, String> environment) {
+  final raw = environment['TWO_PASS_RUNS_PER_FIXTURE']?.trim() ?? '';
+  final runsPerFixture = int.tryParse(raw) ?? defaultRunsPerFixture;
+  if (runsPerFixture < 1) {
+    throw ArgumentError(
+      'TWO_PASS_RUNS_PER_FIXTURE must be >= 1 (was $runsPerFixture) — 0 or '
+      'negative would silently run every selected fixture zero times.',
+    );
+  }
+  return runsPerFixture;
+}
+
 /// Selects which fixtures a live run should exercise (issue #85) — lets a
 /// proof-of-concept run start with a small, cheap live sample before
 /// committing to the full ~85-fixture benchmark's ~255-call spend (see
@@ -1375,6 +1413,7 @@ class FixtureResult {
     required this.finalCorrectedText,
     required this.finalCorrectionCount,
     this.errorMessage,
+    this.runIndex = 1,
   });
 
   /// [partialStats] is whatever latency/token/cost was already spent on
@@ -1398,6 +1437,7 @@ class FixtureResult {
     String message, {
     CallStats partialStats = CallStats.zero,
     int? parallelPhaseWallClockMs,
+    int runIndex = 1,
   }) {
     const emptyReview = NaturalnessReview(
       hasNaturalnessIssue: false,
@@ -1418,6 +1458,7 @@ class FixtureResult {
       finalCorrectedText: '',
       finalCorrectionCount: 0,
       errorMessage: message,
+      runIndex: runIndex,
     );
   }
 
@@ -1444,6 +1485,13 @@ class FixtureResult {
   final String finalCorrectedText;
   final int finalCorrectionCount;
   final String? errorMessage;
+
+  /// Which repeated run of [fixture] this is, 1-based (issue #107) —
+  /// `1` for an ordinary single run, unchanged from before this field
+  /// existed. Only meaningful relative to how many total runs of the same
+  /// fixture appear in the same results list; this field alone doesn't
+  /// know that total, see `buildReport`'s own run-count tally.
+  final int runIndex;
 
   bool get isError => errorMessage != null;
 
@@ -1651,6 +1699,7 @@ Future<FixtureResult> runFixture({
   required String firstPassModel,
   required String naturalnessModel,
   required TwoPassFixture fixture,
+  int runIndex = 1,
 }) async {
   var firstPassStats = CallStats.zero;
   var naturalOriginalStats = CallStats.zero;
@@ -1751,12 +1800,14 @@ Future<FixtureResult> runFixture({
       usedFallback: hadConflict,
       finalCorrectedText: finalResponse.correctedText,
       finalCorrectionCount: finalResponse.corrections.length,
+      runIndex: runIndex,
     );
   } catch (error) {
     return FixtureResult.error(
       fixture,
       error.toString(),
       partialStats: firstPassStats + naturalOriginalStats + naturalFirstPassStats,
+      runIndex: runIndex,
     );
   }
 }
@@ -1962,6 +2013,82 @@ String _outliersSection(
   return buffer.toString();
 }
 
+/// Summarizes every fixture run more than once in [results] (issue #107)
+/// — a single live result can't tell a stable, deterministic failure apart
+/// from one-off model variance, but five repeated runs of the exact same
+/// submitted text can: the same failing output every time points at a
+/// reproducible defect; a different output (or a mix of pass/fail) each
+/// time points at model non-determinism instead.
+///
+/// A fixture that only ran once is not included — this section exists
+/// specifically to compare repeated runs of the *same* fixture against
+/// each other, which needs at least two.
+String _repeatedRunSummary(List<FixtureResult> results) {
+  final byFixtureId = <String, List<FixtureResult>>{};
+  final order = <String>[];
+  for (final result in results) {
+    final id = result.fixture.id;
+    if (!byFixtureId.containsKey(id)) {
+      order.add(id);
+    }
+    (byFixtureId[id] ??= []).add(result);
+  }
+
+  final repeated = [
+    for (final id in order)
+      if (byFixtureId[id]!.length > 1) id,
+  ];
+  if (repeated.isEmpty) {
+    return 'No fixture was run more than once in this report.\n';
+  }
+
+  final buffer = StringBuffer();
+  for (final id in repeated) {
+    final runs = byFixtureId[id]!;
+    final passCount = runs
+        .where((r) => !r.isError && isPassingScore(scoreFixtureResult(r)))
+        .length;
+
+    // Groups by final output text (or, for an errored run, its own error
+    // message) rather than by score label — two runs can share a score
+    // (e.g. both `ambiguous`) while producing different text, and that
+    // difference is exactly what distinguishes "the same failure every
+    // time" from "a different failure (or non-failure) each time".
+    final outputCounts = <String, int>{};
+    for (final run in runs) {
+      final key = run.isError
+          ? '(error: ${run.errorMessage})'
+          : run.finalCorrectedText;
+      outputCounts[key] = (outputCounts[key] ?? 0) + 1;
+    }
+
+    buffer
+      ..writeln('#### $id')
+      ..writeln()
+      ..writeln('- Pass rate: $passCount/${runs.length}')
+      ..writeln('- Distinct final outputs:');
+    for (final entry in outputCounts.entries) {
+      buffer.writeln('  - `${entry.key}` (${entry.value}x)');
+    }
+
+    if (passCount == runs.length) {
+      buffer.writeln('- All runs passed.');
+    } else if (passCount == 0 && outputCounts.length == 1) {
+      buffer.writeln(
+        '- Same output every run — looks like a stable, deterministic '
+        'failure, not one-off model variance.',
+      );
+    } else {
+      buffer.writeln(
+        '- Output (or pass/fail result) varied across runs — this looks '
+        'like one-off model variance rather than a single stable failure.',
+      );
+    }
+    buffer.writeln();
+  }
+  return buffer.toString();
+}
+
 /// Builds the full markdown report for [results], in the same style as
 /// this repo's other harness reports.
 String buildReport({
@@ -1989,10 +2116,27 @@ String buildReport({
     ..writeln()
     ..writeln(pricing.pricingSection([firstPassModel, naturalnessModel]));
 
+  // Issue #107: a fixture run more than once (TWO_PASS_RUNS_PER_FIXTURE)
+  // gets "(run N of M)" appended to its own section heading below, so
+  // repeated runs of the same fixture render as distinct sections instead
+  // of silently overwriting each other's heading. A fixture that only ran
+  // once (the ordinary case) keeps its plain heading, unchanged.
+  final runCountByFixtureId = <String, int>{};
+  for (final result in results) {
+    runCountByFixtureId[result.fixture.id] =
+        (runCountByFixtureId[result.fixture.id] ?? 0) + 1;
+  }
+  String sectionHeading(FixtureResult result) {
+    final totalRuns = runCountByFixtureId[result.fixture.id]!;
+    return totalRuns > 1
+        ? '${result.fixture.id} (run ${result.runIndex} of $totalRuns)'
+        : result.fixture.id;
+  }
+
   for (final result in results) {
     if (result.isError) {
       buffer
-        ..writeln('## ${result.fixture.id}')
+        ..writeln('## ${sectionHeading(result)}')
         ..writeln()
         ..writeln('- Input text: `${result.fixture.text}`')
         ..writeln('- Note: ${result.fixture.note}')
@@ -2022,7 +2166,7 @@ String buildReport({
     }
 
     buffer
-      ..writeln('## ${result.fixture.id}')
+      ..writeln('## ${sectionHeading(result)}')
       ..writeln()
       ..writeln('- Input text: `${result.fixture.text}`')
       ..writeln('- Note: ${result.fixture.note}')
@@ -2193,7 +2337,11 @@ String buildReport({
     ..writeln()
     ..writeln('### Latency / cost outliers')
     ..writeln()
-    ..write(_outliersSection(results));
+    ..write(_outliersSection(results))
+    ..writeln()
+    ..writeln('### Repeated-run summary')
+    ..writeln()
+    ..write(_repeatedRunSummary(results));
 
   return buffer.toString();
 }
@@ -2634,6 +2782,7 @@ String buildProductionModeReport({
 FixtureResult _fakeResult(
   TwoPassFixture fixture, {
   required String finalCorrectedText,
+  int runIndex = 1,
 }) {
   const emptyReview = NaturalnessReview(hasNaturalnessIssue: false, issues: []);
   return FixtureResult(
@@ -2649,6 +2798,7 @@ FixtureResult _fakeResult(
     usedFallback: false,
     finalCorrectedText: finalCorrectedText,
     finalCorrectionCount: 0,
+    runIndex: runIndex,
   );
 }
 
@@ -4303,6 +4453,177 @@ void main() {
         },
       );
     });
+
+    group('repeated-run mode (issue #107)', () {
+      test(
+        'runsPerFixtureFrom defaults to 1 and reads a real environment '
+        'variable',
+        () {
+          expect(runsPerFixtureFrom(const {}), 1);
+          expect(
+            runsPerFixtureFrom(const {'TWO_PASS_RUNS_PER_FIXTURE': '5'}),
+            5,
+          );
+        },
+      );
+
+      test(
+        'runsPerFixtureFrom throws for a zero or negative value instead '
+        'of silently running every fixture zero times',
+        () {
+          expect(
+            () => runsPerFixtureFrom(const {'TWO_PASS_RUNS_PER_FIXTURE': '0'}),
+            throwsArgumentError,
+          );
+          expect(
+            () =>
+                runsPerFixtureFrom(const {'TWO_PASS_RUNS_PER_FIXTURE': '-1'}),
+            throwsArgumentError,
+          );
+        },
+      );
+
+      test(
+        'FixtureResult.runIndex defaults to 1, unchanged from before this '
+        'field existed',
+        () {
+          final fixture = languagePointBenchmarkFixtures.first;
+          final result = _fakeResult(
+            fixture,
+            finalCorrectedText: fixture.expectedCorrectedText,
+          );
+          expect(result.runIndex, 1);
+        },
+      );
+
+      test(
+        'buildReport does not label a single-run fixture with a run '
+        'number, keeping existing single-run reports unchanged',
+        () {
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'accent-manana',
+          );
+          final report = buildReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              _fakeResult(
+                fixture,
+                finalCorrectedText: fixture.expectedCorrectedText,
+              ),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+          expect(report, contains('## accent-manana\n'));
+          expect(report, isNot(contains('run 1 of')));
+          expect(
+            report,
+            contains('No fixture was run more than once in this report.'),
+          );
+        },
+      );
+
+      test(
+        'buildReport labels each section with its run number when a '
+        'fixture ran more than once, and reports a stable failure when '
+        'every run produces the same non-passing output',
+        () {
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'regional-voy-para-casa',
+          );
+          final overcorrectedText = 'Voy para la casa ahora mismo.';
+          final report = buildReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              for (var run = 1; run <= 3; run++)
+                _fakeResult(
+                  fixture,
+                  finalCorrectedText: overcorrectedText,
+                  runIndex: run,
+                ),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(report, contains('## regional-voy-para-casa (run 1 of 3)'));
+          expect(report, contains('## regional-voy-para-casa (run 2 of 3)'));
+          expect(report, contains('## regional-voy-para-casa (run 3 of 3)'));
+          expect(report, contains('#### regional-voy-para-casa'));
+          expect(report, contains('- Pass rate: 0/3'));
+          expect(report, contains('`$overcorrectedText` (3x)'));
+          expect(
+            report,
+            contains(
+              'Same output every run — looks like a stable, deterministic '
+              'failure',
+            ),
+          );
+        },
+      );
+
+      test(
+        'buildReport reports "all runs passed" when every repeated run '
+        'matches the expected output',
+        () {
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'accent-manana',
+          );
+          final report = buildReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              for (var run = 1; run <= 5; run++)
+                _fakeResult(
+                  fixture,
+                  finalCorrectedText: fixture.expectedCorrectedText,
+                  runIndex: run,
+                ),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(report, contains('- Pass rate: 5/5'));
+          expect(report, contains('- All runs passed.'));
+        },
+      );
+
+      test(
+        'buildReport reports output variance, not a stable failure, when '
+        'repeated runs of the same fixture produce different outputs',
+        () {
+          final fixture = languagePointBenchmarkFixtures.firstWhere(
+            (f) => f.id == 'naturalness-corriendo-tarde',
+          );
+          final report = buildReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [
+              _fakeResult(
+                fixture,
+                finalCorrectedText: fixture.expectedCorrectedText,
+                runIndex: 1,
+              ),
+              _fakeResult(
+                fixture,
+                finalCorrectedText: 'Voy a llegar tarde a la reunión.',
+                runIndex: 2,
+              ),
+            ],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(report, contains('- Pass rate: 1/2'));
+          expect(
+            report,
+            contains(
+              'Output (or pass/fail result) varied across runs — this '
+              'looks like one-off model variance',
+            ),
+          );
+        },
+      );
+    });
   });
 
   test('two-pass live integration experiment', tags: 'live', () async {
@@ -4344,6 +4665,7 @@ void main() {
     );
     final callDelayMs = callDelayMsFrom(environment);
     final selectedFixtures = selectedFixturesFrom(environment);
+    final runsPerFixture = runsPerFixtureFrom(environment);
     final fixtureSelectionDescription = describeFixtureSelection(
       fixtureSet: _runtimeString(
         environment: environment,
@@ -4368,36 +4690,44 @@ void main() {
 
     final results = <FixtureResult>[];
     for (final fixture in selectedFixtures) {
-      // runFixture already catches its own failures and returns a
-      // FixtureResult.error rather than throwing; this try/catch is a
-      // defensive second layer only, in case something outside runFixture
-      // itself (e.g. a bug in the print line below) throws — either way,
-      // one fixture's failure must never lose the data already gathered
-      // for every other fixture.
-      try {
-        final result = await runFixture(
-          apiKey: apiKey,
-          httpClient: httpClient,
-          firstPassModel: firstPassModel,
-          naturalnessModel: naturalnessModel,
-          fixture: fixture,
-        );
-        results.add(result);
-        // ignore: avoid_print
-        print(
-          result.isError
-              ? '=== ${fixture.id} === ERROR: ${result.errorMessage}'
-              : '=== ${fixture.id} ===\n'
-                    'conflict=${result.hadConflict} '
-                    'fallback=${result.usedFallback} '
-                    'final="${result.finalCorrectedText}"',
-        );
-      } catch (error) {
-        results.add(FixtureResult.error(fixture, error.toString()));
-        // ignore: avoid_print
-        print('=== ${fixture.id} === ERROR: $error');
+      for (var runIndex = 1; runIndex <= runsPerFixture; runIndex++) {
+        final runLabel = runsPerFixture > 1
+            ? '${fixture.id} (run $runIndex/$runsPerFixture)'
+            : fixture.id;
+        // runFixture already catches its own failures and returns a
+        // FixtureResult.error rather than throwing; this try/catch is a
+        // defensive second layer only, in case something outside
+        // runFixture itself (e.g. a bug in the print line below) throws —
+        // either way, one run's failure must never lose the data already
+        // gathered for every other run or fixture.
+        try {
+          final result = await runFixture(
+            apiKey: apiKey,
+            httpClient: httpClient,
+            firstPassModel: firstPassModel,
+            naturalnessModel: naturalnessModel,
+            fixture: fixture,
+            runIndex: runIndex,
+          );
+          results.add(result);
+          // ignore: avoid_print
+          print(
+            result.isError
+                ? '=== $runLabel === ERROR: ${result.errorMessage}'
+                : '=== $runLabel ===\n'
+                      'conflict=${result.hadConflict} '
+                      'fallback=${result.usedFallback} '
+                      'final="${result.finalCorrectedText}"',
+          );
+        } catch (error) {
+          results.add(
+            FixtureResult.error(fixture, error.toString(), runIndex: runIndex),
+          );
+          // ignore: avoid_print
+          print('=== $runLabel === ERROR: $error');
+        }
+        await Future<void>.delayed(Duration(milliseconds: callDelayMs));
       }
-      await Future<void>.delayed(Duration(milliseconds: callDelayMs));
     }
 
     final report = buildReport(
