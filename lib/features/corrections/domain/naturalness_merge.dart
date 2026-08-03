@@ -95,17 +95,18 @@ class NaturalnessMergeResult {
 /// `CorrectionItem`s, issue #36); the merge itself only ever reads and
 /// edits [firstPassCorrectedText].
 ///
-/// Each issue's `span` is located in [firstPassCorrectedText] by exact
-/// grapheme-cluster match, the same approach
+/// Each issue's `span` is located in [firstPassCorrectedText] by exact,
+/// word-boundary-aware grapheme-cluster match, the same approach
 /// `resolveOccurrenceCorrections`/`CorrectionItem._anchorRange` use
 /// elsewhere in this app. An issue is applied only when its
 /// `naturalReplacement` is a single clean replacement (not a slash-joined
 /// menu of options, issue #108), its span is unambiguous (found exactly
-/// once), and its resolved range does not overlap an edit already accepted
-/// from an earlier (leftmost-starting) issue — see
-/// [NaturalnessMergeSkipReason] for why every other case is skipped rather
-/// than guessed. This is deliberately the minimum safe merge, not full
-/// conflict analysis — see issue #34 for anything more involved.
+/// once, at a real word boundary), and its resolved range does not
+/// overlap an edit already accepted from an
+/// earlier (leftmost-starting) issue — see [NaturalnessMergeSkipReason]
+/// for why every other case is skipped rather than guessed. This is
+/// deliberately the minimum safe merge, not full conflict analysis — see
+/// issue #34 for anything more involved.
 NaturalnessMergeResult mergeNaturalnessReview({
   required String originalText,
   required String firstPassCorrectedText,
@@ -122,7 +123,10 @@ NaturalnessMergeResult mergeNaturalnessReview({
       continue;
     }
     final spanGraphemes = issue.span.characters.toList();
-    final matches = _findGraphemeMatches(graphemes, spanGraphemes);
+    final matches = _findGraphemeMatches(
+      graphemes,
+      spanGraphemes,
+    ).where((start) => _isWordBoundaryMatch(graphemes, start, spanGraphemes.length)).toList();
     if (matches.isEmpty) {
       skipReasonByIssue[issue] = NaturalnessMergeSkipReason.spanNotFound;
       continue;
@@ -207,6 +211,36 @@ NaturalnessMergeResult mergeNaturalnessReview({
 /// conceivable way a model could misbehave.
 bool _looksLikeMultipleOptions(String naturalReplacement) {
   return naturalReplacement.contains(' / ');
+}
+
+/// Whether the grapheme-cluster range `[start, start + length)` in
+/// [haystack] starts and ends at a word boundary — the character
+/// immediately before [start] (if any) and the character at
+/// `start + length` (if any) are not themselves word characters.
+///
+/// Fixes a specific observed failure (issue #111): `_findGraphemeMatches`
+/// is a plain substring search, so a span like `"a tienda"` can match
+/// starting at the trailing "a" of an unrelated word "la" (e.g. inside
+/// "Fui a **la** tienda", the "a" of "la" is immediately followed by "
+/// tienda"). Applying the replacement there duplicates the word instead
+/// of fixing anything — "Fui a la la tienda" — the exact "la la" artifact
+/// observed live. A match that starts or ends mid-word is not really a
+/// match of the *word or phrase* the naturalness pass meant, so it is
+/// filtered out before a span is judged found/ambiguous, same as if it
+/// had never matched at all.
+bool _isWordBoundaryMatch(List<String> haystack, int start, int length) {
+  final end = start + length;
+  final startOk = start == 0 || !_isWordChar(haystack[start - 1]);
+  final endOk = end == haystack.length || !_isWordChar(haystack[end]);
+  return startOk && endOk;
+}
+
+/// Whether [grapheme] is a Spanish letter — used only for the word-
+/// boundary check in [_isWordBoundaryMatch]. Not a general Unicode word-
+/// character classifier; deliberately scoped to the Latin/Spanish
+/// alphabet this app's text is always in.
+bool _isWordChar(String grapheme) {
+  return RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]$').hasMatch(grapheme);
 }
 
 /// Every grapheme-cluster-safe start position where [needle] occurs in

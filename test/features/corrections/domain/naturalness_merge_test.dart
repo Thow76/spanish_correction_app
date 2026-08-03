@@ -490,4 +490,189 @@ void main() {
       },
     );
   });
+
+  group(
+    'guards removed after review — regression coverage (issue #111)',
+    () {
+      test(
+        'still applies a full-sentence naturalness fix where the whole '
+        'sentence genuinely is the idiom being corrected — '
+        '"Te llamo para atrás." -> "Te devuelvo la llamada.", a real '
+        'benchmark fixture (naturalness-llamar-para-atras)',
+        () {
+          const issue = NaturalnessIssue(
+            span: 'Te llamo para atrás.',
+            naturalReplacement: 'Te devuelvo la llamada.',
+            explanation: 'English-influenced "llamar para atrás".',
+          );
+
+          final result = mergeNaturalnessReview(
+            originalText: 'placeholder',
+            firstPassCorrectedText: 'Te llamo para atrás.',
+            naturalnessReview: const NaturalnessReview(
+              hasNaturalnessIssue: true,
+              issues: [issue],
+            ),
+          );
+
+          // A first version of this guard rejected any span covering 80%+
+          // of firstPassCorrectedText, meant to catch a full-sentence
+          // rewrite of an already-fine sentence (e.g. "Vi mucho tráfico
+          // ayer." -> "Había mucho tráfico ayer.", also span == 100% of
+          // the text). Review caught that both the bad case and this
+          // genuinely correct one are span == 100% of the text —
+          // mechanically indistinguishable by span breadth alone, so no
+          // threshold can separate them. The guard was removed rather
+          // than tuned; this test guards against reintroducing it.
+          expect(result.finalCorrectedText, 'Te devuelvo la llamada.');
+          expect(result.appliedEdits, hasLength(1));
+          expect(result.skippedEdits, isEmpty);
+        },
+      );
+
+      test(
+        'still applies a legitimately long phrase-level naturalness fix '
+        'covering most of a longer sentence',
+        () {
+          const issue = NaturalnessIssue(
+            span: 'corriendo tarde para la reunión',
+            naturalReplacement: 'llegando tarde a la reunión',
+            explanation: 'English-influenced phrasing.',
+          );
+
+          final result = mergeNaturalnessReview(
+            originalText: 'placeholder',
+            firstPassCorrectedText:
+                'Le dije a mi jefe que estoy corriendo tarde para la '
+                'reunión de mañana.',
+            naturalnessReview: const NaturalnessReview(
+              hasNaturalnessIssue: true,
+              issues: [issue],
+            ),
+          );
+
+          expect(
+            result.finalCorrectedText,
+            'Le dije a mi jefe que estoy llegando tarde a la reunión de '
+            'mañana.',
+          );
+          expect(result.appliedEdits, hasLength(1));
+          expect(result.skippedEdits, isEmpty);
+        },
+      );
+
+      test(
+        'still applies a noun replacement that was once blocked by a '
+        'contentWordReplaced guard — "su parte" -> "su informe". That '
+        'guard tried to infer a meaning-changing rewrite from word shape '
+        'alone, with no semantic understanding of whether the '
+        'replacement was actually wrong; it was removed as not a '
+        'deterministically provable safety check, so this now applies '
+        'like any other single naturalness edit. This is a real, live '
+        'over-rewrite risk, but it belongs at the prompt-design/live-'
+        'evaluation level, not merge-layer guessing.',
+        () {
+          const issue = NaturalnessIssue(
+            span: 'su parte',
+            naturalReplacement: 'su informe',
+            explanation: '"Informe" reads as more concrete in context.',
+          );
+
+          final result = mergeNaturalnessReview(
+            originalText: 'placeholder',
+            firstPassCorrectedText: 'Era necesario que enviara su parte.',
+            naturalnessReview: const NaturalnessReview(
+              hasNaturalnessIssue: true,
+              issues: [issue],
+            ),
+          );
+
+          expect(
+            result.finalCorrectedText,
+            'Era necesario que enviara su informe.',
+          );
+          expect(result.appliedEdits, hasLength(1));
+          expect(result.skippedEdits, isEmpty);
+        },
+      );
+    },
+  );
+
+  group('word-boundary span matching (issue #111)', () {
+    test(
+      'skips (as spanNotFound) rather than matching mid-word and '
+      'duplicating a word — the "Fui a la la tienda" article-duplication '
+      'artifact observed live',
+      () {
+        const issue = NaturalnessIssue(
+          span: 'a tienda',
+          naturalReplacement: 'a la tienda',
+          explanation:
+              'Naturalness reviewed the pre-first-pass text, which was '
+              'still missing the article here.',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'Fui a tienda después del trabajo.',
+          // First pass already inserted "la" — the only remaining
+          // occurrence of the character sequence "a tienda" is the
+          // trailing "a" of "la" followed by " tienda", not a standalone
+          // "a" word. Without word-boundary awareness this resolves as a
+          // single "match" and duplicates the article: "la la tienda".
+          firstPassCorrectedText: 'Fui a la tienda después del trabajo.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issue],
+          ),
+        );
+
+        expect(
+          result.finalCorrectedText,
+          'Fui a la tienda después del trabajo.',
+        );
+        expect(result.appliedEdits, isEmpty);
+        expect(result.skippedEdits, hasLength(1));
+        expect(result.skippedEdits.single.issue, same(issue));
+        expect(
+          result.skippedEdits.single.reason,
+          NaturalnessMergeSkipReason.spanNotFound,
+        );
+      },
+    );
+
+    test(
+      'still finds and applies the one genuine word-boundary match even '
+      'when a mid-word decoy of the same substring exists elsewhere in '
+      'the text — proves the guard narrows to the real match rather than '
+      'just rejecting whenever more than one raw substring hit exists',
+      () {
+        const issue = NaturalnessIssue(
+          span: 'a tienda',
+          naturalReplacement: 'a la tienda',
+          explanation: 'Missing article before "tienda".',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'placeholder',
+          // Two raw substring hits for "a tienda": the genuine one at
+          // "Voy a tienda" (standalone "a", a real word boundary), and a
+          // decoy inside "fui a la tienda" (the trailing "a" of "la").
+          // Only the first is a real match once filtered.
+          firstPassCorrectedText:
+              'Voy a tienda mañana, y ya fui a la tienda ayer.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issue],
+          ),
+        );
+
+        expect(
+          result.finalCorrectedText,
+          'Voy a la tienda mañana, y ya fui a la tienda ayer.',
+        );
+        expect(result.appliedEdits, hasLength(1));
+        expect(result.skippedEdits, isEmpty);
+      },
+    );
+  });
 }
