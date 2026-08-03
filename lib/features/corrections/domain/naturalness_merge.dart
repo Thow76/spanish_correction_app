@@ -30,6 +30,30 @@ enum NaturalnessMergeSkipReason {
   /// is never applied — same "don't guess" precedent as every other skip
   /// reason here, just applied to the replacement text instead of the span.
   multiOptionReplacement,
+
+  /// `NaturalnessIssue.span` covers most or all of
+  /// `firstPassCorrectedText` (issue #111) — it looks like a full-sentence
+  /// rewrite rather than the narrow calque/idiom/collocation fix the
+  /// naturalness pass is scoped to. Observed live: a fallback call
+  /// replacing an entire already-correct sentence ("Vi mucho tráfico
+  /// ayer." -> "Había mucho tráfico ayer.") wholesale. A genuine
+  /// naturalness issue is a sub-sentence phrase; a span this broad risks
+  /// shifting the sentence's overall meaning in ways no downstream code
+  /// can verify, so it is never applied.
+  spanTooBroad,
+
+  /// `NaturalnessIssue.span` is a short phrase wrapping exactly one
+  /// content word (e.g. an article/possessive plus one noun) whose
+  /// content word does not appear anywhere in `naturalReplacement` (issue
+  /// #111). Observed live: `"su parte"` -> `"su informe"` — the model
+  /// invented a more specific noun ("informe") that was not in the
+  /// learner's text, rather than correcting how the existing content word
+  /// was phrased. Deliberately narrow: a *single bare word* being swapped
+  /// for a different word (e.g. a false-friend fix like `"Atendió"` ->
+  /// `"Asistió"`) is exactly what naturalness is supposed to do and is
+  /// not caught by this guard — only a wrapped phrase whose one content
+  /// word is dropped entirely is.
+  contentWordReplaced,
 }
 
 /// One [NaturalnessIssue] the merge did not apply, with why.
@@ -95,17 +119,19 @@ class NaturalnessMergeResult {
 /// `CorrectionItem`s, issue #36); the merge itself only ever reads and
 /// edits [firstPassCorrectedText].
 ///
-/// Each issue's `span` is located in [firstPassCorrectedText] by exact
-/// grapheme-cluster match, the same approach
+/// Each issue's `span` is located in [firstPassCorrectedText] by exact,
+/// word-boundary-aware grapheme-cluster match, the same approach
 /// `resolveOccurrenceCorrections`/`CorrectionItem._anchorRange` use
 /// elsewhere in this app. An issue is applied only when its
 /// `naturalReplacement` is a single clean replacement (not a slash-joined
-/// menu of options, issue #108), its span is unambiguous (found exactly
-/// once), and its resolved range does not overlap an edit already accepted
-/// from an earlier (leftmost-starting) issue — see
-/// [NaturalnessMergeSkipReason] for why every other case is skipped rather
-/// than guessed. This is deliberately the minimum safe merge, not full
-/// conflict analysis — see issue #34 for anything more involved.
+/// menu of options, issue #108), its span is not suspiciously broad or a
+/// content-word substitution in disguise (issue #111), its span is
+/// unambiguous (found exactly once, at a real word boundary), and its
+/// resolved range does not overlap an edit already accepted from an
+/// earlier (leftmost-starting) issue — see [NaturalnessMergeSkipReason]
+/// for why every other case is skipped rather than guessed. This is
+/// deliberately the minimum safe merge, not full conflict analysis — see
+/// issue #34 for anything more involved.
 NaturalnessMergeResult mergeNaturalnessReview({
   required String originalText,
   required String firstPassCorrectedText,
@@ -121,8 +147,22 @@ NaturalnessMergeResult mergeNaturalnessReview({
       skipReasonByIssue[issue] = NaturalnessMergeSkipReason.multiOptionReplacement;
       continue;
     }
+    if (_isSpanTooBroad(issue.span, graphemes.length)) {
+      skipReasonByIssue[issue] = NaturalnessMergeSkipReason.spanTooBroad;
+      continue;
+    }
+    if (_replacesContentWordWithUnrelatedWord(
+      issue.span,
+      issue.naturalReplacement,
+    )) {
+      skipReasonByIssue[issue] = NaturalnessMergeSkipReason.contentWordReplaced;
+      continue;
+    }
     final spanGraphemes = issue.span.characters.toList();
-    final matches = _findGraphemeMatches(graphemes, spanGraphemes);
+    final matches = _findGraphemeMatches(
+      graphemes,
+      spanGraphemes,
+    ).where((start) => _isWordBoundaryMatch(graphemes, start, spanGraphemes.length)).toList();
     if (matches.isEmpty) {
       skipReasonByIssue[issue] = NaturalnessMergeSkipReason.spanNotFound;
       continue;
@@ -207,6 +247,125 @@ NaturalnessMergeResult mergeNaturalnessReview({
 /// conceivable way a model could misbehave.
 bool _looksLikeMultipleOptions(String naturalReplacement) {
   return naturalReplacement.contains(' / ');
+}
+
+/// The fraction of `firstPassCorrectedText` (by grapheme-cluster count,
+/// [firstPassLength]) that would have to be considered "unnatural" for
+/// [span] to be a genuine calque/idiom/collocation, rather than a
+/// full-sentence rewrite in disguise (issue #111).
+///
+/// A real naturalness issue is a sub-sentence phrase — the whole point of
+/// the pass is to flag *specific* wording, not to rewrite the sentence.
+/// 80% is deliberately generous (it does not block long, legitimately
+/// broad phrase-level fixes like "Estoy corriendo tarde para la reunión"
+/// -> "Voy tarde a la reunión", which covers well under 80% of a longer
+/// sentence) while still catching the observed failure mode: a fallback
+/// call replacing an entire already-correct sentence wholesale (e.g. "Vi
+/// mucho tráfico ayer." -> "Había mucho tráfico ayer.", where span was
+/// the full sentence).
+bool _isSpanTooBroad(String span, int firstPassLength) {
+  if (firstPassLength == 0) {
+    return false;
+  }
+  return span.characters.length / firstPassLength >= 0.8;
+}
+
+/// Spanish function words excluded from the "content word" check in
+/// [_replacesContentWordWithUnrelatedWord] — articles, possessives, a
+/// handful of common prepositions/conjunctions, and object/reflexive
+/// pronouns. Deliberately not exhaustive Spanish grammar coverage, only
+/// enough to separate a content word (a noun/verb/adjective actually
+/// carrying the sentence's meaning) from the function words that
+/// typically wrap it in a short span like `"su parte"`.
+const Set<String> _spanishFunctionWords = {
+  'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
+  'mi', 'mis', 'tu', 'tus', 'su', 'sus',
+  'nuestro', 'nuestra', 'nuestros', 'nuestras',
+  'vuestro', 'vuestra', 'vuestros', 'vuestras',
+  'de', 'a', 'en', 'con', 'para', 'por', 'sin', 'sobre', 'entre', 'desde',
+  'hasta',
+  'y', 'o', 'u', 'e', 'pero', 'que',
+  'me', 'te', 'se', 'le', 'les', 'lo', 'nos',
+};
+
+/// Splits [text] into lowercase words with surrounding punctuation
+/// stripped, for the word-level comparisons in
+/// [_replacesContentWordWithUnrelatedWord].
+List<String> _wordsOf(String text) {
+  return text
+      .split(RegExp(r'\s+'))
+      .map(
+        (word) => word
+            .toLowerCase()
+            .replaceAll(RegExp(r'^[¿¡"“”‘’.,;:!?()]+|[¿¡"“”‘’.,;:!?()]+$'), ''),
+      )
+      .where((word) => word.isNotEmpty)
+      .toList();
+}
+
+/// Whether [span] is a short phrase wrapping exactly one content word
+/// (i.e. every other word in [span] is a function word from
+/// [_spanishFunctionWords]) whose content word does not appear anywhere
+/// in [naturalReplacement] (issue #111) — e.g. `"su parte"` ->
+/// `"su informe"`, where the only content word, "parte", is dropped
+/// entirely in favor of an unrelated, more specific noun the model
+/// invented rather than corrected.
+///
+/// Deliberately requires [span] to have at least two words: a *single
+/// bare word* being swapped for a completely different word (e.g. a
+/// false-friend fix like `"Atendió"` -> `"Asistió"`, or `"hace"` ->
+/// `"tiene"` inside a longer span that still shares its other content
+/// word) is exactly what naturalness is supposed to do, and must not be
+/// caught by this guard. Also requires exactly one content word in
+/// [span] — a phrase with two or more content words (e.g. `"importante
+/// hoy mismo"`) is a broader rewrite this function does not attempt to
+/// judge; [_isSpanTooBroad] is the guard for spans that broad.
+bool _replacesContentWordWithUnrelatedWord(
+  String span,
+  String naturalReplacement,
+) {
+  final spanWords = _wordsOf(span);
+  if (spanWords.length < 2) {
+    return false;
+  }
+  final spanContentWords = spanWords
+      .where((word) => !_spanishFunctionWords.contains(word))
+      .toList();
+  if (spanContentWords.length != 1) {
+    return false;
+  }
+  final replacementWords = _wordsOf(naturalReplacement).toSet();
+  return !replacementWords.contains(spanContentWords.single);
+}
+
+/// Whether the grapheme-cluster range `[start, start + length)` in
+/// [haystack] starts and ends at a word boundary — the character
+/// immediately before [start] (if any) and the character at
+/// `start + length` (if any) are not themselves word characters.
+///
+/// Fixes a specific observed failure (issue #111): `_findGraphemeMatches`
+/// is a plain substring search, so a span like `"a tienda"` can match
+/// starting at the trailing "a" of an unrelated word "la" (e.g. inside
+/// "Fui a **la** tienda", the "a" of "la" is immediately followed by "
+/// tienda"). Applying the replacement there duplicates the word instead
+/// of fixing anything — "Fui a la la tienda" — the exact "la la" artifact
+/// observed live. A match that starts or ends mid-word is not really a
+/// match of the *word or phrase* the naturalness pass meant, so it is
+/// filtered out before a span is judged found/ambiguous, same as if it
+/// had never matched at all.
+bool _isWordBoundaryMatch(List<String> haystack, int start, int length) {
+  final end = start + length;
+  final startOk = start == 0 || !_isWordChar(haystack[start - 1]);
+  final endOk = end == haystack.length || !_isWordChar(haystack[end]);
+  return startOk && endOk;
+}
+
+/// Whether [grapheme] is a Spanish letter — used only for the word-
+/// boundary check in [_isWordBoundaryMatch]. Not a general Unicode word-
+/// character classifier; deliberately scoped to the Latin/Spanish
+/// alphabet this app's text is always in.
+bool _isWordChar(String grapheme) {
+  return RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]$').hasMatch(grapheme);
 }
 
 /// Every grapheme-cluster-safe start position where [needle] occurs in
