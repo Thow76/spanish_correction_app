@@ -14,9 +14,11 @@ void main() {
   test(
     'naturalnessReviewSpanish is unchanged from the harness-validated prompt',
     () {
-      // Issue #31's scope is explicitly to use the existing naturalness
-      // prompt unchanged — this pins the production copy to the harness's
-      // own (already model-validated) v3 wording character-for-character,
+      // Issue #31's original scope was to use the existing naturalness
+      // prompt unchanged; issue #108 later updated both sides of this pin
+      // together (v3 -> v4, adding the "exactly one replacement"
+      // paragraph) — this still pins the production copy to the harness's
+      // own (already model-validated) wording character-for-character,
       // same precedent as the automated diff test described for
       // stage1DetectionDialectSpanish in correction_prompt.dart.
       expect(naturalnessReviewSpanish, harness.naturalnessSystemPrompt);

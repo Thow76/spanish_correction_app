@@ -130,6 +130,97 @@ void main() {
       },
     );
 
+    test(
+      'skips a slash-separated multi-option replacement rather than '
+      'splicing a menu of alternatives into the text (issue #108, the '
+      '"beer" pattern)',
+      () {
+        const issue = NaturalnessIssue(
+          span: '¿Puedo tener una cerveza?',
+          naturalReplacement:
+              '¿Me pones una cerveza? / ¿Me traes una cerveza? / ¿Me das '
+              'una cerveza?',
+          explanation: 'English-influenced "can I have" phrasing.',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: '¿Puedo tener una cerveza?',
+          firstPassCorrectedText: '¿Puedo tener una cerveza?',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issue],
+          ),
+        );
+
+        expect(result.finalCorrectedText, '¿Puedo tener una cerveza?');
+        expect(result.appliedEdits, isEmpty);
+        expect(result.skippedEdits, hasLength(1));
+        expect(result.skippedEdits.single.issue, same(issue));
+        expect(
+          result.skippedEdits.single.reason,
+          NaturalnessMergeSkipReason.multiOptionReplacement,
+        );
+      },
+    );
+
+    test(
+      'skips a slash-separated multi-option replacement rather than '
+      'splicing a menu of alternatives into the text (issue #108, the '
+      '"pasar un buen tiempo" pattern)',
+      () {
+        const issue = NaturalnessIssue(
+          span: 'pasar un buen tiempo',
+          naturalReplacement: 'pasarlo bien / pasar un buen rato',
+          explanation: 'English-influenced "have a good time" phrasing.',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'Quiero pasar un buen tiempo.',
+          firstPassCorrectedText: 'Quiero pasar un buen tiempo.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issue],
+          ),
+        );
+
+        expect(result.finalCorrectedText, 'Quiero pasar un buen tiempo.');
+        expect(result.appliedEdits, isEmpty);
+        expect(result.skippedEdits, hasLength(1));
+        expect(
+          result.skippedEdits.single.reason,
+          NaturalnessMergeSkipReason.multiOptionReplacement,
+        );
+      },
+    );
+
+    test(
+      'does not mistake a bare slash with no surrounding spaces for a '
+      'multi-option replacement (issue #108) — only " / " triggers the '
+      'skip',
+      () {
+        const issue = NaturalnessIssue(
+          span: 'y o',
+          naturalReplacement: 'y/o',
+          explanation:
+              'Synthetic case: a legitimate single replacement that '
+              'happens to contain an unspaced slash, e.g. "and/or".',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'Necesito pan y o leche.',
+          firstPassCorrectedText: 'Necesito pan y o leche.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issue],
+          ),
+        );
+
+        expect(result.finalCorrectedText, 'Necesito pan y/o leche.');
+        expect(result.appliedEdits, hasLength(1));
+        expect(result.skippedEdits, isEmpty);
+      },
+    );
+
     test('skips a span that does not occur in the first-pass text', () {
       const issue = NaturalnessIssue(
         span: 'no existe en el texto',
