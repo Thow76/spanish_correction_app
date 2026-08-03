@@ -746,12 +746,14 @@ void main() {
         expect(result.current.fallbackTriggered, isTrue);
         expect(result.candidate.fallbackTriggered, isTrue);
         expect(client.fallbackCallCount, 2);
-        // Current variant's fallback still proposes the same full-sentence
-        // rewrite it always did, but issue #111's spanTooBroad guard now
-        // catches it in mergeNaturalnessReview before it can be applied —
-        // the span is the entire sentence, so it is skipped rather than
-        // over-rewriting.
-        expect(result.current.finalCorrectedText, 'Vi mucho tráfico ayer.');
+        // Current variant's fallback still over-rewrites. (issue #111
+        // originally added a span-breadth guard meant to catch exactly
+        // this, but review found it also blocked a genuinely correct
+        // full-sentence naturalness fix elsewhere — see
+        // naturalness_merge_test.dart's "span-breadth guard removed"
+        // group — so it was removed rather than tuned, and this case
+        // remains an open over-rewrite issue, not a merge-layer bug.)
+        expect(result.current.finalCorrectedText, 'Había mucho tráfico ayer.');
         // Candidate variant's fallback correctly finds no remaining issue.
         expect(
           result.candidate.finalCorrectedText,

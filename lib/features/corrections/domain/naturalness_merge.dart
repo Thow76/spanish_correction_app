@@ -31,17 +31,6 @@ enum NaturalnessMergeSkipReason {
   /// reason here, just applied to the replacement text instead of the span.
   multiOptionReplacement,
 
-  /// `NaturalnessIssue.span` covers most or all of
-  /// `firstPassCorrectedText` (issue #111) — it looks like a full-sentence
-  /// rewrite rather than the narrow calque/idiom/collocation fix the
-  /// naturalness pass is scoped to. Observed live: a fallback call
-  /// replacing an entire already-correct sentence ("Vi mucho tráfico
-  /// ayer." -> "Había mucho tráfico ayer.") wholesale. A genuine
-  /// naturalness issue is a sub-sentence phrase; a span this broad risks
-  /// shifting the sentence's overall meaning in ways no downstream code
-  /// can verify, so it is never applied.
-  spanTooBroad,
-
   /// `NaturalnessIssue.span` is a short phrase wrapping exactly one
   /// content word (e.g. an article/possessive plus one noun) whose
   /// content word does not appear anywhere in `naturalReplacement` (issue
@@ -52,7 +41,12 @@ enum NaturalnessMergeSkipReason {
   /// for a different word (e.g. a false-friend fix like `"Atendió"` ->
   /// `"Asistió"`) is exactly what naturalness is supposed to do and is
   /// not caught by this guard — only a wrapped phrase whose one content
-  /// word is dropped entirely is.
+  /// word is dropped entirely is. "Wrapping" is deliberately limited to
+  /// articles and possessives (see [_spanishFunctionWords]) — an ordinary
+  /// preposition can itself be part of the idiom being corrected (e.g.
+  /// `"para atrás"` -> `"luego"`, a genuine calque fix), so treating every
+  /// preposition as a mere wrapper would misfire on exactly the kind of
+  /// replacement this guard must not catch.
   contentWordReplaced,
 }
 
@@ -124,10 +118,10 @@ class NaturalnessMergeResult {
 /// `resolveOccurrenceCorrections`/`CorrectionItem._anchorRange` use
 /// elsewhere in this app. An issue is applied only when its
 /// `naturalReplacement` is a single clean replacement (not a slash-joined
-/// menu of options, issue #108), its span is not suspiciously broad or a
-/// content-word substitution in disguise (issue #111), its span is
-/// unambiguous (found exactly once, at a real word boundary), and its
-/// resolved range does not overlap an edit already accepted from an
+/// menu of options, issue #108), its span is not a content-word
+/// substitution in disguise (issue #111), its span is unambiguous (found
+/// exactly once, at a real word boundary), and its resolved range does
+/// not overlap an edit already accepted from an
 /// earlier (leftmost-starting) issue — see [NaturalnessMergeSkipReason]
 /// for why every other case is skipped rather than guessed. This is
 /// deliberately the minimum safe merge, not full conflict analysis — see
@@ -145,10 +139,6 @@ NaturalnessMergeResult mergeNaturalnessReview({
   for (final issue in naturalnessReview.issues) {
     if (_looksLikeMultipleOptions(issue.naturalReplacement)) {
       skipReasonByIssue[issue] = NaturalnessMergeSkipReason.multiOptionReplacement;
-      continue;
-    }
-    if (_isSpanTooBroad(issue.span, graphemes.length)) {
-      skipReasonByIssue[issue] = NaturalnessMergeSkipReason.spanTooBroad;
       continue;
     }
     if (_replacesContentWordWithUnrelatedWord(
@@ -249,43 +239,23 @@ bool _looksLikeMultipleOptions(String naturalReplacement) {
   return naturalReplacement.contains(' / ');
 }
 
-/// The fraction of `firstPassCorrectedText` (by grapheme-cluster count,
-/// [firstPassLength]) that would have to be considered "unnatural" for
-/// [span] to be a genuine calque/idiom/collocation, rather than a
-/// full-sentence rewrite in disguise (issue #111).
-///
-/// A real naturalness issue is a sub-sentence phrase — the whole point of
-/// the pass is to flag *specific* wording, not to rewrite the sentence.
-/// 80% is deliberately generous (it does not block long, legitimately
-/// broad phrase-level fixes like "Estoy corriendo tarde para la reunión"
-/// -> "Voy tarde a la reunión", which covers well under 80% of a longer
-/// sentence) while still catching the observed failure mode: a fallback
-/// call replacing an entire already-correct sentence wholesale (e.g. "Vi
-/// mucho tráfico ayer." -> "Había mucho tráfico ayer.", where span was
-/// the full sentence).
-bool _isSpanTooBroad(String span, int firstPassLength) {
-  if (firstPassLength == 0) {
-    return false;
-  }
-  return span.characters.length / firstPassLength >= 0.8;
-}
-
-/// Spanish function words excluded from the "content word" check in
-/// [_replacesContentWordWithUnrelatedWord] — articles, possessives, a
-/// handful of common prepositions/conjunctions, and object/reflexive
-/// pronouns. Deliberately not exhaustive Spanish grammar coverage, only
-/// enough to separate a content word (a noun/verb/adjective actually
-/// carrying the sentence's meaning) from the function words that
-/// typically wrap it in a short span like `"su parte"`.
+/// Spanish articles and possessives excluded from the "content word"
+/// check in [_replacesContentWordWithUnrelatedWord] — deliberately
+/// limited to words that only ever wrap a noun (determiners/possessives),
+/// not general function words. A review finding on this guard's own PR
+/// caught an earlier, broader version of this set that also excluded
+/// prepositions/conjunctions/object pronouns: that misfired on a genuine
+/// preposition-anchored idiom fix like `"para atrás"` -> `"luego"`
+/// (`"para"` is part of the calque being corrected, not a mere wrapper
+/// around an unrelated content word), skipping a legitimate replacement.
+/// Determiners and possessives don't have that problem — they only ever
+/// modify the noun they precede, never carry idiomatic meaning of their
+/// own.
 const Set<String> _spanishFunctionWords = {
   'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
   'mi', 'mis', 'tu', 'tus', 'su', 'sus',
   'nuestro', 'nuestra', 'nuestros', 'nuestras',
   'vuestro', 'vuestra', 'vuestros', 'vuestras',
-  'de', 'a', 'en', 'con', 'para', 'por', 'sin', 'sobre', 'entre', 'desde',
-  'hasta',
-  'y', 'o', 'u', 'e', 'pero', 'que',
-  'me', 'te', 'se', 'le', 'les', 'lo', 'nos',
 };
 
 /// Splits [text] into lowercase words with surrounding punctuation
@@ -318,8 +288,10 @@ List<String> _wordsOf(String text) {
 /// word) is exactly what naturalness is supposed to do, and must not be
 /// caught by this guard. Also requires exactly one content word in
 /// [span] — a phrase with two or more content words (e.g. `"importante
-/// hoy mismo"`) is a broader rewrite this function does not attempt to
-/// judge; [_isSpanTooBroad] is the guard for spans that broad.
+/// hoy mismo"`) is a broader rewrite this function deliberately does not
+/// attempt to judge (an earlier, broader span-size guard tried and was
+/// removed — see the "Status update (issue #111)" section of
+/// `docs/two_pass_test_change_notes.md` for why).
 bool _replacesContentWordWithUnrelatedWord(
   String span,
   String naturalReplacement,

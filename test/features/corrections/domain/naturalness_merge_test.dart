@@ -230,22 +230,14 @@ void main() {
 
       final result = mergeNaturalnessReview(
         originalText: 'placeholder',
-        // Long enough that the (nonexistent) 22-character span stays
-        // well under the issue #111 spanTooBroad threshold (80% of the
-        // text) — this test is specifically about spanNotFound, not
-        // spanTooBroad, so the fixture must not accidentally trip the
-        // other guard first.
-        firstPassCorrectedText: 'Todo está muy bien hoy y también mañana.',
+        firstPassCorrectedText: 'Todo está bien.',
         naturalnessReview: const NaturalnessReview(
           hasNaturalnessIssue: true,
           issues: [issue],
         ),
       );
 
-      expect(
-        result.finalCorrectedText,
-        'Todo está muy bien hoy y también mañana.',
-      );
+      expect(result.finalCorrectedText, 'Todo está bien.');
       expect(result.appliedEdits, isEmpty);
       expect(result.skippedEdits, hasLength(1));
       expect(result.skippedEdits.single.issue, same(issue));
@@ -499,69 +491,78 @@ void main() {
     );
   });
 
-  group('span-too-broad guard (issue #111)', () {
-    test(
-      'skips a span covering the entire sentence rather than applying a '
-      'full-sentence rewrite — the fallback "Vi mucho tráfico ayer." -> '
-      '"Había mucho tráfico ayer." pattern observed live',
-      () {
-        const issue = NaturalnessIssue(
-          span: 'Vi mucho tráfico ayer.',
-          naturalReplacement: 'Había mucho tráfico ayer.',
-          explanation: 'Reframed as an existential statement.',
-        );
+  group(
+    'span-breadth guard removed — regression coverage (issue #111 '
+    'review finding)',
+    () {
+      test(
+        'still applies a full-sentence naturalness fix where the whole '
+        'sentence genuinely is the idiom being corrected — '
+        '"Te llamo para atrás." -> "Te devuelvo la llamada.", a real '
+        'benchmark fixture (naturalness-llamar-para-atras)',
+        () {
+          const issue = NaturalnessIssue(
+            span: 'Te llamo para atrás.',
+            naturalReplacement: 'Te devuelvo la llamada.',
+            explanation: 'English-influenced "llamar para atrás".',
+          );
 
-        final result = mergeNaturalnessReview(
-          originalText: 'placeholder',
-          firstPassCorrectedText: 'Vi mucho tráfico ayer.',
-          naturalnessReview: const NaturalnessReview(
-            hasNaturalnessIssue: true,
-            issues: [issue],
-          ),
-        );
+          final result = mergeNaturalnessReview(
+            originalText: 'placeholder',
+            firstPassCorrectedText: 'Te llamo para atrás.',
+            naturalnessReview: const NaturalnessReview(
+              hasNaturalnessIssue: true,
+              issues: [issue],
+            ),
+          );
 
-        expect(result.finalCorrectedText, 'Vi mucho tráfico ayer.');
-        expect(result.appliedEdits, isEmpty);
-        expect(result.skippedEdits, hasLength(1));
-        expect(result.skippedEdits.single.issue, same(issue));
-        expect(
-          result.skippedEdits.single.reason,
-          NaturalnessMergeSkipReason.spanTooBroad,
-        );
-      },
-    );
+          // A first version of this guard rejected any span covering 80%+
+          // of firstPassCorrectedText, meant to catch a full-sentence
+          // rewrite of an already-fine sentence (e.g. "Vi mucho tráfico
+          // ayer." -> "Había mucho tráfico ayer.", also span == 100% of
+          // the text). Review caught that both the bad case and this
+          // genuinely correct one are span == 100% of the text —
+          // mechanically indistinguishable by span breadth alone, so no
+          // threshold can separate them. The guard was removed rather
+          // than tuned; this test guards against reintroducing it.
+          expect(result.finalCorrectedText, 'Te devuelvo la llamada.');
+          expect(result.appliedEdits, hasLength(1));
+          expect(result.skippedEdits, isEmpty);
+        },
+      );
 
-    test(
-      'still applies a legitimately long phrase-level naturalness fix that '
-      'covers well under 80% of a longer sentence',
-      () {
-        const issue = NaturalnessIssue(
-          span: 'corriendo tarde para la reunión',
-          naturalReplacement: 'llegando tarde a la reunión',
-          explanation: 'English-influenced phrasing.',
-        );
+      test(
+        'still applies a legitimately long phrase-level naturalness fix '
+        'covering most of a longer sentence',
+        () {
+          const issue = NaturalnessIssue(
+            span: 'corriendo tarde para la reunión',
+            naturalReplacement: 'llegando tarde a la reunión',
+            explanation: 'English-influenced phrasing.',
+          );
 
-        final result = mergeNaturalnessReview(
-          originalText: 'placeholder',
-          firstPassCorrectedText:
-              'Le dije a mi jefe que estoy corriendo tarde para la '
-              'reunión de mañana.',
-          naturalnessReview: const NaturalnessReview(
-            hasNaturalnessIssue: true,
-            issues: [issue],
-          ),
-        );
+          final result = mergeNaturalnessReview(
+            originalText: 'placeholder',
+            firstPassCorrectedText:
+                'Le dije a mi jefe que estoy corriendo tarde para la '
+                'reunión de mañana.',
+            naturalnessReview: const NaturalnessReview(
+              hasNaturalnessIssue: true,
+              issues: [issue],
+            ),
+          );
 
-        expect(
-          result.finalCorrectedText,
-          'Le dije a mi jefe que estoy llegando tarde a la reunión de '
-          'mañana.',
-        );
-        expect(result.appliedEdits, hasLength(1));
-        expect(result.skippedEdits, isEmpty);
-      },
-    );
-  });
+          expect(
+            result.finalCorrectedText,
+            'Le dije a mi jefe que estoy llegando tarde a la reunión de '
+            'mañana.',
+          );
+          expect(result.appliedEdits, hasLength(1));
+          expect(result.skippedEdits, isEmpty);
+        },
+      );
+    },
+  );
 
   group('content-word-replaced guard (issue #111)', () {
     test(
@@ -595,6 +596,34 @@ void main() {
           result.skippedEdits.single.reason,
           NaturalnessMergeSkipReason.contentWordReplaced,
         );
+      },
+    );
+
+    test(
+      'still applies a preposition-anchored idiom fix even though the '
+      'preposition\'s content word vanishes from the replacement — '
+      'review finding: an earlier, broader function-word list treated '
+      '"para" as a mere wrapper, wrongly skipping "para atrás" -> '
+      '"luego" the same way as "su parte" -> "su informe"',
+      () {
+        const issue = NaturalnessIssue(
+          span: 'para atrás',
+          naturalReplacement: 'luego',
+          explanation: '"Llamar para atrás" is a calque for "call back".',
+        );
+
+        final result = mergeNaturalnessReview(
+          originalText: 'placeholder',
+          firstPassCorrectedText: 'Te llamo para atrás.',
+          naturalnessReview: const NaturalnessReview(
+            hasNaturalnessIssue: true,
+            issues: [issue],
+          ),
+        );
+
+        expect(result.finalCorrectedText, 'Te llamo luego.');
+        expect(result.appliedEdits, hasLength(1));
+        expect(result.skippedEdits, isEmpty);
       },
     );
 
