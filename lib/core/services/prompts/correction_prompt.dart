@@ -396,13 +396,17 @@ For each correction:
 // `NaturalnessReview`/`NaturalnessIssue`
 // (`domain/naturalness_review.dart`, issue #30).
 //
-// Wording is copied unchanged from `naturalnessSystemPrompt` (v3,
+// Wording is copied unchanged from `naturalnessSystemPrompt` (v4,
 // `spanish-naturalness-only-variety-restraint`) in
 // `test/naturalness_model_comparison_harness.dart`, including its known
 // "regional variety.This includes" missing-space typo — see that
 // harness's own header comment and
 // `docs/spanish_two_pass_prompt_handoff.md`. Not fixed here: issue #31's
-// scope is explicitly to use the existing prompt unchanged.
+// original scope was to use the existing prompt unchanged; issue #108
+// later added the one new paragraph requiring exactly one replacement
+// (see that paragraph's own placement below) — the harness's own
+// `previousNaturalnessSystemPromptV3` keeps the pre-#108 wording available
+// for reference.
 //
 // Called by `callNaturalnessReview`
 // (`features/corrections/data/naturalness_review_client.dart`), which is
@@ -426,6 +430,8 @@ If the only problem is grammar, spelling, or punctuation, return no issue.
 Do not normalise wording that is natural in an established variety of Spanish. A form is not a naturalness issue merely because another form is more widespread, more neutral, or preferred by the reviewer's own regional variety.This includes established regional uses of para with verbs of movement to express direction or destination, such as ir para + place, where another variety may prefer ir a + place.
 
 Ignore spelling, punctuation, or grammar errors even if they appear in the same sentence as a naturalness issue.
+
+Give exactly one natural replacement for each issue — never more than one option, and never join alternatives with a slash, "or", or a list. If more than one wording would work, choose the single best one yourself.
 
 Return JSON only.''';
 

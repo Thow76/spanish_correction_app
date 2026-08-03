@@ -20,6 +20,16 @@ enum NaturalnessMergeSkipReason {
   /// `NaturalnessIssue.span` resolves to a range that overlaps an edit
   /// already accepted from an earlier (leftmost) issue in the same review.
   overlapsAnotherEdit,
+
+  /// `NaturalnessIssue.naturalReplacement` looks like more than one
+  /// proposed replacement joined together (e.g. `"A / B / C"`) rather than
+  /// a single clean replacement (issue #108). The naturalness contract
+  /// requires exactly one replacement per issue; splicing a slash-joined
+  /// menu of options into the corrected text would hand the app text no
+  /// learner asked for and no downstream code can make sense of, so this
+  /// is never applied — same "don't guess" precedent as every other skip
+  /// reason here, just applied to the replacement text instead of the span.
+  multiOptionReplacement,
 }
 
 /// One [NaturalnessIssue] the merge did not apply, with why.
@@ -88,13 +98,14 @@ class NaturalnessMergeResult {
 /// Each issue's `span` is located in [firstPassCorrectedText] by exact
 /// grapheme-cluster match, the same approach
 /// `resolveOccurrenceCorrections`/`CorrectionItem._anchorRange` use
-/// elsewhere in this app. An issue is applied only when its span is
-/// unambiguous (found exactly once) and its resolved range does not
-/// overlap an edit already accepted from an earlier (leftmost-starting)
-/// issue — see [NaturalnessMergeSkipReason] for why every other case is
-/// skipped rather than guessed. This is deliberately the minimum safe
-/// merge, not full conflict analysis — see issue #34 for anything more
-/// involved.
+/// elsewhere in this app. An issue is applied only when its
+/// `naturalReplacement` is a single clean replacement (not a slash-joined
+/// menu of options, issue #108), its span is unambiguous (found exactly
+/// once), and its resolved range does not overlap an edit already accepted
+/// from an earlier (leftmost-starting) issue — see
+/// [NaturalnessMergeSkipReason] for why every other case is skipped rather
+/// than guessed. This is deliberately the minimum safe merge, not full
+/// conflict analysis — see issue #34 for anything more involved.
 NaturalnessMergeResult mergeNaturalnessReview({
   required String originalText,
   required String firstPassCorrectedText,
@@ -106,6 +117,10 @@ NaturalnessMergeResult mergeNaturalnessReview({
   final skipReasonByIssue = <NaturalnessIssue, NaturalnessMergeSkipReason>{};
 
   for (final issue in naturalnessReview.issues) {
+    if (_looksLikeMultipleOptions(issue.naturalReplacement)) {
+      skipReasonByIssue[issue] = NaturalnessMergeSkipReason.multiOptionReplacement;
+      continue;
+    }
     final spanGraphemes = issue.span.characters.toList();
     final matches = _findGraphemeMatches(graphemes, spanGraphemes);
     if (matches.isEmpty) {
@@ -176,6 +191,22 @@ NaturalnessMergeResult mergeNaturalnessReview({
     appliedEdits: List.unmodifiable(appliedEdits),
     skippedEdits: List.unmodifiable(skippedEdits),
   );
+}
+
+/// Whether [naturalReplacement] looks like more than one proposed
+/// replacement joined together (e.g. `"A / B"`) rather than a single clean
+/// replacement (issue #108).
+///
+/// Checks for `" / "` — a slash with a space on both sides — rather than a
+/// bare `/`: a bare slash can appear inside one legitimate Spanish
+/// replacement with no surrounding spaces (e.g. `"y/o"`, "and/or"), but
+/// every observed multi-option failure (e.g. `"¿Me pones una cerveza? / ¿Me
+/// das una cerveza?"`, `"pasarlo bien / pasar un buen rato"`) joins its
+/// alternatives with a space on each side of the slash. Narrow on purpose:
+/// this only needs to catch the failure mode actually observed, not every
+/// conceivable way a model could misbehave.
+bool _looksLikeMultipleOptions(String naturalReplacement) {
+  return naturalReplacement.contains(' / ');
 }
 
 /// Every grapheme-cluster-safe start position where [needle] occurs in

@@ -43,7 +43,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'shared/benchmark_fixtures.dart';
 import 'shared/model_pricing.dart' as pricing;
 
-const String naturalnessPromptVersion = 'v3';
+const String naturalnessPromptVersion = 'v4';
 const String naturalnessPromptLabel =
     'spanish-naturalness-only-variety-restraint';
 
@@ -87,6 +87,43 @@ const String previousNaturalnessSystemPrompt =
     '\n'
     'Return JSON only.';
 
+// v3 — superseded by `naturalnessSystemPrompt` (v4) below, issue #108.
+// Kept by value, not deleted, same precedent as `legacyNaturalnessSystemPrompt`
+// and `previousNaturalnessSystemPrompt` above: a prior harness-validated
+// wording stays available for regression/diff comparison rather than being
+// discarded once superseded.
+const String previousNaturalnessSystemPromptV3 =
+    'You are a Spanish tutor reviewing a text that has been checked for '
+    'grammar, spelling, and punctuation.\n'
+    '\n'
+    'Your task is to identify wording that a native Spanish speaker would be '
+    'unlikely to use naturally in this context. This includes calques, idioms, '
+    'and collocations.\n'
+    '\n'
+    'Do not report spelling, punctuation, or grammatical errors.\n'
+    'If the only problem is grammar, spelling, or punctuation, return no '
+    'issue.\n'
+    '\n'
+    'Do not normalise wording that is natural in an established variety of '
+    'Spanish. A form is not a naturalness issue merely because another form is '
+    'more widespread, more neutral, or preferred by the reviewer\'s own '
+    'regional variety.This includes established regional uses of para with verbs of movement to express direction or destination, such as ir para + place, where another variety may prefer ir a + place.\n'
+    '\n'
+    'Ignore spelling, punctuation, or grammar errors even if they appear in '
+    'the same sentence as a naturalness issue.\n'
+    '\n'
+    'Return JSON only.';
+
+// v4 (issue #108): adds one new paragraph to v3 above — everything else is
+// byte-for-byte unchanged, including the known "regional variety.This
+// includes" missing-space typo, which stays untouched here since fixing it
+// is not this issue's scope. The new paragraph requires naturalness edits
+// to propose exactly one replacement, never a slash-separated menu of
+// options — see docs/two_pass_prompt_contract_audit.md §7b for the
+// recorded failures this addresses (the "beer" and "pasar un buen tiempo"
+// patterns) and lib/features/corrections/domain/naturalness_merge.dart's
+// new multiOptionReplacement skip reason for the deterministic code-level
+// backstop this prompt change is paired with.
 const String naturalnessSystemPrompt =
     'You are a Spanish tutor reviewing a text that has been checked for '
     'grammar, spelling, and punctuation.\n'
@@ -106,6 +143,11 @@ const String naturalnessSystemPrompt =
     '\n'
     'Ignore spelling, punctuation, or grammar errors even if they appear in '
     'the same sentence as a naturalness issue.\n'
+    '\n'
+    'Give exactly one natural replacement for each issue — never more than '
+    'one option, and never join alternatives with a slash, "or", or a list. '
+    'If more than one wording would work, choose the single best one '
+    'yourself.\n'
     '\n'
     'Return JSON only.';
 
@@ -1232,7 +1274,7 @@ void main() {
 
   group('naturalness prompt and schema', () {
     test('prompt states the naturalness-only scope', () {
-      expect(naturalnessPromptVersion, 'v3');
+      expect(naturalnessPromptVersion, 'v4');
       expect(
         naturalnessSystemPrompt,
         contains('checked for grammar, spelling, and punctuation'),
@@ -1255,12 +1297,35 @@ void main() {
     });
 
     test(
+      'prompt requires exactly one replacement, never a slash-separated '
+      'menu of options (issue #108)',
+      () {
+        expect(
+          naturalnessSystemPrompt,
+          contains('Give exactly one natural replacement'),
+        );
+        expect(
+          naturalnessSystemPrompt,
+          contains('never join alternatives with a slash'),
+        );
+      },
+    );
+
+    test(
       'keeps previous naturalness prompts available for regression runs',
       () {
         expect(legacyNaturalnessSystemPrompt, contains('only for naturalness'));
         expect(
           legacyNaturalnessSystemPrompt,
           contains('Do not provide a fully corrected'),
+        );
+        expect(
+          previousNaturalnessSystemPromptV3,
+          contains('checked for grammar, spelling, and punctuation'),
+        );
+        expect(
+          previousNaturalnessSystemPromptV3,
+          isNot(contains('Give exactly one natural replacement')),
         );
         expect(
           previousNaturalnessSystemPrompt,

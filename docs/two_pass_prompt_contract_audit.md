@@ -119,6 +119,8 @@ Example, present in both reports (worse in the production-style run — 4/5 fail
 
 Root cause: the `natural_replacement` field is `"type": "string"` with no further constraint, and neither the prompt nor the schema ever states it must contain exactly one proposed replacement. The model is evidently treating "suggest a more natural way to say this" as license to offer several candidates joined by `/` inside that single string field — an output-control gap, not a language-quality one, matching the issue log's own diagnosis.
 
+**Status update (issue #108)**: fixed, via the follow-up this section itself recommended — `naturalnessReviewSpanish` (v4) now explicitly requires exactly one replacement, and `mergeNaturalnessReview` gained a deterministic code-level backstop (`NaturalnessMergeSkipReason.multiOptionReplacement`) that skips any issue whose `naturalReplacement` still looks like a slash-joined menu of options, regardless of whether the prompt change alone is enough. Covered by both the "beer" and `pasar un buen tiempo` patterns cited above.
+
 ### 7c. First pass correcting word choice / naturalness-style issues
 
 Example, present in both reports: `Estoy corriendo tarde para la reunión.` → first pass changes `corriendo tarde` to `llegando tarde`, a genuine word-choice/naturalness edit, despite `firstPassCorrectionSpanish` explicitly saying "Do not correct word choice" and "Do not improve naturalness." Also `Voy para casa ahora mismo.` (valid regional Spanish) → first pass inserts `la`, despite "Do not change valid regional Spanish."

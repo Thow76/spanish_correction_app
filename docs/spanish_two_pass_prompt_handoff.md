@@ -83,7 +83,15 @@ Prompt label: spanish-naturalness-only-variety-restraint
 Prompt version: v3
 ```
 
-Current intended system prompt:
+**Status update (issue #108)**: superseded by v4, which adds one new
+paragraph requiring naturalness edits to propose exactly one replacement
+rather than a slash-separated menu of options — see
+`test/naturalness_model_comparison_harness.dart`'s `naturalnessSystemPrompt`
+(current) and `previousNaturalnessSystemPromptV3` (the exact wording shown
+below, kept for reference). The text below is therefore a historical
+snapshot of v3, not the current production prompt.
+
+Current intended system prompt (v3, superseded — see status update above):
 
 ```text
 You are a Spanish tutor reviewing a text that has been checked for grammar, spelling, and punctuation.
