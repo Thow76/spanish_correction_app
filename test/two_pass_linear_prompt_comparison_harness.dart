@@ -35,34 +35,43 @@
 // that exact call sequence inline, using the same underlying
 // `callFirstPassCorrection`/`callNaturalnessReview`/
 // `mergeNaturalnessReview`/`mapNaturalnessEditsIntoCorrectionResponse`
-// production already composes it from. This is the same "share calls
-// for a fair, confound-free comparison" precedent
-// `runFallbackPipelineComparison` (issue #117) already established: the
-// first pass is called ONCE and shared between both architectures under
-// test (only the naturalness step's timing/target text differs between
-// them), and the parallel path's conditional fallback call — which asks
-// the model the *exact* same question the linear path's own naturalness
-// call already asked ("review this first-pass text for naturalness") —
-// reuses that already-made result rather than spending a second live
-// call asking the same question again. No production code is called or
+// production already composes it from. No production code is called or
 // modified; this file only touches `lib/` via ordinary imports of the
 // same pure functions the production pipeline itself imports.
+//
+// Issue #126: the linear (serial) side's first pass now uses
+// [linearFirstPassPrompt] — a REVISED first-pass prompt sourced from a
+// design review, not production's `firstPassCorrectionSpanish` — while
+// the parallel (production-equivalent) side continues using production's
+// current, unmodified prompt. See [linearFirstPassPrompt]'s own doc
+// comment for the exact source and why the two sides no longer share a
+// first-pass call: once the linear side started using a different
+// prompt, sharing one first-pass call would silently make both sides
+// measure the same prompt, which defeats the point of a "revised
+// prompt + serial architecture" vs. "current prompt + parallel
+// architecture" comparison — exactly the comparison the design review
+// that produced this prompt asked for. This also means the parallel
+// path's conditional fallback can no longer reuse the linear path's
+// naturalness call (they now review two different first-pass outputs),
+// so a genuine fallback call happens again when the parallel merge has
+// a conflict, same as production.
 //
 // Run offline (fixture/logic sanity only, no API calls):
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --exclude-tags live
 //
 // Run live deliberately (costs real API calls — default 17-fixture
-// curated set: 1 shared first-pass call + 1 linear naturalness call + 1
-// parallel naturalness-on-original call per fixture, i.e. always 3 total
-// per fixture regardless of whether a conflict would have triggered a
-// fallback, since the fallback call is never actually re-issued — expect
-// on the order of 50 total calls for the default set):
+// curated set: 2 first-pass calls (one per architecture, since they use
+// different prompts) + 2 naturalness calls always, plus a conditional
+// 3rd naturalness call only when the parallel merge genuinely conflicts
+// — expect on the order of 70-90 total calls for the default set):
 //   OPENAI_API_KEY=sk-... \
 //   TWO_PASS_LINEAR_COMPARISON_LIVE=true \
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --tags live --timeout none
 //
 // Optional runtime controls:
-// - TWO_PASS_LINEAR_FIRST_PASS_MODEL: defaults to gpt-4.1.
+// - TWO_PASS_LINEAR_FIRST_PASS_MODEL: defaults to gpt-4.1 (issue #126's
+//   own "use this prompt with gpt-4.1 unless the harness configuration
+//   overrides it").
 // - TWO_PASS_LINEAR_NATURALNESS_MODEL: defaults to gpt-5.1.
 // - TWO_PASS_LINEAR_OUTPUT: report path, defaults to
 //   docs/two_pass_linear_prompt_comparison.md.
@@ -97,6 +106,106 @@ import 'two_pass_integration_harness.dart'
         allTwoPassFixtures,
         isPassingScore,
         scoreFixtureResult;
+
+/// The revised first-pass prompt (issue #126), used as the linear
+/// (serial) pipeline's grammar/spelling/punctuation pass in this harness
+/// only — it does not replace or modify production's
+/// `firstPassCorrectionSpanish`
+/// (`lib/core/services/prompts/correction_prompt.dart`), which the
+/// parallel (production-equivalent) side of this harness continues to
+/// use unchanged.
+///
+/// **Source**: `Two-Pass_Prompt_Revision_Summary.docx`, section "Revised
+/// First Pass Prompt" — a design-review document external to this repo
+/// (not version-controlled here). Transcribed verbatim, including line
+/// breaks, by unzipping the `.docx` and reading `word/document.xml`
+/// directly (`<w:t>` runs and `<w:br/>` breaks), since no diffable
+/// plain-text export of the source document exists to diff against.
+/// Confirmed the source uses plain straight quotes/apostrophes
+/// throughout (not Word's smart-quote autocorrect), so nothing here was
+/// normalized or altered from what the document contains. Not
+/// paraphrased or reworded in any way — issue #126's own "do not
+/// silently rewrite the correction rules" requirement.
+///
+/// The design review's own stated goal for this revision: replace
+/// subjective concepts ("naturalness", "word choice") with an objective
+/// standard — "recognised as correct by authoritative Spanish language
+/// references" — as the boundary between what the first pass may correct
+/// (objective grammar/spelling/punctuation errors) and what it must
+/// leave alone (word choice, style, fluency, general naturalness, valid
+/// regional Spanish — all covered by the prompt's own "do not rewrite
+/// wording solely because another expression would be more common, more
+/// idiomatic, more fluent, or stylistically preferable" and "do not
+/// treat awkward but grammatically valid Spanish as an error" lines).
+///
+/// The same document also contains a "Revised Second Pass Prompt
+/// (Draft)" — deliberately out of scope for issue #126, which asks only
+/// for the first-pass prompt. The linear pipeline's naturalness
+/// (second-pass) step still uses production's unchanged
+/// `naturalnessReviewSpanish`.
+const String linearFirstPassPrompt =
+    'You are a Spanish language tutor reviewing a student\'s writing.\n'
+    '\n'
+    'Your task is to correct only objective Spanish grammar, spelling, '
+    'and punctuation errors.\n'
+    '\n'
+    'Do not rewrite wording solely because another expression would be '
+    'more common, more idiomatic, more fluent, or stylistically '
+    'preferable.\n'
+    'Do not replace wording that is recognised as correct by '
+    'authoritative Spanish language references with another accepted '
+    'alternative.\n'
+    'Do not treat awkward but grammatically valid Spanish as an error.\n'
+    '\n'
+    'Correct every objective grammar, spelling, and punctuation error '
+    'that you find.\n'
+    '\n'
+    'When a sentence contains more than one objective grammar error, '
+    'correct every instance, not only the first one. For example:\n'
+    '\n'
+    '"Tengo cita con médico mañana."\n'
+    '\n'
+    'is missing both "una" before "cita" and "el" before "médico", so '
+    'correct it to:\n'
+    '\n'
+    '"Tengo una cita con el médico mañana."\n'
+    '\n'
+    'Return JSON only. Do not include Markdown or commentary.';
+
+/// Calls [linearFirstPassPrompt] against [submittedText] and parses the
+/// reply, mirroring `callFirstPassCorrection`'s exact call shape
+/// (`first_pass_correction_client.dart`) — same `stageLabel`, same
+/// [firstPassCorrectionResponseFormat] JSON schema (reused unchanged:
+/// issue #126's own "add [the JSON wrapper] mechanically without
+/// changing the prompt's intended contract" — the revised prompt's
+/// contract is still exactly `{"corrected_text": "string"}`, so the
+/// existing schema is reused rather than redefined), and the same
+/// [buildFirstPassCorrectionUserContent]/[parseFirstPassCorrectionResponse]
+/// helpers — with only the system prompt text swapped for
+/// [linearFirstPassPrompt]. Cannot call `callFirstPassCorrection`
+/// directly, since that function hardcodes production's
+/// `firstPassCorrectionSpanish` as its system prompt with no override
+/// parameter.
+Future<CorrectionResponse> _callLinearFirstPassCorrection({
+  required OpenAiChatCompletionsClient client,
+  required String model,
+  required String submittedText,
+}) async {
+  final replyText = await client.complete(
+    model: model,
+    systemPrompt: linearFirstPassPrompt,
+    userText: buildFirstPassCorrectionUserContent(submittedText),
+    stageLabel: 'linear_first_pass_correction',
+    responseFormat: firstPassCorrectionResponseFormat,
+  );
+  final correctedText = parseFirstPassCorrectionResponse(replyText);
+
+  return CorrectionResponse(
+    originalText: submittedText,
+    correctedText: correctedText,
+    corrections: const [],
+  );
+}
 
 /// Curated subset of `allTwoPassFixtures` (issue #82) this harness
 /// exercises by default — a representative sample across language
@@ -204,12 +313,13 @@ int linearCallDelayMsFrom(Map<String, String> environment) {
 }
 
 /// Runs the two-pass pipeline SERIALLY (issue #125): the first pass
-/// completes fully, then naturalness reviews the first pass's own
-/// corrected text directly — never the original text, never
-/// concurrently with the first pass, and never with a conditional
-/// fallback rerun, because naturalness only ever sees the exact text it
-/// is about to be merged into. Contrast with production's
-/// `runTwoPassCorrectionPipeline`
+/// (using [linearFirstPassPrompt], issue #126 — not production's
+/// `firstPassCorrectionSpanish`) completes fully, then naturalness
+/// reviews the first pass's own corrected text directly — never the
+/// original text, never concurrently with the first pass, and never
+/// with a conditional fallback rerun, because naturalness only ever sees
+/// the exact text it is about to be merged into. Contrast with
+/// production's `runTwoPassCorrectionPipeline`
 /// (`lib/features/corrections/data/two_pass_correction_pipeline.dart`),
 /// which starts the first pass and naturalness-on-original concurrently
 /// and only reruns naturalness sequentially when the parallel merge
@@ -223,7 +333,7 @@ Future<CorrectionResponse> runLinearTwoPassPipeline({
   required String naturalnessModel,
   required String submittedText,
 }) async {
-  final firstPassResponse = await callFirstPassCorrection(
+  final firstPassResponse = await _callLinearFirstPassCorrection(
     client: client,
     model: firstPassModel,
     submittedText: submittedText,
@@ -253,11 +363,12 @@ Future<CorrectionResponse> runLinearTwoPassPipeline({
 class LinearPipelineComparisonResult {
   const LinearPipelineComparisonResult({
     required this.fixture,
-    required this.firstPassCorrectedText,
+    required this.linearFirstPassCorrectedText,
     required this.linearNaturalnessDescription,
     required this.linearCorrectedText,
     required this.linearScore,
     required this.linearReason,
+    required this.parallelFirstPassCorrectedText,
     required this.parallelNaturalnessOnOriginalDescription,
     required this.parallelUsedFallback,
     required this.parallelCorrectedText,
@@ -266,21 +377,29 @@ class LinearPipelineComparisonResult {
   });
 
   final TwoPassFixture fixture;
-  final String firstPassCorrectedText;
 
+  /// First-pass output from [linearFirstPassPrompt] (issue #126) — NOT
+  /// the same call or necessarily the same text as
+  /// [parallelFirstPassCorrectedText], since the two architectures now
+  /// use different first-pass prompts and can no longer share one
+  /// first-pass call (see this file's own header comment).
+  final String linearFirstPassCorrectedText;
   final String linearNaturalnessDescription;
   final String linearCorrectedText;
   final TwoPassScoreLabel linearScore;
   final String linearReason;
 
+  /// First-pass output from production's unchanged
+  /// `firstPassCorrectionSpanish`.
+  final String parallelFirstPassCorrectedText;
   final String parallelNaturalnessOnOriginalDescription;
 
   /// Whether the parallel path's merge on naturalness-on-original had a
-  /// skipped edit, i.e. whether production's real pipeline would have
-  /// triggered its sequential fallback here. That fallback's own
-  /// naturalness call is never separately re-issued — it would ask the
-  /// exact question the linear pipeline's own naturalness call already
-  /// asked, so this result reuses that call's data instead.
+  /// skipped edit, i.e. whether production's real pipeline would trigger
+  /// its sequential fallback here. Since issue #126, this fallback's own
+  /// naturalness call IS genuinely re-issued when triggered — it can no
+  /// longer reuse the linear path's naturalness call, which reviews a
+  /// different (revised-prompt) first-pass output.
   final bool parallelUsedFallback;
   final String parallelCorrectedText;
   final TwoPassScoreLabel parallelScore;
@@ -330,45 +449,59 @@ String _reasonFor(TwoPassFixture fixture, String finalCorrectedText) {
             'output.';
 }
 
-/// Runs both pipeline architectures against [fixture] and scores each,
-/// sharing the first-pass call between them (see this file's own header
-/// comment for why) and reusing the linear pipeline's own naturalness
-/// call as the parallel path's fallback result rather than re-issuing
-/// the identical question a second time.
+/// Runs both pipeline architectures against [fixture] and scores each.
+///
+/// Since issue #126, the linear side's first pass uses
+/// [linearFirstPassPrompt] and the parallel side's uses production's
+/// unchanged `firstPassCorrectionSpanish` — two different prompts, so
+/// (unlike this function's original #125 design) they can no longer
+/// share a single first-pass call, and the parallel path's conditional
+/// fallback can no longer reuse the linear path's naturalness call
+/// either, since that call now reviews a different first-pass output.
+/// Both first-pass calls and, when triggered, the fallback call, are
+/// now genuinely independent — the same shape production's own pipeline
+/// has, just with the linear side's first pass swapped for the revised
+/// prompt.
 Future<LinearPipelineComparisonResult> runLinearPipelineComparison({
   required OpenAiChatCompletionsClient client,
   required String firstPassModel,
   required String naturalnessModel,
   required TwoPassFixture fixture,
 }) async {
-  final firstPassResponse = await callFirstPassCorrection(
+  // Linear: revised first-pass prompt (issue #126), then naturalness
+  // reviews the first pass's own corrected text, sequentially, no
+  // fallback possible.
+  final linearFirstPassResponse = await _callLinearFirstPassCorrection(
     client: client,
     model: firstPassModel,
     submittedText: fixture.text,
   );
-
-  // Linear: naturalness reviews the first pass's own corrected text,
-  // sequentially, no fallback possible.
   final linearNaturalnessReview = await callNaturalnessReview(
     client: client,
     model: naturalnessModel,
-    text: firstPassResponse.correctedText,
+    text: linearFirstPassResponse.correctedText,
   );
   final linearMerge = mergeNaturalnessReview(
     originalText: fixture.text,
-    firstPassCorrectedText: firstPassResponse.correctedText,
+    firstPassCorrectedText: linearFirstPassResponse.correctedText,
     naturalnessReview: linearNaturalnessReview,
   );
   final linearResponse = mapNaturalnessEditsIntoCorrectionResponse(
-    firstPassResponse: firstPassResponse,
+    firstPassResponse: linearFirstPassResponse,
     naturalnessMerge: linearMerge,
   );
 
-  // Parallel: naturalness reviews the ORIGINAL text — production's own
-  // "started concurrently with the first pass" call. Reproducing the
-  // exact wall-clock concurrency isn't necessary for comparing final
-  // output quality, only awaiting it after the first pass instead of
-  // alongside it.
+  // Parallel: production's current, unmodified first-pass prompt, then
+  // naturalness reviews the ORIGINAL text — production's own "started
+  // concurrently with the first pass" call. Reproducing the exact
+  // wall-clock concurrency isn't necessary for comparing final output
+  // quality, only awaiting it after the first pass instead of alongside
+  // it.
+  final parallelFirstPassResponse = await callFirstPassCorrection(
+    client: client,
+    model: firstPassModel,
+    submittedText: fixture.text,
+  );
   final parallelNaturalnessOnOriginal = await callNaturalnessReview(
     client: client,
     model: naturalnessModel,
@@ -376,7 +509,7 @@ Future<LinearPipelineComparisonResult> runLinearPipelineComparison({
   );
   final parallelMerge = mergeNaturalnessReview(
     originalText: fixture.text,
-    firstPassCorrectedText: firstPassResponse.correctedText,
+    firstPassCorrectedText: parallelFirstPassResponse.correctedText,
     naturalnessReview: parallelNaturalnessOnOriginal,
   );
 
@@ -384,31 +517,38 @@ Future<LinearPipelineComparisonResult> runLinearPipelineComparison({
   final CorrectionResponse parallelResponse;
   if (!parallelUsedFallback) {
     parallelResponse = mapNaturalnessEditsIntoCorrectionResponse(
-      firstPassResponse: firstPassResponse,
+      firstPassResponse: parallelFirstPassResponse,
       naturalnessMerge: parallelMerge,
     );
   } else {
-    // Production's fallback asks the exact same question the linear
-    // pipeline's own naturalness call already asked — reuse that
-    // result instead of calling the API again.
+    // Genuine fallback call (issue #126) — can no longer reuse the
+    // linear path's naturalness call, since that reviewed a different
+    // (revised-prompt) first-pass output than this (production-prompt)
+    // one.
+    final fallbackNaturalnessReview = await callNaturalnessReview(
+      client: client,
+      model: naturalnessModel,
+      text: parallelFirstPassResponse.correctedText,
+    );
     final fallbackMerge = mergeNaturalnessReview(
       originalText: fixture.text,
-      firstPassCorrectedText: firstPassResponse.correctedText,
-      naturalnessReview: linearNaturalnessReview,
+      firstPassCorrectedText: parallelFirstPassResponse.correctedText,
+      naturalnessReview: fallbackNaturalnessReview,
     );
     parallelResponse = mapNaturalnessEditsIntoCorrectionResponse(
-      firstPassResponse: firstPassResponse,
+      firstPassResponse: parallelFirstPassResponse,
       naturalnessMerge: fallbackMerge,
     );
   }
 
   return LinearPipelineComparisonResult(
     fixture: fixture,
-    firstPassCorrectedText: firstPassResponse.correctedText,
+    linearFirstPassCorrectedText: linearFirstPassResponse.correctedText,
     linearNaturalnessDescription: _describeReview(linearNaturalnessReview),
     linearCorrectedText: linearResponse.correctedText,
     linearScore: _score(fixture, linearResponse.correctedText),
     linearReason: _reasonFor(fixture, linearResponse.correctedText),
+    parallelFirstPassCorrectedText: parallelFirstPassResponse.correctedText,
     parallelNaturalnessOnOriginalDescription: _describeReview(
       parallelNaturalnessOnOriginal,
     ),
@@ -445,7 +585,7 @@ String buildLinearPipelineComparisonReport({
   final buffer = StringBuffer()
     ..writeln(
       '# Two-Pass Pipeline Architecture Comparison: Linear vs. Parallel '
-      '(issue #125)',
+      '(issues #125, #126)',
     )
     ..writeln()
     ..writeln('## Run configuration')
@@ -456,13 +596,16 @@ String buildLinearPipelineComparisonReport({
     ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
     ..writeln()
     ..writeln(
-      'The first pass is run once per fixture and shared between both '
-      'architectures below. "Linear" reviews the first pass\'s own '
-      'corrected text once, sequentially, with no fallback concept. '
-      '"Parallel" reviews the original text (production\'s own '
-      'concurrent call) and — only when that merge has a conflict — '
-      'falls back to the exact naturalness call the linear pipeline '
-      'already made, rather than issuing it again.',
+      '"Linear" uses the revised first-pass prompt (issue #126, '
+      '`linearFirstPassPrompt`, sourced from '
+      '`Two-Pass_Prompt_Revision_Summary.docx`), then reviews that '
+      'first pass\'s own corrected text once, sequentially, with no '
+      'fallback concept. "Parallel" uses production\'s current, '
+      'unmodified first-pass prompt, then reviews the original text '
+      '(production\'s own concurrent call) and — only when that merge '
+      'has a conflict — falls back to a genuine second naturalness '
+      'call, same as production. The two architectures no longer share '
+      'a first-pass call, since they now use different prompts.',
     )
     ..writeln();
 
@@ -490,11 +633,15 @@ String buildLinearPipelineComparisonReport({
           '`${result.fixture.expectedCorrectedText}`',
         )
         ..writeln(
-          '- Pass 1 (first-pass corrected text, shared): '
-          '`${result.firstPassCorrectedText}`',
+          '- Pass 1, linear (revised prompt): '
+          '`${result.linearFirstPassCorrectedText}`',
         )
         ..writeln(
-          '- Parallel would use fallback: ${result.parallelUsedFallback}',
+          '- Pass 1, parallel (current prompt): '
+          '`${result.parallelFirstPassCorrectedText}`',
+        )
+        ..writeln(
+          '- Parallel used fallback: ${result.parallelUsedFallback}',
         )
         ..writeln()
         ..writeln(
@@ -572,6 +719,86 @@ void main() {
       expect(ids.length, linearComparisonFixtureIds.length);
     });
 
+    group('linearFirstPassPrompt (issue #126)', () {
+      test(
+        'matches the source document\'s exact wording — pinned so an '
+        'accidental future edit is caught rather than silently drifting '
+        'from Two-Pass_Prompt_Revision_Summary.docx',
+        () {
+          expect(
+            linearFirstPassPrompt,
+            'You are a Spanish language tutor reviewing a student\'s '
+            'writing.\n'
+            '\n'
+            'Your task is to correct only objective Spanish grammar, '
+            'spelling, and punctuation errors.\n'
+            '\n'
+            'Do not rewrite wording solely because another expression '
+            'would be more common, more idiomatic, more fluent, or '
+            'stylistically preferable.\n'
+            'Do not replace wording that is recognised as correct by '
+            'authoritative Spanish language references with another '
+            'accepted alternative.\n'
+            'Do not treat awkward but grammatically valid Spanish as an '
+            'error.\n'
+            '\n'
+            'Correct every objective grammar, spelling, and punctuation '
+            'error that you find.\n'
+            '\n'
+            'When a sentence contains more than one objective grammar '
+            'error, correct every instance, not only the first one. For '
+            'example:\n'
+            '\n'
+            '"Tengo cita con médico mañana."\n'
+            '\n'
+            'is missing both "una" before "cita" and "el" before '
+            '"médico", so correct it to:\n'
+            '\n'
+            '"Tengo una cita con el médico mañana."\n'
+            '\n'
+            'Return JSON only. Do not include Markdown or commentary.',
+          );
+        },
+      );
+
+      test(
+        'says only objective grammar/spelling/punctuation are in scope, '
+        'and explicitly excludes word choice, style, fluency, general '
+        'naturalness, and valid regional Spanish (acceptance criteria)',
+        () {
+          expect(
+            linearFirstPassPrompt,
+            contains(
+              'correct only objective Spanish grammar, spelling, and '
+              'punctuation errors',
+            ),
+          );
+          expect(
+            linearFirstPassPrompt,
+            contains(
+              'Do not rewrite wording solely because another expression '
+              'would be more common, more idiomatic, more fluent, or '
+              'stylistically preferable',
+            ),
+          );
+          expect(
+            linearFirstPassPrompt,
+            contains(
+              'Do not treat awkward but grammatically valid Spanish as '
+              'an error',
+            ),
+          );
+        },
+      );
+
+      test('requests a plain JSON reply with no wrapper commentary', () {
+        expect(
+          linearFirstPassPrompt,
+          contains('Return JSON only. Do not include Markdown or commentary.'),
+        );
+      });
+    });
+
     group('fixture-set selection', () {
       test('"comparison" returns the curated 17-fixture comparison set', () {
         expect(linearFixturesFor('comparison'), linearComparisonFixtures);
@@ -607,13 +834,15 @@ void main() {
     });
 
     test(
-      'runLinearTwoPassPipeline reviews the first pass\'s own corrected '
-      'text, not the original — and makes exactly two calls, never a '
-      'third',
+      'runLinearTwoPassPipeline uses linearFirstPassPrompt (issue #126, '
+      'not production\'s firstPassCorrectionSpanish), then reviews the '
+      'first pass\'s own corrected text, not the original — and makes '
+      'exactly two calls, never a third',
       () async {
         const fixtureText = 'Vi mucho trafico ayer.';
         final client = _RoutingHttpClient(
-          firstPassReply: _firstPassEnvelope('Vi mucho tráfico ayer.'),
+          linearFirstPassReply: _firstPassEnvelope('Vi mucho tráfico ayer.'),
+          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
           originalText: fixtureText,
           naturalnessOnOriginalReply: _naturalnessEnvelope(
             '{"has_naturalness_issue": false, "issues": []}',
@@ -640,26 +869,29 @@ void main() {
         // Applied the naturalness-on-first-pass reply, not the
         // naturalness-on-original reply (which reported no issue).
         expect(response.correctedText, 'Había mucho tráfico ayer.');
+        expect(client.linearFirstPassCallCount, 1);
+        expect(client.parallelFirstPassCallCount, 0);
         expect(client.naturalnessCallCount, 1);
       },
     );
 
     test(
-      'runLinearPipelineComparison shares one first-pass call and never '
-      'issues a third naturalness call even when the parallel merge '
-      'would trigger a fallback — it reuses the linear pipeline\'s own '
-      'naturalness-on-first-pass result instead',
+      'runLinearPipelineComparison (issue #126) makes two independent '
+      'first-pass calls — one per prompt — and genuinely re-issues the '
+      'parallel path\'s fallback naturalness call when the parallel '
+      'merge conflicts, rather than reusing the linear path\'s call',
       () async {
         final fixture = allTwoPassFixtures.firstWhere(
           (f) => f.id == 'clean-grammar-only',
         );
         final client = _RoutingHttpClient(
-          firstPassReply: _firstPassEnvelope('Vi mucho tráfico ayer.'),
+          linearFirstPassReply: _firstPassEnvelope('Vi mucho tráfico ayer.'),
+          parallelFirstPassReply: _firstPassEnvelope('Vi mucho tráfico ayer.'),
           originalText: fixture.text,
           // Flags the whole sentence against the ORIGINAL text — this
-          // won't match the first pass's own corrected text exactly, so
-          // the parallel merge conflicts (would trigger a fallback in
-          // production).
+          // won't match the parallel first pass's own corrected text
+          // exactly, so the parallel merge conflicts and triggers a
+          // fallback.
           naturalnessOnOriginalReply: _naturalnessEnvelope(
             '{"has_naturalness_issue": true, "issues": ['
             '{"span": "Vi mucho trafico ayer.", '
@@ -683,16 +915,15 @@ void main() {
         );
 
         expect(result.parallelUsedFallback, isTrue);
-        // Linear found no remaining issue reviewing the first-pass text
-        // directly.
         expect(result.linearCorrectedText, 'Vi mucho tráfico ayer.');
-        // Parallel's "fallback" reused that exact same result rather
-        // than asking again.
         expect(result.parallelCorrectedText, 'Vi mucho tráfico ayer.');
-        // Exactly one first-pass call and two naturalness calls total —
-        // never a third for the fallback.
-        expect(client.firstPassCallCount, 1);
-        expect(client.naturalnessCallCount, 2);
+        // One first-pass call per architecture (no longer shared, issue
+        // #126) and three naturalness calls: linear's own call, the
+        // parallel merge's naturalness-on-original call, and a genuine
+        // third call for the parallel path's fallback.
+        expect(client.linearFirstPassCallCount, 1);
+        expect(client.parallelFirstPassCallCount, 1);
+        expect(client.naturalnessCallCount, 3);
       },
     );
 
@@ -705,11 +936,12 @@ void main() {
         );
         final result = LinearPipelineComparisonResult(
           fixture: fixture,
-          firstPassCorrectedText: fixture.expectedCorrectedText,
+          linearFirstPassCorrectedText: fixture.expectedCorrectedText,
           linearNaturalnessDescription: '(none)',
           linearCorrectedText: fixture.expectedCorrectedText,
           linearScore: TwoPassScoreLabel.correctFix,
           linearReason: 'Matches expected output.',
+          parallelFirstPassCorrectedText: fixture.expectedCorrectedText,
           parallelNaturalnessOnOriginalDescription: '(none)',
           parallelUsedFallback: false,
           parallelCorrectedText: fixture.expectedCorrectedText,
@@ -835,28 +1067,46 @@ String _naturalnessEnvelope(String replyContent) => jsonEncode({
   ],
 });
 
-/// Fake HTTP client routing by request shape: the first-pass prompt
-/// always gets [firstPassReply]; a naturalness call is routed by
-/// *user text* — whether it targets [originalText] (the parallel path's
-/// concurrent call) or anything else (the linear path's call, always
-/// targeting the first pass's own corrected text). Unlike the fallback
+/// Fake HTTP client routing by request shape: a first-pass call is
+/// routed by *system prompt* — [linearFirstPassPrompt] (issue #126) vs.
+/// production's `firstPassCorrectionSpanish` — since issue #126 the two
+/// architectures no longer share one first-pass call. A naturalness
+/// call is routed by *user text* — whether it targets [originalText]
+/// (the parallel path's concurrent call) or anything else (a call
+/// reviewing a first-pass output, whether the linear path's own call or
+/// the parallel path's genuine fallback call). Unlike the fallback
 /// comparison harness's fake client (issue #117), there is only ever
 /// one naturalness system prompt in play here, so no per-variant
-/// system-prompt routing is needed. All routing state lives on this
-/// client instance (constructed fresh per test), never a static field.
+/// naturalness system-prompt routing is needed. All routing state lives
+/// on this client instance (constructed fresh per test), never a static
+/// field.
 class _RoutingHttpClient implements HttpClient {
   _RoutingHttpClient({
-    required this.firstPassReply,
+    required this.linearFirstPassReply,
+    required this.parallelFirstPassReply,
     required this.originalText,
     required this.naturalnessOnOriginalReply,
     required this.naturalnessOnFirstPassReply,
   });
 
-  final String firstPassReply;
+  /// Reply for a first-pass call using [linearFirstPassPrompt] (issue
+  /// #126).
+  final String linearFirstPassReply;
+
+  /// Reply for a first-pass call using production's
+  /// `firstPassCorrectionSpanish`.
+  final String parallelFirstPassReply;
   final String originalText;
   final String naturalnessOnOriginalReply;
+
+  /// Reply for any naturalness call NOT targeting [originalText] —
+  /// covers both the linear path's own naturalness call and, when
+  /// triggered, the parallel path's genuine fallback call (issue #126
+  /// made these two separate HTTP requests again; tests that don't need
+  /// to tell them apart by content can share this one reply).
   final String naturalnessOnFirstPassReply;
-  int firstPassCallCount = 0;
+  int linearFirstPassCallCount = 0;
+  int parallelFirstPassCallCount = 0;
   int naturalnessCallCount = 0;
 
   @override
@@ -888,9 +1138,15 @@ class _RoutingRequest implements HttpClientRequest {
     final systemPrompt = (messages[0] as Map)['content'] as String;
     final userText = (messages[1] as Map)['content'] as String;
 
+    if (systemPrompt == linearFirstPassPrompt) {
+      client.linearFirstPassCallCount++;
+      return _FakeHttpClientResponse(replyBody: client.linearFirstPassReply);
+    }
     if (systemPrompt == firstPassCorrectionSpanish) {
-      client.firstPassCallCount++;
-      return _FakeHttpClientResponse(replyBody: client.firstPassReply);
+      client.parallelFirstPassCallCount++;
+      return _FakeHttpClientResponse(
+        replyBody: client.parallelFirstPassReply,
+      );
     }
 
     client.naturalnessCallCount++;
