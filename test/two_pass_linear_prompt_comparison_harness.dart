@@ -410,6 +410,12 @@ const String _defaultNaturalnessModel = 'gpt-5.1';
 const String defaultLinearOutputPath =
     'docs/two_pass_linear_prompt_comparison.md';
 
+/// Default report path for the standalone serial execution flow (issue
+/// #128) — distinct from [defaultLinearOutputPath], which is the
+/// linear-vs-parallel *comparison* report's own path.
+const String defaultLinearExecutionOutputPath =
+    'docs/two_pass_linear_execution.md';
+
 const bool _liveRunOptInFromDefine = bool.fromEnvironment(
   'TWO_PASS_LINEAR_COMPARISON_LIVE',
   defaultValue: false,
@@ -418,6 +424,21 @@ const bool _liveRunOptInFromDefine = bool.fromEnvironment(
 bool _liveRunOptIn(Map<String, String> environment) {
   return _liveRunOptInFromDefine ||
       (environment['TWO_PASS_LINEAR_COMPARISON_LIVE']?.trim().toLowerCase() ==
+          'true');
+}
+
+/// Opt-in flag for the standalone serial execution flow's own live test
+/// (issue #128) — distinct from [_liveRunOptIn], which gates the
+/// linear-vs-parallel *comparison* live test. Kept separate so running
+/// one never accidentally triggers the other's real API calls.
+const bool _executionLiveRunOptInFromDefine = bool.fromEnvironment(
+  'TWO_PASS_LINEAR_EXECUTION_LIVE',
+  defaultValue: false,
+);
+
+bool _executionLiveRunOptIn(Map<String, String> environment) {
+  return _executionLiveRunOptInFromDefine ||
+      (environment['TWO_PASS_LINEAR_EXECUTION_LIVE']?.trim().toLowerCase() ==
           'true');
 }
 
@@ -439,24 +460,72 @@ int linearCallDelayMsFrom(Map<String, String> environment) {
   return int.tryParse(raw) ?? 750;
 }
 
-/// Runs the two-pass pipeline SERIALLY (issue #125): the first pass
-/// (using [linearFirstPassPrompt], issue #126 — not production's
-/// `firstPassCorrectionSpanish`) completes fully, then a lexical
-/// transfer review (using [linearSecondPassPrompt], issue #127 — not
-/// production's broader `naturalnessReviewSpanish`) reviews the first
-/// pass's own corrected text directly — never the original text, never
-/// concurrently with the first pass, and never with a conditional
-/// fallback rerun, because the review only ever sees the exact text it
-/// is about to be merged into. Contrast with production's
-/// `runTwoPassCorrectionPipeline`
-/// (`lib/features/corrections/data/two_pass_correction_pipeline.dart`),
-/// which starts the first pass and naturalness-on-original concurrently
-/// and only reruns naturalness sequentially when the parallel merge
-/// finds a conflict.
-///
-/// A pure prototype for this harness's own comparison — not called by
-/// or wired into production code anywhere.
-Future<CorrectionResponse> runLinearTwoPassPipeline({
+/// Default number of times to run each selected fixture through the
+/// standalone serial execution flow (issue #128) — unchanged single-run
+/// behavior from before this option existed.
+const int defaultLinearRunsPerFixture = 1;
+
+/// Reads `TWO_PASS_LINEAR_RUNS_PER_FIXTURE` from a real environment
+/// (issue #128) — how many times to run each selected fixture through
+/// [runLinearExecution] with the exact same submitted text, so a
+/// repeated live result can be told apart from a one-off stochastic one.
+/// Same convention as `two_pass_fallback_pipeline_comparison_harness.dart`'s
+/// `FALLBACK_PIPELINE_RUNS_PER_FIXTURE` (issue #122) and
+/// `two_pass_integration_harness.dart`'s `TWO_PASS_RUNS_PER_FIXTURE`
+/// (issue #107), including throwing [ArgumentError] for a zero or
+/// negative value rather than silently running every selected fixture
+/// zero times.
+int linearRunsPerFixtureFrom(Map<String, String> environment) {
+  final raw = environment['TWO_PASS_LINEAR_RUNS_PER_FIXTURE']?.trim() ?? '';
+  final runsPerFixture = int.tryParse(raw) ?? defaultLinearRunsPerFixture;
+  if (runsPerFixture < 1) {
+    throw ArgumentError(
+      'TWO_PASS_LINEAR_RUNS_PER_FIXTURE must be >= 1 (was $runsPerFixture) '
+      '— 0 or negative would silently run every selected fixture zero '
+      'times.',
+    );
+  }
+  return runsPerFixture;
+}
+
+/// The intermediate values one serial Pass 1 -> Pass 2 execution
+/// produces, shared by [runLinearTwoPassPipeline] and
+/// [runLinearExecution] (issue #128) so the two never drift apart on
+/// what "the serial flow" actually does.
+class _LinearSteps {
+  const _LinearSteps({
+    required this.response,
+    required this.firstPassCorrectedText,
+    required this.lexicalReview,
+  });
+
+  final CorrectionResponse response;
+  final String firstPassCorrectedText;
+  final NaturalnessReview lexicalReview;
+}
+
+/// Runs the two-pass pipeline SERIALLY (issue #125, execution flow
+/// finalized by issue #128): Pass 1 (using [linearFirstPassPrompt],
+/// issue #126 — not production's `firstPassCorrectionSpanish`) completes
+/// fully; its corrected text — never the original submitted text — is
+/// sent to Pass 2, a lexical transfer review (using
+/// [linearSecondPassPrompt], issue #127 — not production's broader
+/// `naturalnessReviewSpanish`); Pass 2's output becomes the final
+/// corrected text. Issue #128's own scope, satisfied by construction
+/// rather than by a branch that could be gotten wrong: this function
+/// never calls `callFirstPassCorrection` or `callNaturalnessReview` (the
+/// production-prompt clients the *parallel* side of this harness uses),
+/// never runs a naturalness-on-original call, and has no fallback/retry
+/// branch of any kind — there is nothing here that could "invoke a
+/// parallel merge or fallback path", because no code path to one exists
+/// in this function at all. The one deterministic step,
+/// `mergeNaturalnessReview`, is not that excluded conflict-resolution
+/// path — it is the same span-splicing step that applies ANY single
+/// naturalness/lexical review's edits onto a base text (used
+/// identically by production's own pipeline for its own single
+/// naturalness call), not a mechanism for choosing between competing
+/// pass results the way the parallel path's fallback decision is.
+Future<_LinearSteps> _runLinearSteps({
   required OpenAiChatCompletionsClient client,
   required String firstPassModel,
   required String naturalnessModel,
@@ -480,9 +549,106 @@ Future<CorrectionResponse> runLinearTwoPassPipeline({
     naturalnessReview: lexicalReview,
   );
 
-  return mapNaturalnessEditsIntoCorrectionResponse(
+  final response = mapNaturalnessEditsIntoCorrectionResponse(
     firstPassResponse: firstPassResponse,
     naturalnessMerge: merge,
+  );
+
+  return _LinearSteps(
+    response: response,
+    firstPassCorrectedText: firstPassResponse.correctedText,
+    lexicalReview: lexicalReview,
+  );
+}
+
+/// A pure prototype of the serial two-pass flow — not called by or
+/// wired into production code anywhere. Driven across the fixture set
+/// by [runLinearExecution] (issue #128) for standalone (non-comparison)
+/// live runs, and by [runLinearPipelineComparison] (issues #125-127)
+/// when compared side-by-side against the parallel/production-equivalent
+/// path. See [_runLinearSteps] for what "serially" means here.
+Future<CorrectionResponse> runLinearTwoPassPipeline({
+  required OpenAiChatCompletionsClient client,
+  required String firstPassModel,
+  required String naturalnessModel,
+  required String submittedText,
+}) async {
+  final steps = await _runLinearSteps(
+    client: client,
+    firstPassModel: firstPassModel,
+    naturalnessModel: naturalnessModel,
+    submittedText: submittedText,
+  );
+  return steps.response;
+}
+
+/// One fixture's one run through the standalone serial execution flow
+/// (issue #128) — deliberately lean, with no parallel/fallback fields
+/// at all, unlike [LinearPipelineComparisonResult] (issues #125-127),
+/// which exists specifically to compare the linear path against the
+/// parallel one.
+class LinearExecutionResult {
+  const LinearExecutionResult({
+    required this.fixture,
+    required this.runIndex,
+    required this.firstPassCorrectedText,
+    required this.lexicalReviewDescription,
+    required this.finalCorrectedText,
+    required this.score,
+    required this.reason,
+  });
+
+  final TwoPassFixture fixture;
+
+  /// 1-based index of this run among a fixture's repeated runs (issue
+  /// #128) — same convention as
+  /// `two_pass_fallback_pipeline_comparison_harness.dart`'s
+  /// `FallbackPipelineComparisonResult.runIndex` (issue #122). Defaults
+  /// to 1 for a single run.
+  final int runIndex;
+
+  /// Pass 1's own corrected text — what Pass 2 received (issue #128's
+  /// own "Pass 2 receives Pass 1 output, not original text" acceptance
+  /// criterion).
+  final String firstPassCorrectedText;
+  final String lexicalReviewDescription;
+
+  /// Pass 2's output, treated as the final corrected text directly
+  /// (issue #128's own "treat Pass 2 output as the final corrected
+  /// text" scope) — identical to [runLinearTwoPassPipeline]'s own
+  /// return value for this fixture/run, with no further processing.
+  final String finalCorrectedText;
+  final TwoPassScoreLabel score;
+  final String reason;
+}
+
+/// Runs [fixture] once (or once per call — see [runIndex]) through the
+/// standalone serial execution flow (issue #128): the exact same steps
+/// [runLinearTwoPassPipeline] runs (via the shared [_runLinearSteps]),
+/// wrapped with scoring. No parallel call, no fallback call, no
+/// comparison — for that, see [runLinearPipelineComparison].
+Future<LinearExecutionResult> runLinearExecution({
+  required OpenAiChatCompletionsClient client,
+  required String firstPassModel,
+  required String naturalnessModel,
+  required TwoPassFixture fixture,
+  int runIndex = 1,
+}) async {
+  final steps = await _runLinearSteps(
+    client: client,
+    firstPassModel: firstPassModel,
+    naturalnessModel: naturalnessModel,
+    submittedText: fixture.text,
+  );
+
+  return LinearExecutionResult(
+    fixture: fixture,
+    runIndex: runIndex,
+    firstPassCorrectedText: steps.firstPassCorrectedText,
+    lexicalReviewDescription: _describeReview(steps.lexicalReview),
+    finalCorrectedText: steps.response.correctedText,
+    score: _score(fixture, steps.response.correctedText),
+    reason: _reasonFor(fixture, steps.response.correctedText),
   );
 }
 
@@ -852,6 +1018,186 @@ String buildLinearPipelineComparisonReport({
   return buffer.toString();
 }
 
+/// One fixture's repeated runs (issue #128, [linearRunsPerFixtureFrom])
+/// through the standalone serial execution flow — mirrors
+/// `two_pass_fallback_pipeline_comparison_harness.dart`'s
+/// `_FixtureGroup` (issues #122/#124), kept as this harness's own
+/// separate copy per issue #125's "keep it separate" requirement rather
+/// than a shared import.
+class _LinearFixtureGroup {
+  _LinearFixtureGroup(List<LinearExecutionResult> runs)
+    : runs = [...runs]..sort((a, b) => a.runIndex.compareTo(b.runIndex));
+
+  final List<LinearExecutionResult> runs;
+
+  TwoPassFixture get fixture => runs.first.fixture;
+  int get passCount => runs.where((r) => isPassingScore(r.score)).length;
+
+  List<String> get distinctFinalOutputs {
+    final seen = <String>[];
+    for (final run in runs) {
+      if (!seen.contains(run.finalCorrectedText)) {
+        seen.add(run.finalCorrectedText);
+      }
+    }
+    return seen;
+  }
+}
+
+/// Groups a flat [LinearExecutionResult] list by fixture id then by
+/// language point, both in first-seen order — same purpose as
+/// `_GroupedFallbackResults`, kept separate per fixture/harness
+/// convention.
+class _GroupedLinearExecutionResults {
+  factory _GroupedLinearExecutionResults(List<LinearExecutionResult> results) {
+    final byFixtureId = <String, List<LinearExecutionResult>>{};
+    final fixtureIdOrder = <String>[];
+    for (final result in results) {
+      final key = result.fixture.id;
+      if (!byFixtureId.containsKey(key)) {
+        fixtureIdOrder.add(key);
+      }
+      (byFixtureId[key] ??= []).add(result);
+    }
+    final groups = {
+      for (final entry in byFixtureId.entries)
+        entry.key: _LinearFixtureGroup(entry.value),
+    };
+
+    final byLanguagePoint = <String, List<String>>{};
+    final languagePointOrder = <String>[];
+    for (final fixtureId in fixtureIdOrder) {
+      final languagePoint = groups[fixtureId]!.fixture.languagePoint;
+      if (!byLanguagePoint.containsKey(languagePoint)) {
+        languagePointOrder.add(languagePoint);
+      }
+      (byLanguagePoint[languagePoint] ??= []).add(fixtureId);
+    }
+
+    return _GroupedLinearExecutionResults._(
+      fixtureIdOrder: fixtureIdOrder,
+      groups: groups,
+      languagePointOrder: languagePointOrder,
+      byLanguagePoint: byLanguagePoint,
+    );
+  }
+
+  const _GroupedLinearExecutionResults._({
+    required this.fixtureIdOrder,
+    required this.groups,
+    required this.languagePointOrder,
+    required this.byLanguagePoint,
+  });
+
+  final List<String> fixtureIdOrder;
+  final Map<String, _LinearFixtureGroup> groups;
+  final List<String> languagePointOrder;
+  final Map<String, List<String>> byLanguagePoint;
+
+  int get fixtureCount => fixtureIdOrder.length;
+}
+
+/// Builds a report for the standalone serial execution flow (issue
+/// #128), grouped by language point then by fixture, with each
+/// fixture's repeated runs ([linearRunsPerFixtureFrom]) rolled up into a
+/// pass count and a distinct-outputs list. Unlike
+/// [buildLinearPipelineComparisonReport], there is no parallel/production
+/// side and so no win/tie/regression comparison here — this reports
+/// only what the serial flow itself produced.
+String buildLinearExecutionReport({
+  required String firstPassModel,
+  required String naturalnessModel,
+  required List<LinearExecutionResult> results,
+  required DateTime generatedAt,
+}) {
+  final grouped = _GroupedLinearExecutionResults(results);
+
+  final buffer = StringBuffer()
+    ..writeln('# Two-Pass Linear (Serial) Execution Flow (issue #128)')
+    ..writeln()
+    ..writeln('## Run configuration')
+    ..writeln()
+    ..writeln('- First-pass model: `$firstPassModel`')
+    ..writeln('- Naturalness model: `$naturalnessModel`')
+    ..writeln('- Fixture count: `${grouped.fixtureCount}`')
+    ..writeln('- Total runs: `${results.length}`')
+    ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
+    ..writeln()
+    ..writeln(
+      'Each fixture is sent through the standalone serial execution '
+      'flow (issue #128, `runLinearExecution`): Pass 1 uses the '
+      'revised first-pass prompt (issue #126, `linearFirstPassPrompt`); '
+      'Pass 2, a lexical review (issue #127, `linearSecondPassPrompt`), '
+      'receives Pass 1\'s own corrected text — never the original — and '
+      'its output is treated as the final corrected text directly. '
+      'There is no parallel call, no fallback call, and no comparison '
+      'against production in this report — for that, see '
+      '`buildLinearPipelineComparisonReport`.',
+    )
+    ..writeln();
+
+  for (final languagePoint in grouped.languagePointOrder) {
+    buffer
+      ..writeln('## $languagePoint')
+      ..writeln();
+    for (final fixtureId in grouped.byLanguagePoint[languagePoint]!) {
+      final group = grouped.groups[fixtureId]!;
+      final fixture = group.fixture;
+      buffer
+        ..writeln('### ${fixture.id}')
+        ..writeln()
+        ..writeln('- Original text: `${fixture.text}`')
+        ..writeln(
+          '- Expected corrected text: `${fixture.expectedCorrectedText}`',
+        )
+        ..writeln('- Pass rate: ${group.passCount}/${group.runs.length}')
+        ..writeln('- Distinct final outputs:');
+      for (final output in group.distinctFinalOutputs) {
+        buffer.writeln('  - `$output`');
+      }
+      buffer.writeln();
+
+      if (group.runs.length > 1) {
+        buffer
+          ..writeln(
+            '| Run | Pass 1 output | Pass 2 signal | Final output | '
+            'Score | Reason |',
+          )
+          ..writeln('| --- | --- | --- | --- | --- | --- |');
+        for (final run in group.runs) {
+          buffer.writeln(
+            '| ${run.runIndex} | `${run.firstPassCorrectedText}` | '
+            '${run.lexicalReviewDescription} | `${run.finalCorrectedText}` '
+            '| ${run.score.reportLabel} | ${run.reason} |',
+          );
+        }
+      } else {
+        final run = group.runs.single;
+        buffer
+          ..writeln('- Pass 1 output: `${run.firstPassCorrectedText}`')
+          ..writeln('- Pass 2 signal: ${run.lexicalReviewDescription}')
+          ..writeln('- Score: ${run.score.reportLabel}')
+          ..writeln('- Reason: ${run.reason}');
+      }
+      buffer.writeln();
+    }
+  }
+
+  final totalPassCount = results.where((r) => isPassingScore(r.score)).length;
+  buffer
+    ..writeln('---')
+    ..writeln()
+    ..writeln('## Overall summary')
+    ..writeln()
+    ..writeln('| Metric | Value |')
+    ..writeln('| --- | --- |')
+    ..writeln('| Fixtures | ${grouped.fixtureCount} |')
+    ..writeln('| Total runs | ${results.length} |')
+    ..writeln('| Pass rate | $totalPassCount/${results.length} |');
+
+  return buffer.toString();
+}
+
 void main() {
   group('offline sanity (no API calls)', () {
     test('linearComparisonFixtureIds all resolve to real fixtures', () {
@@ -1129,6 +1475,39 @@ void main() {
       );
     });
 
+    group('linearRunsPerFixtureFrom (issue #128)', () {
+      test('defaults to 1 when unset', () {
+        expect(linearRunsPerFixtureFrom(const {}), 1);
+      });
+
+      test('reads a valid override from a real environment', () {
+        expect(
+          linearRunsPerFixtureFrom(const {
+            'TWO_PASS_LINEAR_RUNS_PER_FIXTURE': '5',
+          }),
+          5,
+        );
+      });
+
+      test('throws for zero', () {
+        expect(
+          () => linearRunsPerFixtureFrom(const {
+            'TWO_PASS_LINEAR_RUNS_PER_FIXTURE': '0',
+          }),
+          throwsArgumentError,
+        );
+      });
+
+      test('throws for a negative value', () {
+        expect(
+          () => linearRunsPerFixtureFrom(const {
+            'TWO_PASS_LINEAR_RUNS_PER_FIXTURE': '-2',
+          }),
+          throwsArgumentError,
+        );
+      });
+    });
+
     test('linearCallDelayMsFrom reads a real environment variable', () {
       expect(
         linearCallDelayMsFrom(const {'TWO_PASS_LINEAR_CALL_DELAY_MS': '2000'}),
@@ -1187,6 +1566,65 @@ void main() {
           client.capturedLinearLexicalReviewUserText,
           buildNaturalnessUserContent('Vi mucho tráfico ayer.'),
         );
+      },
+    );
+
+    test(
+      'runLinearExecution (issue #128) runs the serial flow with no '
+      'parallel call and no fallback call, and its Pass 2 receives Pass '
+      '1\'s output, not the original text',
+      () async {
+        final fixture = allTwoPassFixtures.firstWhere(
+          (f) => f.id == 'clean-grammar-only',
+        );
+        final client = _RoutingHttpClient(
+          linearFirstPassReply: _firstPassEnvelope(
+            fixture.expectedCorrectedText,
+          ),
+          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+          originalText: fixture.text,
+          naturalnessOnOriginalReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+          linearLexicalReviewReply: _naturalnessEnvelope(
+            '{"has_naturalness_issue": false, "issues": []}',
+          ),
+        );
+
+        final result = await runLinearExecution(
+          client: OpenAiChatCompletionsClient(
+            apiKey: 'test-key',
+            httpClient: client,
+          ),
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          fixture: fixture,
+          runIndex: 3,
+        );
+
+        expect(result.fixture, fixture);
+        expect(result.runIndex, 3);
+        expect(
+          result.firstPassCorrectedText,
+          fixture.expectedCorrectedText,
+        );
+        expect(result.finalCorrectedText, fixture.expectedCorrectedText);
+        expect(result.score, TwoPassScoreLabel.correctFix);
+
+        // Issue #128's own acceptance criteria: Pass 2 receives Pass 1's
+        // output, not the original text.
+        expect(
+          client.capturedLinearLexicalReviewUserText,
+          buildNaturalnessUserContent(fixture.expectedCorrectedText),
+        );
+
+        // No parallel merge path and no fallback call are ever invoked
+        // by the standalone serial execution flow.
+        expect(client.parallelFirstPassCallCount, 0);
+        expect(client.naturalnessCallCount, 0);
+        expect(client.linearFirstPassCallCount, 1);
+        expect(client.linearLexicalReviewCallCount, 1);
       },
     );
 
@@ -1283,6 +1721,53 @@ void main() {
         expect(report, contains('| Parallel pass rate | 1/1 |'));
       },
     );
+
+    test(
+      'buildLinearExecutionReport (issue #128) groups fixtures by '
+      'language point and rolls up repeated runs into a pass count and '
+      'distinct outputs',
+      () {
+        final fixture = allTwoPassFixtures.firstWhere(
+          (f) => f.id == 'clean-grammar-only',
+        );
+        final results = [
+          LinearExecutionResult(
+            fixture: fixture,
+            runIndex: 1,
+            firstPassCorrectedText: fixture.expectedCorrectedText,
+            lexicalReviewDescription: '(none)',
+            finalCorrectedText: fixture.expectedCorrectedText,
+            score: TwoPassScoreLabel.correctFix,
+            reason: 'Matches expected output.',
+          ),
+          LinearExecutionResult(
+            fixture: fixture,
+            runIndex: 2,
+            firstPassCorrectedText: fixture.text,
+            lexicalReviewDescription: '(none)',
+            finalCorrectedText: fixture.text,
+            score: TwoPassScoreLabel.missedIssue,
+            reason: 'Did not match expected output.',
+          ),
+        ];
+
+        final report = buildLinearExecutionReport(
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          results: results,
+          generatedAt: DateTime.utc(2026, 1, 1),
+        );
+
+        expect(report, contains('## ${fixture.languagePoint}'));
+        expect(report, contains('### clean-grammar-only'));
+        expect(report, contains('- Pass rate: 1/2'));
+        expect(report, contains('`${fixture.expectedCorrectedText}`'));
+        expect(report, contains('`${fixture.text}`'));
+        expect(report, contains('| Fixtures | 1 |'));
+        expect(report, contains('| Total runs | 2 |'));
+        expect(report, contains('| Pass rate | 1/2 |'));
+      },
+    );
   });
 
   test(
@@ -1363,6 +1848,88 @@ void main() {
       await file.writeAsString(report);
       // ignore: avoid_print
       print('Wrote linear pipeline comparison report to $outputPath');
+    },
+  );
+
+  test(
+    'two-pass linear (serial) execution flow (issue #128)',
+    tags: 'live',
+    () async {
+      final environment = Platform.environment;
+      if (!_executionLiveRunOptIn(environment)) {
+        // ignore: avoid_print
+        print(
+          'Skipping live linear execution flow run. Set '
+          'TWO_PASS_LINEAR_EXECUTION_LIVE=true to opt in.',
+        );
+        return;
+      }
+
+      final apiKey = environment['OPENAI_API_KEY']?.trim() ?? '';
+      if (apiKey.isEmpty) {
+        fail(
+          'Set OPENAI_API_KEY to run the linear execution flow harness. '
+          'This script does NOT fall back to any hardcoded/default key.',
+        );
+      }
+
+      final firstPassModel = _runtimeString(
+        environment: environment,
+        key: 'TWO_PASS_LINEAR_FIRST_PASS_MODEL',
+        defaultValue: _defaultFirstPassModel,
+      );
+      final naturalnessModel = _runtimeString(
+        environment: environment,
+        key: 'TWO_PASS_LINEAR_NATURALNESS_MODEL',
+        defaultValue: _defaultNaturalnessModel,
+      );
+      final outputPath = _runtimeString(
+        environment: environment,
+        key: 'TWO_PASS_LINEAR_EXECUTION_OUTPUT',
+        defaultValue: defaultLinearExecutionOutputPath,
+      );
+      final callDelayMs = linearCallDelayMsFrom(environment);
+      final fixtures = linearFixturesFrom(environment);
+      final runsPerFixture = linearRunsPerFixtureFrom(environment);
+      final httpClient = HttpClient();
+      final client = OpenAiChatCompletionsClient(
+        apiKey: apiKey,
+        httpClient: httpClient,
+      );
+
+      final results = <LinearExecutionResult>[];
+      for (final fixture in fixtures) {
+        for (var runIndex = 1; runIndex <= runsPerFixture; runIndex++) {
+          final result = await runLinearExecution(
+            client: client,
+            firstPassModel: firstPassModel,
+            naturalnessModel: naturalnessModel,
+            fixture: fixture,
+            runIndex: runIndex,
+          );
+          results.add(result);
+          // ignore: avoid_print
+          print(
+            '=== ${fixture.id} (run $runIndex/$runsPerFixture) === '
+            'final="${result.finalCorrectedText}" '
+            '(${result.score.reportLabel})',
+          );
+          await Future<void>.delayed(Duration(milliseconds: callDelayMs));
+        }
+      }
+
+      final report = buildLinearExecutionReport(
+        firstPassModel: firstPassModel,
+        naturalnessModel: naturalnessModel,
+        results: results,
+        generatedAt: DateTime.now(),
+      );
+
+      final file = File(outputPath);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(report);
+      // ignore: avoid_print
+      print('Wrote linear execution flow report to $outputPath');
     },
   );
 }
