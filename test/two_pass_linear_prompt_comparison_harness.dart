@@ -357,9 +357,13 @@ Future<CorrectionResponse> runLinearTwoPassPipeline({
   );
 }
 
-/// One fixture's side-by-side result: the linear (serial) pipeline vs.
-/// the parallel (production-equivalent) pipeline, sharing the same
-/// first-pass call.
+/// One fixture's side-by-side result: the linear (serial) pipeline
+/// (using [linearFirstPassPrompt], issue #126) vs. the parallel
+/// (production-equivalent) pipeline (using production's unmodified
+/// `firstPassCorrectionSpanish`). The two architectures use different
+/// first-pass prompts, so — unlike issue #125's original design — they
+/// no longer share a first-pass call; see [linearFirstPassCorrectedText]
+/// and [parallelFirstPassCorrectedText].
 class LinearPipelineComparisonResult {
   const LinearPipelineComparisonResult({
     required this.fixture,
