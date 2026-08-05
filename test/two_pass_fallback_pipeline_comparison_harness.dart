@@ -52,8 +52,16 @@
 // Optional runtime controls:
 // - FALLBACK_PIPELINE_FIRST_PASS_MODEL: defaults to gpt-4.1.
 // - FALLBACK_PIPELINE_NATURALNESS_MODEL: defaults to gpt-5.1.
-// - FALLBACK_PIPELINE_OUTPUT: report path, defaults to
+// - FALLBACK_PIPELINE_OUTPUT: raw table-style report path, defaults to
 //   docs/two_pass_fallback_pipeline_comparison.md.
+// - FALLBACK_PIPELINE_ISSUE_LOG_OUTPUT (issue #124): plain-English
+//   issue-log-style report path (buildFallbackPipelineIssueLogReport),
+//   written alongside FALLBACK_PIPELINE_OUTPUT on every live run.
+//   Defaults to docs/two_pass_fallback_pipeline_comparison_issue_log.md
+//   — deliberately not the same filename as the hand-written precedent
+//   this generator replaces
+//   (docs/two_pass_fallback_prompt_comparison_issue_log.md), so a live
+//   run here never silently overwrites that file.
 // - FALLBACK_PIPELINE_CALL_DELAY_MS: delay between fixture runs, defaults
 //   to 750.
 // - FALLBACK_PIPELINE_FIXTURE_SET (issue #122): "comparison" (default —
@@ -213,6 +221,14 @@ const String _defaultFirstPassModel = 'gpt-4.1';
 const String _defaultNaturalnessModel = 'gpt-5.1';
 const String defaultFallbackPipelineOutputPath =
     'docs/two_pass_fallback_pipeline_comparison.md';
+
+/// Default path for [buildFallbackPipelineIssueLogReport]'s output
+/// (issue #124) — deliberately distinct from
+/// `docs/two_pass_fallback_prompt_comparison_issue_log.md` (the
+/// hand-written precedent this generator replaces), so a live run here
+/// never silently overwrites that file.
+const String defaultFallbackPipelineIssueLogOutputPath =
+    'docs/two_pass_fallback_pipeline_comparison_issue_log.md';
 
 const bool _liveRunOptInFromDefine = bool.fromEnvironment(
   'FALLBACK_PIPELINE_COMPARISON_LIVE',
@@ -566,6 +582,88 @@ _RunOutcome _classifyRun(FallbackPipelineComparisonResult result) {
   return _RunOutcome.tie;
 }
 
+/// One fixture's runs (1 for the default single-run mode, N under issue
+/// #122's repeated-run mode) plus the counts/distinct-output summaries
+/// both report builders need — computed once here so
+/// [buildFallbackPipelineComparisonReport] and
+/// [buildFallbackPipelineIssueLogReport] (issue #124) can never disagree
+/// about what a fixture's runs add up to.
+class _FixtureGroup {
+  _FixtureGroup(List<FallbackPipelineComparisonResult> runs)
+    : runs = [...runs]..sort((a, b) => a.runIndex.compareTo(b.runIndex));
+
+  final List<FallbackPipelineComparisonResult> runs;
+
+  TwoPassFixture get fixture => runs.first.fixture;
+  int get triggeredCount => runs.where((r) => r.hadConflict).length;
+  int get currentPassCount =>
+      runs.where((r) => isPassingScore(r.current.score)).length;
+  int get candidatePassCount =>
+      runs.where((r) => isPassingScore(r.candidate.score)).length;
+  List<String> get distinctCurrentOutputs =>
+      _distinctOutputs(runs, (r) => r.current.finalCorrectedText);
+  List<String> get distinctCandidateOutputs =>
+      _distinctOutputs(runs, (r) => r.candidate.finalCorrectedText);
+}
+
+/// Groups a flat [FallbackPipelineComparisonResult] list by fixture id
+/// (issue #122's repeated-run mode can produce several results per
+/// fixture) and then by language point, both in first-seen order — the
+/// shared grouping both report builders in this file work from, so the
+/// two report *styles* (issues #117/#122's raw table style, and issue
+/// #124's plain-English issue-log style) are always summarizing exactly
+/// the same fixtures/runs.
+class _GroupedFallbackResults {
+  factory _GroupedFallbackResults(
+    List<FallbackPipelineComparisonResult> results,
+  ) {
+    final byFixtureId = <String, List<FallbackPipelineComparisonResult>>{};
+    final fixtureIdOrder = <String>[];
+    for (final result in results) {
+      final key = result.fixture.id;
+      if (!byFixtureId.containsKey(key)) {
+        fixtureIdOrder.add(key);
+      }
+      (byFixtureId[key] ??= []).add(result);
+    }
+    final groups = {
+      for (final entry in byFixtureId.entries)
+        entry.key: _FixtureGroup(entry.value),
+    };
+
+    final byLanguagePoint = <String, List<String>>{};
+    final languagePointOrder = <String>[];
+    for (final fixtureId in fixtureIdOrder) {
+      final languagePoint = groups[fixtureId]!.fixture.languagePoint;
+      if (!byLanguagePoint.containsKey(languagePoint)) {
+        languagePointOrder.add(languagePoint);
+      }
+      (byLanguagePoint[languagePoint] ??= []).add(fixtureId);
+    }
+
+    return _GroupedFallbackResults._(
+      fixtureIdOrder: fixtureIdOrder,
+      groups: groups,
+      languagePointOrder: languagePointOrder,
+      byLanguagePoint: byLanguagePoint,
+    );
+  }
+
+  const _GroupedFallbackResults._({
+    required this.fixtureIdOrder,
+    required this.groups,
+    required this.languagePointOrder,
+    required this.byLanguagePoint,
+  });
+
+  final List<String> fixtureIdOrder;
+  final Map<String, _FixtureGroup> groups;
+  final List<String> languagePointOrder;
+  final Map<String, List<String>> byLanguagePoint;
+
+  int get fixtureCount => fixtureIdOrder.length;
+}
+
 /// Builds the comparison report, grouped by language point (issue #117's
 /// own "grouped by case type" requirement) then by fixture, with each
 /// fixture's repeated runs (issue #122) rolled up into a summary plus one
@@ -578,19 +676,8 @@ String buildFallbackPipelineComparisonReport({
   required List<FallbackPipelineComparisonResult> results,
   required DateTime generatedAt,
 }) {
-  final byFixtureId = <String, List<FallbackPipelineComparisonResult>>{};
-  final fixtureOrder = <String>[];
-  for (final result in results) {
-    final key = result.fixture.id;
-    if (!byFixtureId.containsKey(key)) {
-      fixtureOrder.add(key);
-    }
-    (byFixtureId[key] ??= []).add(result);
-  }
-  for (final runs in byFixtureId.values) {
-    runs.sort((a, b) => a.runIndex.compareTo(b.runIndex));
-  }
-  final distinctFixtureCount = fixtureOrder.length;
+  final grouped = _GroupedFallbackResults(results);
+  final distinctFixtureCount = grouped.fixtureCount;
 
   final buffer = StringBuffer()
     ..writeln(
@@ -629,57 +716,28 @@ String buildFallbackPipelineComparisonReport({
       'pass | Distinct current outputs | Distinct candidate outputs |',
     )
     ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
-  for (final fixtureId in fixtureOrder) {
-    final runs = byFixtureId[fixtureId]!;
-    final triggeredCount = runs.where((r) => r.hadConflict).length;
-    final currentPassCount = runs
-        .where((r) => isPassingScore(r.current.score))
-        .length;
-    final candidatePassCount = runs
-        .where((r) => isPassingScore(r.candidate.score))
-        .length;
-    final distinctCurrent = _distinctOutputs(
-      runs,
-      (r) => r.current.finalCorrectedText,
-    );
-    final distinctCandidate = _distinctOutputs(
-      runs,
-      (r) => r.candidate.finalCorrectedText,
-    );
+  for (final fixtureId in grouped.fixtureIdOrder) {
+    final group = grouped.groups[fixtureId]!;
+    final runs = group.runs;
     buffer.writeln(
-      '| $fixtureId | ${runs.length} | $triggeredCount/${runs.length} | '
-      '$currentPassCount/${runs.length} | '
-      '$candidatePassCount/${runs.length} | '
-      '${_formatOutputList(distinctCurrent)} | '
-      '${_formatOutputList(distinctCandidate)} |',
+      '| $fixtureId | ${runs.length} | '
+      '${group.triggeredCount}/${runs.length} | '
+      '${group.currentPassCount}/${runs.length} | '
+      '${group.candidatePassCount}/${runs.length} | '
+      '${_formatOutputList(group.distinctCurrentOutputs)} | '
+      '${_formatOutputList(group.distinctCandidateOutputs)} |',
     );
   }
   buffer.writeln();
 
-  final byLanguagePoint = <String, List<String>>{};
-  final languagePointOrder = <String>[];
-  for (final fixtureId in fixtureOrder) {
-    final key = byFixtureId[fixtureId]!.first.fixture.languagePoint;
-    if (!byLanguagePoint.containsKey(key)) {
-      languagePointOrder.add(key);
-    }
-    (byLanguagePoint[key] ??= []).add(fixtureId);
-  }
-
-  for (final languagePoint in languagePointOrder) {
+  for (final languagePoint in grouped.languagePointOrder) {
     buffer
       ..writeln('## $languagePoint')
       ..writeln();
-    for (final fixtureId in byLanguagePoint[languagePoint]!) {
-      final runs = byFixtureId[fixtureId]!;
-      final fixture = runs.first.fixture;
-      final triggeredCount = runs.where((r) => r.hadConflict).length;
-      final currentPassCount = runs
-          .where((r) => isPassingScore(r.current.score))
-          .length;
-      final candidatePassCount = runs
-          .where((r) => isPassingScore(r.candidate.score))
-          .length;
+    for (final fixtureId in grouped.byLanguagePoint[languagePoint]!) {
+      final group = grouped.groups[fixtureId]!;
+      final runs = group.runs;
+      final fixture = group.fixture;
 
       buffer
         ..writeln('### $fixtureId')
@@ -690,17 +748,21 @@ String buildFallbackPipelineComparisonReport({
         )
         ..writeln('- Runs: ${runs.length}')
         ..writeln(
-          '- Fallback triggered: $triggeredCount/${runs.length}',
+          '- Fallback triggered: ${group.triggeredCount}/${runs.length}',
         )
-        ..writeln('- Current pass: $currentPassCount/${runs.length}')
-        ..writeln('- Candidate pass: $candidatePassCount/${runs.length}')
+        ..writeln(
+          '- Current pass: ${group.currentPassCount}/${runs.length}',
+        )
+        ..writeln(
+          '- Candidate pass: ${group.candidatePassCount}/${runs.length}',
+        )
         ..writeln(
           '- Distinct current outputs: '
-          '${_formatOutputList(_distinctOutputs(runs, (r) => r.current.finalCorrectedText))}',
+          '${_formatOutputList(group.distinctCurrentOutputs)}',
         )
         ..writeln(
           '- Distinct candidate outputs: '
-          '${_formatOutputList(_distinctOutputs(runs, (r) => r.candidate.finalCorrectedText))}',
+          '${_formatOutputList(group.distinctCandidateOutputs)}',
         )
         ..writeln();
 
@@ -848,6 +910,329 @@ String buildFallbackPipelineComparisonReport({
       'only) | $currentWins |',
     )
     ..writeln('| Ties (fallback-triggered runs only) | $ties |');
+
+  return buffer.toString();
+}
+
+/// Mechanical Pass/Fail/Needs-review label for one language-point group
+/// (issue #124) — "Pass" only when every run of every fixture in the
+/// group passed for both variants, "Fail" only when every run failed for
+/// both, otherwise "Needs review". Deliberately coarser than the
+/// hand-written precedent this function's report style replaces
+/// (`docs/two_pass_fallback_prompt_comparison_issue_log.md`), which
+/// sometimes labelled an all-failing group "Needs review" instead of
+/// "Fail" when the output looked like a plausible-but-not-matching
+/// alternative rather than a clear over-rewrite — that distinction is a
+/// judgment call about the *content* of the output, not something
+/// derivable from pass/fail counts alone, so this mechanical version
+/// does not attempt to reproduce it. See "issue #124" in
+/// `docs/two_pass_test_change_notes.md` for the full list of fields the
+/// hand-written precedent had that this function does not attempt to
+/// reproduce.
+String _groupStatusLabel(List<_FixtureGroup> groupsInLanguagePoint) {
+  final totalRuns = groupsInLanguagePoint.fold<int>(
+    0,
+    (sum, g) => sum + g.runs.length,
+  );
+  final currentPass = groupsInLanguagePoint.fold<int>(
+    0,
+    (sum, g) => sum + g.currentPassCount,
+  );
+  final candidatePass = groupsInLanguagePoint.fold<int>(
+    0,
+    (sum, g) => sum + g.candidatePassCount,
+  );
+  if (currentPass == totalRuns && candidatePass == totalRuns) {
+    return 'Pass';
+  }
+  if (currentPass == 0 && candidatePass == 0) {
+    return 'Fail';
+  }
+  return 'Needs review';
+}
+
+/// Renders the same [FallbackPipelineComparisonResult] data as
+/// [buildFallbackPipelineComparisonReport] in the plain-English
+/// "issue log" style established by
+/// `docs/two_pass_live_language_point_benchmark_issue_log.md` (issue
+/// #124) — Item/Finding tables plus one per-phrase table per language-
+/// point group — built entirely from the same fixture source, scoring
+/// taxonomy (`TwoPassScoreLabel`/`isPassingScore`), and issue #122
+/// repeated-run aggregation as the raw report, so this style never needs
+/// hand-typing from a previously generated report again. That is how
+/// `docs/two_pass_fallback_prompt_comparison_issue_log.md` was produced
+/// before this function existed: a one-off manual reformat of
+/// `docs/two_pass_fallback_pipeline_comparison.md`'s data (same 27
+/// fixtures, same generated timestamp) into this narrative style, which
+/// duplicated benchmark text this function now sources programmatically
+/// instead (issue #124's own "avoid manually duplicating benchmark text"
+/// requirement).
+///
+/// Deliberately does NOT attempt to generate the free-text interpretive
+/// fields the hand-written precedent had — a "First-pass signal" and
+/// "Naturalness / fallback signal" sentence per group, a "Practical
+/// meaning" sentence per group, and a closing "Main Takeaways" narrative.
+/// Those are genuine analytical judgment calls about *why* a result
+/// looks the way it does (e.g. "this may be a valid alternative the
+/// benchmark doesn't credit" vs. "this is a genuine over-rewrite") —
+/// not values derivable from the result data itself. Auto-generating
+/// plausible-sounding prose for them would look authoritative without
+/// being grounded, which is worse than omitting them; every group
+/// section below is mechanical fact only, and the report says so
+/// explicitly rather than silently leaving a gap a reader might mistake
+/// for "nothing to report."
+String buildFallbackPipelineIssueLogReport({
+  required String firstPassModel,
+  required String naturalnessModel,
+  required List<FallbackPipelineComparisonResult> results,
+  required DateTime generatedAt,
+}) {
+  final grouped = _GroupedFallbackResults(results);
+  final runsPerFixture = grouped.fixtureCount == 0
+      ? 0
+      : results.length ~/ grouped.fixtureCount;
+
+  final buffer = StringBuffer()
+    ..writeln('# Two-Pass Fallback Prompt Comparison: Issue Log')
+    ..writeln()
+    ..writeln('Source report:')
+    ..writeln()
+    ..writeln(
+      '- Generated report: `Two-Pass Fallback Prompt Comparison: Full '
+      'Pipeline (issues #117, #122)`',
+    )
+    ..writeln()
+    ..writeln('Run configuration:')
+    ..writeln()
+    ..writeln('- First-pass model: `$firstPassModel`')
+    ..writeln('- Naturalness model: `$naturalnessModel`')
+    ..writeln('- Fixtures: `${grouped.fixtureCount}`')
+    ..writeln('- Total runs: `${results.length}`')
+    ..writeln('- Generated: `${generatedAt.toUtc().toIso8601String()}`')
+    ..writeln()
+    ..writeln(
+      'This log reproduces the fallback prompt comparison using the '
+      'same plain-English issue-log style as '
+      '`docs/two_pass_live_language_point_benchmark_issue_log.md` '
+      '(issue #124), generated directly from '
+      '`buildFallbackPipelineComparisonReport`\'s own fixture source and '
+      'run data (issues #117, #122) rather than hand-typed.',
+    )
+    ..writeln()
+    ..writeln('For this document:')
+    ..writeln()
+    ..writeln('- `pass` means `correct_fix` or `acceptable_no_change`.')
+    ..writeln(
+      '- `fail` means `partial_fix`, `ambiguous`, `overcorrection`, '
+      '`missed_issue`, or `error`.',
+    )
+    ..writeln(
+      '- `Current` means the existing reused naturalness prompt was '
+      'used for fallback.',
+    )
+    ..writeln(
+      '- `Candidate` means the fallback-specific prompt was used for '
+      'fallback.',
+    );
+  if (runsPerFixture > 1) {
+    buffer.writeln(
+      '- Each fixture ran $runsPerFixture times (issue #122); pass '
+      'counts below are `passed/runs` and "outputs" lists every unique '
+      'final output produced across those runs.',
+    );
+  }
+  buffer
+    ..writeln()
+    ..writeln(
+      'Important context: pass 1 and the naturalness call on the '
+      'original text were shared between both variants. The only thing '
+      'being compared is the fallback call itself, and that fallback '
+      'call only ran where the real conflict logic triggered it. Where '
+      'fallback did not trigger, both variants usually have the same '
+      'result because the candidate fallback prompt was never used.',
+    )
+    ..writeln()
+    ..writeln(
+      '**Not included below**: a plain-language "signal" sentence per '
+      'pass, a "practical meaning" sentence per group, and a closing '
+      '"Main Takeaways" narrative, all present in an earlier hand-'
+      'written version of this log. Those require reading the actual '
+      'outputs and judging *why* a result looks the way it does, which '
+      'this report cannot derive from the data alone — add that '
+      'analysis by hand on top of this report; do not read its absence '
+      'as "nothing to analyze."',
+    )
+    ..writeln();
+
+  final triggered = results.where((r) => r.hadConflict).toList();
+  final untriggered = results.where((r) => !r.hadConflict).toList();
+  final currentTriggeredPass = triggered
+      .where((r) => isPassingScore(r.current.score))
+      .length;
+  final candidateTriggeredPass = triggered
+      .where((r) => isPassingScore(r.candidate.score))
+      .length;
+  final currentUntriggeredPass = untriggered
+      .where((r) => isPassingScore(r.current.score))
+      .length;
+  final candidateUntriggeredPass = untriggered
+      .where((r) => isPassingScore(r.candidate.score))
+      .length;
+  final currentOverallPass = results
+      .where((r) => isPassingScore(r.current.score))
+      .length;
+  final candidateOverallPass = results
+      .where((r) => isPassingScore(r.candidate.score))
+      .length;
+  final outcomes = triggered.map(_classifyRun).toList();
+  final candidateWins = outcomes
+      .where((o) => o == _RunOutcome.candidateWin)
+      .length;
+  final currentWins = outcomes
+      .where((o) => o == _RunOutcome.currentWin)
+      .length;
+  final ties = outcomes.where((o) => o == _RunOutcome.tie).length;
+
+  buffer
+    ..writeln('## Overall Summary')
+    ..writeln()
+    ..writeln('| Item | Finding |')
+    ..writeln('| --- | --- |')
+    ..writeln('| Fixtures tested | ${grouped.fixtureCount} |')
+    ..writeln('| Total runs | ${results.length} |')
+    ..writeln('| Fallback triggered | ${triggered.length} runs |')
+    ..writeln('| Fallback did not trigger | ${untriggered.length} runs |')
+    ..writeln(
+      '| Current result on fallback-triggered runs | '
+      '$currentTriggeredPass/${triggered.length} pass; '
+      '${triggered.length - currentTriggeredPass}/${triggered.length} '
+      'fail |',
+    )
+    ..writeln(
+      '| Candidate result on fallback-triggered runs | '
+      '$candidateTriggeredPass/${triggered.length} pass; '
+      '${triggered.length - candidateTriggeredPass}/${triggered.length} '
+      'fail |',
+    )
+    ..writeln(
+      '| Current result on non-triggered runs | '
+      '$currentUntriggeredPass/${untriggered.length} pass; '
+      '${untriggered.length - currentUntriggeredPass}/'
+      '${untriggered.length} fail |',
+    )
+    ..writeln(
+      '| Candidate result on non-triggered runs | '
+      '$candidateUntriggeredPass/${untriggered.length} pass; '
+      '${untriggered.length - candidateUntriggeredPass}/'
+      '${untriggered.length} fail |',
+    )
+    ..writeln(
+      '| Current result overall | $currentOverallPass/${results.length} '
+      'pass; ${results.length - currentOverallPass}/${results.length} '
+      'fail |',
+    )
+    ..writeln(
+      '| Candidate result overall | '
+      '$candidateOverallPass/${results.length} pass; '
+      '${results.length - candidateOverallPass}/${results.length} fail |',
+    )
+    ..writeln('| Candidate wins (fallback-triggered runs) | $candidateWins |')
+    ..writeln(
+      '| Current wins / candidate regressions (fallback-triggered runs) '
+      '| $currentWins |',
+    )
+    ..writeln('| Ties (fallback-triggered runs) | $ties |')
+    ..writeln();
+
+  for (final languagePoint in grouped.languagePointOrder) {
+    final fixtureIds = grouped.byLanguagePoint[languagePoint]!;
+    final groupsHere = [
+      for (final id in fixtureIds) grouped.groups[id]!,
+    ];
+    final groupTotalRuns = groupsHere.fold<int>(
+      0,
+      (sum, g) => sum + g.runs.length,
+    );
+    final groupCurrentPass = groupsHere.fold<int>(
+      0,
+      (sum, g) => sum + g.currentPassCount,
+    );
+    final groupCandidatePass = groupsHere.fold<int>(
+      0,
+      (sum, g) => sum + g.candidatePassCount,
+    );
+
+    buffer
+      ..writeln('## $languagePoint')
+      ..writeln()
+      ..writeln('| Item | Finding |')
+      ..writeln('| --- | --- |')
+      ..writeln(
+        '| Result | Current: $groupCurrentPass/$groupTotalRuns pass; '
+        'Candidate: $groupCandidatePass/$groupTotalRuns pass |',
+      )
+      ..writeln(
+        '| Overall group status | ${_groupStatusLabel(groupsHere)} |',
+      )
+      ..writeln();
+
+    if (runsPerFixture <= 1) {
+      buffer
+        ..writeln(
+          '| Phrase | Expected | First pass corrected phrase | Pass 2 '
+          'signal | Fallback triggered | Current final output | Current '
+          'pass/fail | Candidate final output | Candidate pass/fail |',
+        )
+        ..writeln(
+          '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+        );
+      for (final id in fixtureIds) {
+        final group = grouped.groups[id]!;
+        final result = group.runs.single;
+        buffer.writeln(
+          '| `${group.fixture.text}` | '
+          '`${group.fixture.expectedCorrectedText}` | '
+          '`${result.firstPassCorrectedText}` | '
+          '${result.naturalnessOnOriginalDescription} | '
+          '${result.hadConflict ? 'Yes' : 'No'} | '
+          '`${result.current.finalCorrectedText}` | '
+          '${isPassingScore(result.current.score) ? 'Pass' : 'Fail'} '
+          '(`${result.current.score.reportLabel}`) | '
+          '`${result.candidate.finalCorrectedText}` | '
+          '${isPassingScore(result.candidate.score) ? 'Pass' : 'Fail'} '
+          '(`${result.candidate.score.reportLabel}`) |',
+        );
+      }
+    } else {
+      // Adaptation (issue #124): with more than one run per fixture,
+      // "the" first-pass output or "the" final output is no longer a
+      // single value, so this repeated-run table reuses the same
+      // per-fixture aggregation buildFallbackPipelineComparisonReport's
+      // "Per-fixture summary" table already computes (pass counts as
+      // X/N, distinct outputs) instead of the single-run column set
+      // above.
+      buffer
+        ..writeln(
+          '| Phrase | Expected | Fallback triggered | Current pass | '
+          'Current outputs | Candidate pass | Candidate outputs |',
+        )
+        ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
+      for (final id in fixtureIds) {
+        final group = grouped.groups[id]!;
+        final runs = group.runs;
+        buffer.writeln(
+          '| `${group.fixture.text}` | '
+          '`${group.fixture.expectedCorrectedText}` | '
+          '${group.triggeredCount}/${runs.length} | '
+          '${group.currentPassCount}/${runs.length} | '
+          '${_formatOutputList(group.distinctCurrentOutputs)} | '
+          '${group.candidatePassCount}/${runs.length} | '
+          '${_formatOutputList(group.distinctCandidateOutputs)} |',
+        );
+      }
+    }
+    buffer.writeln();
+  }
 
   return buffer.toString();
 }
@@ -1109,6 +1494,207 @@ void main() {
       },
     );
 
+    group('buildFallbackPipelineIssueLogReport (issue #124)', () {
+      test(
+        'single-run mode renders the issue-log style with the '
+        'single-run phrase table column set, matching '
+        'docs/two_pass_live_language_point_benchmark_issue_log.md\'s '
+        'established plain-English style',
+        () {
+          final fixture = allTwoPassFixtures.firstWhere(
+            (f) => f.id == 'clean-grammar-only',
+          );
+          final result = FallbackPipelineComparisonResult(
+            fixture: fixture,
+            firstPassCorrectedText: fixture.expectedCorrectedText,
+            naturalnessOnOriginalDescription: '(none)',
+            hadConflict: false,
+            current: FallbackVariantOutcome(
+              fallbackTriggered: false,
+              fallbackReviewDescription: null,
+              finalCorrectedText: fixture.expectedCorrectedText,
+              score: TwoPassScoreLabel.correctFix,
+              reason: 'Matches expected output.',
+            ),
+            candidate: FallbackVariantOutcome(
+              fallbackTriggered: false,
+              fallbackReviewDescription: null,
+              finalCorrectedText: fixture.expectedCorrectedText,
+              score: TwoPassScoreLabel.correctFix,
+              reason: 'Matches expected output.',
+            ),
+          );
+
+          final report = buildFallbackPipelineIssueLogReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [result],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(
+            report,
+            contains('# Two-Pass Fallback Prompt Comparison: Issue Log'),
+          );
+          expect(report, contains('## Overall Summary'));
+          expect(report, contains('## ${fixture.languagePoint}'));
+          expect(report, contains('| Overall group status | Pass |'));
+          // Single-run column set — matches the hand-written precedent's
+          // shape, not the aggregated repeated-run shape.
+          expect(
+            report,
+            contains(
+              '| Phrase | Expected | First pass corrected phrase | '
+              'Pass 2 signal | Fallback triggered | Current final '
+              'output | Current pass/fail | Candidate final output | '
+              'Candidate pass/fail |',
+            ),
+          );
+          expect(
+            report,
+            contains(
+              '| `${fixture.text}` | `${fixture.expectedCorrectedText}` |',
+            ),
+          );
+          // Interpretive fields explicitly not generated, and the
+          // report says so rather than silently omitting them.
+          expect(report, contains('Not included below'));
+          // The report explains that it omits a "Main Takeaways"
+          // narrative (mentioning the phrase), but must not actually
+          // render one as its own heading/section.
+          expect(report, isNot(contains('## Main Takeaways')));
+        },
+      );
+
+      test(
+        'repeated-run mode (issue #122) switches the phrase table to '
+        'the aggregated pass-count/distinct-output column set and notes '
+        'the run count, since no single "final output" exists across '
+        'multiple runs',
+        () {
+          final fixture = allTwoPassFixtures.firstWhere(
+            (f) => f.id == 'clean-grammar-only',
+          );
+
+          FallbackVariantOutcome outcome(String text, TwoPassScoreLabel score) {
+            return FallbackVariantOutcome(
+              fallbackTriggered: true,
+              fallbackReviewDescription: 'span -> $text',
+              finalCorrectedText: text,
+              score: score,
+              reason: 'Synthetic test outcome.',
+            );
+          }
+
+          final results = [
+            for (var i = 1; i <= 3; i++)
+              FallbackPipelineComparisonResult(
+                fixture: fixture,
+                firstPassCorrectedText: fixture.expectedCorrectedText,
+                naturalnessOnOriginalDescription: '(none)',
+                hadConflict: true,
+                current: outcome(
+                  'Había mucho tráfico ayer.',
+                  TwoPassScoreLabel.ambiguous,
+                ),
+                candidate: outcome(
+                  fixture.expectedCorrectedText,
+                  TwoPassScoreLabel.correctFix,
+                ),
+                runIndex: i,
+              ),
+          ];
+
+          final report = buildFallbackPipelineIssueLogReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: results,
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(report, contains('Each fixture ran 3 times'));
+          expect(
+            report,
+            contains(
+              '| Phrase | Expected | Fallback triggered | Current pass '
+              '| Current outputs | Candidate pass | Candidate outputs |',
+            ),
+          );
+          expect(
+            report,
+            contains(
+              '| `${fixture.text}` | `${fixture.expectedCorrectedText}` '
+              '| 3/3 | 0/3 | `Había mucho tráfico ayer.` | 3/3 | '
+              '`${fixture.expectedCorrectedText}` |',
+            ),
+          );
+        },
+      );
+
+      test(
+        'reuses exactly the same fixture/scoring data as '
+        'buildFallbackPipelineComparisonReport — both report styles '
+        'agree on the overall pass counts for the same input, proving '
+        'the issue-log style is not sourced from separately duplicated '
+        'data',
+        () {
+          final fixture = allTwoPassFixtures.firstWhere(
+            (f) => f.id == 'grammar-overlaps-naturalness',
+          );
+          final result = FallbackPipelineComparisonResult(
+            fixture: fixture,
+            firstPassCorrectedText: 'Ayer hizo una decisión importante.',
+            naturalnessOnOriginalDescription: '(none)',
+            hadConflict: true,
+            current: FallbackVariantOutcome(
+              fallbackTriggered: true,
+              fallbackReviewDescription: 'span -> replacement',
+              finalCorrectedText: fixture.expectedCorrectedText,
+              score: TwoPassScoreLabel.correctFix,
+              reason: 'Matches expected output.',
+            ),
+            candidate: FallbackVariantOutcome(
+              fallbackTriggered: true,
+              fallbackReviewDescription: 'span -> replacement',
+              finalCorrectedText: fixture.expectedCorrectedText,
+              score: TwoPassScoreLabel.correctFix,
+              reason: 'Matches expected output.',
+            ),
+          );
+
+          final tableReport = buildFallbackPipelineComparisonReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [result],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+          final issueLogReport = buildFallbackPipelineIssueLogReport(
+            firstPassModel: 'gpt-4.1',
+            naturalnessModel: 'gpt-5.1',
+            results: [result],
+            generatedAt: DateTime.utc(2026, 1, 1),
+          );
+
+          expect(
+            tableReport,
+            contains('| Current pass rate, all runs (diluted, see note above) | 1/1 |'),
+          );
+          expect(
+            issueLogReport,
+            contains(
+              '| Current result overall | 1/1 pass; 0/1 fail |',
+            ),
+          );
+          expect(
+            issueLogReport,
+            contains(
+              '| Candidate result overall | 1/1 pass; 0/1 fail |',
+            ),
+          );
+        },
+      );
+    });
+
     test(
       'runFallbackPipelineComparison never calls the fallback endpoint '
       'for either variant when the real conflict logic finds no conflict',
@@ -1253,6 +1839,11 @@ void main() {
         key: 'FALLBACK_PIPELINE_OUTPUT',
         defaultValue: defaultFallbackPipelineOutputPath,
       );
+      final issueLogOutputPath = _runtimeString(
+        environment: environment,
+        key: 'FALLBACK_PIPELINE_ISSUE_LOG_OUTPUT',
+        defaultValue: defaultFallbackPipelineIssueLogOutputPath,
+      );
       final callDelayMs = callDelayMsFrom(environment);
       final fixtures = fallbackPipelineFixturesFrom(environment);
       final runsPerFixture = fallbackPipelineRunsPerFixtureFrom(environment);
@@ -1298,6 +1889,21 @@ void main() {
       await file.writeAsString(report);
       // ignore: avoid_print
       print('Wrote fallback pipeline comparison report to $outputPath');
+
+      final issueLogReport = buildFallbackPipelineIssueLogReport(
+        firstPassModel: firstPassModel,
+        naturalnessModel: naturalnessModel,
+        results: results,
+        generatedAt: DateTime.now(),
+      );
+      final issueLogFile = File(issueLogOutputPath);
+      await issueLogFile.parent.create(recursive: true);
+      await issueLogFile.writeAsString(issueLogReport);
+      // ignore: avoid_print
+      print(
+        'Wrote fallback pipeline comparison issue log to '
+        '$issueLogOutputPath',
+      );
     },
   );
 }
