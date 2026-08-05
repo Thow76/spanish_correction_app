@@ -753,6 +753,37 @@ String _reasonFor(TwoPassFixture fixture, String finalCorrectedText) {
             'output.';
 }
 
+/// Renders a one-row-per-[rowLabel] markdown table counting [labels] by
+/// every [TwoPassScoreLabel] value (issue #129) — the full benchmark
+/// taxonomy (`correct_fix`, `partial_fix`, `missed_issue`,
+/// `overcorrection`, `acceptable_no_change`, `ambiguous`, `error`), not
+/// only pass/fail, so a linear-harness report stays comparable against
+/// `two_pass_integration_harness.dart`'s own `_groupedScoreTable`-style
+/// breakdowns rather than collapsing detail an existing benchmark report
+/// would show. Every column is always present, even at zero, so column
+/// sets never differ between reports/calls.
+String _scoreLabelBreakdownTable({
+  required Map<String, Iterable<TwoPassScoreLabel>> rows,
+}) {
+  final columns = TwoPassScoreLabel.values.map((l) => l.reportLabel).toList();
+  final separatorCells = List.filled(2 + columns.length, '---').join(' | ');
+  final buffer = StringBuffer()
+    ..writeln('| | Total | ${columns.join(' | ')} |')
+    ..writeln('| $separatorCells |');
+  for (final entry in rows.entries) {
+    final counts = {for (final label in TwoPassScoreLabel.values) label: 0};
+    for (final label in entry.value) {
+      counts[label] = counts[label]! + 1;
+    }
+    final total = counts.values.fold<int>(0, (a, b) => a + b);
+    final cells = TwoPassScoreLabel.values
+        .map((label) => counts[label].toString())
+        .join(' | ');
+    buffer.writeln('| ${entry.key} | $total | $cells |');
+  }
+  return buffer.toString();
+}
+
 /// Runs both pipeline architectures against [fixture] and scores each.
 ///
 /// Since issue #126, the linear side's first pass uses
@@ -1013,7 +1044,21 @@ String buildLinearPipelineComparisonReport({
     )
     ..writeln('| Linear wins | $linearWins |')
     ..writeln('| Parallel wins | $parallelWins |')
-    ..writeln('| Ties | $ties |');
+    ..writeln('| Ties | $ties |')
+    ..writeln()
+    ..writeln(
+      '### Score breakdown (issue #129 — full taxonomy, not only '
+      'pass/fail)',
+    )
+    ..writeln()
+    ..write(
+      _scoreLabelBreakdownTable(
+        rows: {
+          'Linear': results.map((r) => r.linearScore),
+          'Parallel': results.map((r) => r.parallelScore),
+        },
+      ),
+    );
 
   return buffer.toString();
 }
@@ -1193,7 +1238,18 @@ String buildLinearExecutionReport({
     ..writeln('| --- | --- |')
     ..writeln('| Fixtures | ${grouped.fixtureCount} |')
     ..writeln('| Total runs | ${results.length} |')
-    ..writeln('| Pass rate | $totalPassCount/${results.length} |');
+    ..writeln('| Pass rate | $totalPassCount/${results.length} |')
+    ..writeln()
+    ..writeln(
+      '### Score breakdown (issue #129 — full taxonomy, not only '
+      'pass/fail)',
+    )
+    ..writeln()
+    ..write(
+      _scoreLabelBreakdownTable(
+        rows: {'All runs': results.map((r) => r.score)},
+      ),
+    );
 
   return buffer.toString();
 }
@@ -1719,6 +1775,22 @@ void main() {
         expect(report, contains('Parallel (production-equivalent)'));
         expect(report, contains('| Linear pass rate | 1/1 |'));
         expect(report, contains('| Parallel pass rate | 1/1 |'));
+
+        // Issue #129: the full benchmark taxonomy is preserved in the
+        // overall summary, not collapsed to only pass/fail.
+        expect(report, contains('### Score breakdown'));
+        expect(
+          report,
+          contains(
+            '| | Total | correct_fix | partial_fix | missed_issue | '
+            'overcorrection | acceptable_no_change | ambiguous | error |',
+          ),
+        );
+        expect(report, contains('| Linear | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'));
+        expect(
+          report,
+          contains('| Parallel | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'),
+        );
       },
     );
 
@@ -1766,6 +1838,55 @@ void main() {
         expect(report, contains('| Fixtures | 1 |'));
         expect(report, contains('| Total runs | 2 |'));
         expect(report, contains('| Pass rate | 1/2 |'));
+
+        // Issue #129: one correct_fix run and one missed_issue run stay
+        // distinguishable in the overall summary, not merged into a
+        // single pass/fail count.
+        expect(report, contains('### Score breakdown'));
+        expect(
+          report,
+          contains(
+            '| All runs | 2 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |',
+          ),
+        );
+      },
+    );
+
+    test(
+      '_scoreLabelBreakdownTable (issue #129) always shows every '
+      'taxonomy column, even at zero, and pass/fail is not the only '
+      'signal it reports',
+      () {
+        final table = _scoreLabelBreakdownTable(
+          rows: {
+            'Row A': [TwoPassScoreLabel.correctFix],
+            'Row B': [
+              TwoPassScoreLabel.partialFix,
+              TwoPassScoreLabel.overcorrection,
+              TwoPassScoreLabel.ambiguous,
+            ],
+          },
+        );
+
+        for (final label in TwoPassScoreLabel.values) {
+          expect(table, contains(label.reportLabel));
+        }
+        expect(table, contains('| Row A | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'));
+        expect(table, contains('| Row B | 3 | 0 | 1 | 0 | 1 | 0 | 1 | 0 |'));
+      },
+    );
+
+    test(
+      'isPassingScore (issue #129) matches this harness\'s own pass/fail '
+      'mapping: pass is exactly correct_fix or acceptable_no_change',
+      () {
+        expect(isPassingScore(TwoPassScoreLabel.correctFix), isTrue);
+        expect(isPassingScore(TwoPassScoreLabel.acceptableNoChange), isTrue);
+        expect(isPassingScore(TwoPassScoreLabel.partialFix), isFalse);
+        expect(isPassingScore(TwoPassScoreLabel.missedIssue), isFalse);
+        expect(isPassingScore(TwoPassScoreLabel.overcorrection), isFalse);
+        expect(isPassingScore(TwoPassScoreLabel.ambiguous), isFalse);
+        expect(isPassingScore(TwoPassScoreLabel.error), isFalse);
       },
     );
   });
