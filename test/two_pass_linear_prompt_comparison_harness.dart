@@ -56,14 +56,28 @@
 // so a genuine fallback call happens again when the parallel merge has
 // a conflict, same as production.
 //
+// Issue #127: the linear side's second pass now uses
+// [linearSecondPassPrompt] — a REVISED, narrower LEXICAL TRANSFER review
+// (calques, false friends, incorrect collocations, transferred idioms,
+// and other objectively incorrect lexical constructions), not production's
+// broader `naturalnessReviewSpanish` — while the parallel side's
+// naturalness-on-original and fallback calls continue using production's
+// unchanged prompt. See [linearSecondPassPrompt]'s own doc comment for
+// the exact source. Same JSON contract as production's naturalness
+// review (`{"has_naturalness_issue", "issues": [{"span",
+// "natural_replacement", "explanation"}]}`), so it plugs directly into
+// the same `mergeNaturalnessReview`/`mapNaturalnessEditsIntoCorrectionResponse`
+// machinery with no changes there.
+//
 // Run offline (fixture/logic sanity only, no API calls):
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --exclude-tags live
 //
 // Run live deliberately (costs real API calls — default 17-fixture
 // curated set: 2 first-pass calls (one per architecture, since they use
-// different prompts) + 2 naturalness calls always, plus a conditional
-// 3rd naturalness call only when the parallel merge genuinely conflicts
-// — expect on the order of 70-90 total calls for the default set):
+// different prompts) + 2 second-pass calls always (linear's lexical
+// review + parallel's naturalness-on-original), plus a conditional 3rd
+// naturalness call only when the parallel merge genuinely conflicts —
+// expect on the order of 70-90 total calls for the default set):
 //   OPENAI_API_KEY=sk-... \
 //   TWO_PASS_LINEAR_COMPARISON_LIVE=true \
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --tags live --timeout none
@@ -72,7 +86,10 @@
 // - TWO_PASS_LINEAR_FIRST_PASS_MODEL: defaults to gpt-4.1 (issue #126's
 //   own "use this prompt with gpt-4.1 unless the harness configuration
 //   overrides it").
-// - TWO_PASS_LINEAR_NATURALNESS_MODEL: defaults to gpt-5.1.
+// - TWO_PASS_LINEAR_NATURALNESS_MODEL: defaults to gpt-5.1 (issue #127's
+//   own "use this prompt with gpt-5.1 unless the harness configuration
+//   overrides it" — used for both linear's lexical review and
+//   parallel's naturalness calls).
 // - TWO_PASS_LINEAR_OUTPUT: report path, defaults to
 //   docs/two_pass_linear_prompt_comparison.md.
 // - TWO_PASS_LINEAR_CALL_DELAY_MS: delay between fixtures, defaults to
@@ -207,6 +224,116 @@ Future<CorrectionResponse> _callLinearFirstPassCorrection({
   );
 }
 
+/// The revised second-pass prompt (issue #127), used as the linear
+/// (serial) pipeline's second-pass review in this harness only — it
+/// does not replace or modify production's `naturalnessReviewSpanish`
+/// (`lib/core/services/prompts/correction_prompt.dart`), which the
+/// parallel (production-equivalent) side of this harness continues to
+/// use unchanged for both its naturalness-on-original and (when
+/// triggered) fallback calls.
+///
+/// **Source**: `Two-Pass_Prompt_Revision_Summary.docx`, section "Revised
+/// Second Pass Prompt (Draft)" — the same external, non-version-
+/// controlled design-review document [linearFirstPassPrompt] (issue
+/// #126) was sourced from. Transcribed verbatim, including line breaks
+/// and literal `•`/`-` bullet characters (plain text runs, not Word's
+/// auto-numbered list feature — confirmed by inspecting the underlying
+/// XML directly), the same way as [linearFirstPassPrompt]. Not
+/// paraphrased or reworded.
+///
+/// Deliberately narrower than production's `naturalnessReviewSpanish`:
+/// where that prompt's operational instruction is broad ("identify
+/// wording... unlikely to use naturally"), this one names objective
+/// LEXICAL TRANSFER categories explicitly — calques, false friends,
+/// incorrect collocations from language transfer, transferred
+/// idiomatic expressions, and other objectively incorrect lexical
+/// constructions — the same "replace subjective concepts... with
+/// objective decision criteria" goal the design review states for the
+/// first-pass revision, applied to the second pass. Also states a
+/// minimal-intervention policy explicitly (replace only the identified
+/// issue, preserve meaning, no paraphrasing, smallest change necessary)
+/// that production's current prompt does not spell out to this degree —
+/// the design review's own stated reason: "the current second pass
+/// frequently rewrites or paraphrases complete sentences instead of
+/// repairing only the lexical issue."
+const String linearSecondPassPrompt =
+    'You are a Spanish language tutor reviewing text that has already '
+    'been checked for grammar, spelling, and punctuation.\n'
+    '\n'
+    'Your task is to identify lexical issues that are not recognised as '
+    'correct by authoritative Spanish language references.\n'
+    '\n'
+    'These include, but are not limited to:\n'
+    '\n'
+    '• lexical issues resulting from cross-linguistic interference, '
+    'including:\n'
+    '  - lexical calques (literal translations),\n'
+    '  - false friends (semantic transfer),\n'
+    '  - incorrect collocations resulting from language transfer,\n'
+    '  - transferred idiomatic expressions.\n'
+    '\n'
+    '• other objectively incorrect lexical constructions.\n'
+    '\n'
+    'Do not report spelling, punctuation, or grammatical errors.\n'
+    'If the only problem is grammar, spelling, or punctuation, return no '
+    'issue.\n'
+    '\n'
+    'Ignore spelling, punctuation, and grammar errors even if they '
+    'appear in the same sentence as a lexical issue.\n'
+    '\n'
+    'When correcting a lexical issue:\n'
+    '\n'
+    '• Replace only the lexical issue that you have identified.\n'
+    '• Limit your changes to that lexical issue and any unavoidable '
+    'grammatical adjustments required by the replacement.\n'
+    '• Preserve the original meaning.\n'
+    '• Do not add new information, new clauses, or new ideas.\n'
+    '• Do not remove information unless it forms part of the lexical '
+    'issue being corrected.\n'
+    '• Do not paraphrase or otherwise rewrite the sentence.\n'
+    '• Make only the smallest change necessary to eliminate the lexical '
+    'issue.\n'
+    '\n'
+    'Give exactly one replacement for each issue.\n'
+    'Never provide more than one replacement.\n'
+    'Never join alternatives with a slash, "or", or a list.\n'
+    'If more than one replacement is possible, choose the one that '
+    'requires the smallest change to the original sentence while fully '
+    'resolving the lexical issue.\n'
+    '\n'
+    'Return JSON only.';
+
+/// Calls [linearSecondPassPrompt] against [text] and parses the reply,
+/// mirroring `callNaturalnessReview`'s exact call shape
+/// (`naturalness_review_client.dart`) — same `stageLabel` convention,
+/// same [naturalnessReviewResponseFormat] JSON schema (reused unchanged:
+/// issue #127's own "target objective lexical transfer issues" is a
+/// scope instruction, not a contract change — the schema is still
+/// exactly `{"has_naturalness_issue": bool, "issues": [{"span",
+/// "natural_replacement", "explanation"}]}`), and the same
+/// [buildNaturalnessUserContent]/[parseNaturalnessReviewResponse]
+/// helpers — with only the system prompt text swapped for
+/// [linearSecondPassPrompt]. Cannot call `callNaturalnessReview`
+/// directly, since that function hardcodes production's
+/// `naturalnessReviewSpanish` as its system prompt with no override
+/// parameter. Returns [NaturalnessReview] unchanged — the existing
+/// domain type already matches this prompt's own contract, so no new
+/// type is needed.
+Future<NaturalnessReview> _callLinearLexicalReview({
+  required OpenAiChatCompletionsClient client,
+  required String model,
+  required String text,
+}) async {
+  final replyText = await client.complete(
+    model: model,
+    systemPrompt: linearSecondPassPrompt,
+    userText: buildNaturalnessUserContent(text),
+    stageLabel: 'linear_lexical_review',
+    responseFormat: naturalnessReviewResponseFormat,
+  );
+  return parseNaturalnessReviewResponse(replyText);
+}
+
 /// Curated subset of `allTwoPassFixtures` (issue #82) this harness
 /// exercises by default — a representative sample across language
 /// points. Chosen independently of (and incidentally overlapping with,
@@ -314,12 +441,14 @@ int linearCallDelayMsFrom(Map<String, String> environment) {
 
 /// Runs the two-pass pipeline SERIALLY (issue #125): the first pass
 /// (using [linearFirstPassPrompt], issue #126 — not production's
-/// `firstPassCorrectionSpanish`) completes fully, then naturalness
-/// reviews the first pass's own corrected text directly — never the
-/// original text, never concurrently with the first pass, and never
-/// with a conditional fallback rerun, because naturalness only ever sees
-/// the exact text it is about to be merged into. Contrast with
-/// production's `runTwoPassCorrectionPipeline`
+/// `firstPassCorrectionSpanish`) completes fully, then a lexical
+/// transfer review (using [linearSecondPassPrompt], issue #127 — not
+/// production's broader `naturalnessReviewSpanish`) reviews the first
+/// pass's own corrected text directly — never the original text, never
+/// concurrently with the first pass, and never with a conditional
+/// fallback rerun, because the review only ever sees the exact text it
+/// is about to be merged into. Contrast with production's
+/// `runTwoPassCorrectionPipeline`
 /// (`lib/features/corrections/data/two_pass_correction_pipeline.dart`),
 /// which starts the first pass and naturalness-on-original concurrently
 /// and only reruns naturalness sequentially when the parallel merge
@@ -339,7 +468,7 @@ Future<CorrectionResponse> runLinearTwoPassPipeline({
     submittedText: submittedText,
   );
 
-  final naturalnessReview = await callNaturalnessReview(
+  final lexicalReview = await _callLinearLexicalReview(
     client: client,
     model: naturalnessModel,
     text: firstPassResponse.correctedText,
@@ -348,7 +477,7 @@ Future<CorrectionResponse> runLinearTwoPassPipeline({
   final merge = mergeNaturalnessReview(
     originalText: submittedText,
     firstPassCorrectedText: firstPassResponse.correctedText,
-    naturalnessReview: naturalnessReview,
+    naturalnessReview: lexicalReview,
   );
 
   return mapNaturalnessEditsIntoCorrectionResponse(
@@ -368,7 +497,7 @@ class LinearPipelineComparisonResult {
   const LinearPipelineComparisonResult({
     required this.fixture,
     required this.linearFirstPassCorrectedText,
-    required this.linearNaturalnessDescription,
+    required this.linearLexicalReviewDescription,
     required this.linearCorrectedText,
     required this.linearScore,
     required this.linearReason,
@@ -388,7 +517,12 @@ class LinearPipelineComparisonResult {
   /// use different first-pass prompts and can no longer share one
   /// first-pass call (see this file's own header comment).
   final String linearFirstPassCorrectedText;
-  final String linearNaturalnessDescription;
+
+  /// What [linearSecondPassPrompt] (issue #127) flagged, if anything —
+  /// a lexical transfer review, not general naturalness, despite the
+  /// field name matching [parallelNaturalnessOnOriginalDescription]'s
+  /// shape for symmetry in the generated report.
+  final String linearLexicalReviewDescription;
   final String linearCorrectedText;
   final TwoPassScoreLabel linearScore;
   final String linearReason;
@@ -465,22 +599,27 @@ String _reasonFor(TwoPassFixture fixture, String finalCorrectedText) {
 /// Both first-pass calls and, when triggered, the fallback call, are
 /// now genuinely independent — the same shape production's own pipeline
 /// has, just with the linear side's first pass swapped for the revised
-/// prompt.
+/// prompt. Since issue #127, the linear side's second-pass call also
+/// uses a different (narrower, lexical-transfer-only) prompt than the
+/// parallel side's naturalness calls — the two second-pass prompts were
+/// already never shared (linear reviews the first-pass output, parallel
+/// reviews the original text), so this changes what the linear side's
+/// call finds, not the calls' independence.
 Future<LinearPipelineComparisonResult> runLinearPipelineComparison({
   required OpenAiChatCompletionsClient client,
   required String firstPassModel,
   required String naturalnessModel,
   required TwoPassFixture fixture,
 }) async {
-  // Linear: revised first-pass prompt (issue #126), then naturalness
-  // reviews the first pass's own corrected text, sequentially, no
-  // fallback possible.
+  // Linear: revised first-pass prompt (issue #126), then a lexical
+  // transfer review (issue #127) reviews the first pass's own corrected
+  // text, sequentially, no fallback possible.
   final linearFirstPassResponse = await _callLinearFirstPassCorrection(
     client: client,
     model: firstPassModel,
     submittedText: fixture.text,
   );
-  final linearNaturalnessReview = await callNaturalnessReview(
+  final linearLexicalReview = await _callLinearLexicalReview(
     client: client,
     model: naturalnessModel,
     text: linearFirstPassResponse.correctedText,
@@ -488,7 +627,7 @@ Future<LinearPipelineComparisonResult> runLinearPipelineComparison({
   final linearMerge = mergeNaturalnessReview(
     originalText: fixture.text,
     firstPassCorrectedText: linearFirstPassResponse.correctedText,
-    naturalnessReview: linearNaturalnessReview,
+    naturalnessReview: linearLexicalReview,
   );
   final linearResponse = mapNaturalnessEditsIntoCorrectionResponse(
     firstPassResponse: linearFirstPassResponse,
@@ -548,7 +687,7 @@ Future<LinearPipelineComparisonResult> runLinearPipelineComparison({
   return LinearPipelineComparisonResult(
     fixture: fixture,
     linearFirstPassCorrectedText: linearFirstPassResponse.correctedText,
-    linearNaturalnessDescription: _describeReview(linearNaturalnessReview),
+    linearLexicalReviewDescription: _describeReview(linearLexicalReview),
     linearCorrectedText: linearResponse.correctedText,
     linearScore: _score(fixture, linearResponse.correctedText),
     linearReason: _reasonFor(fixture, linearResponse.correctedText),
@@ -601,15 +740,18 @@ String buildLinearPipelineComparisonReport({
     ..writeln()
     ..writeln(
       '"Linear" uses the revised first-pass prompt (issue #126, '
-      '`linearFirstPassPrompt`, sourced from '
-      '`Two-Pass_Prompt_Revision_Summary.docx`), then reviews that '
-      'first pass\'s own corrected text once, sequentially, with no '
-      'fallback concept. "Parallel" uses production\'s current, '
-      'unmodified first-pass prompt, then reviews the original text '
-      '(production\'s own concurrent call) and — only when that merge '
-      'has a conflict — falls back to a genuine second naturalness '
-      'call, same as production. The two architectures no longer share '
-      'a first-pass call, since they now use different prompts.',
+      '`linearFirstPassPrompt`) and the revised, narrower lexical-'
+      'transfer-only second-pass prompt (issue #127, '
+      '`linearSecondPassPrompt`) — both sourced from '
+      '`Two-Pass_Prompt_Revision_Summary.docx` — reviewing that first '
+      'pass\'s own corrected text once, sequentially, with no fallback '
+      'concept. "Parallel" uses production\'s current, unmodified '
+      'first-pass and naturalness prompts throughout, reviewing the '
+      'original text (production\'s own concurrent call) and — only '
+      'when that merge has a conflict — falling back to a genuine '
+      'second naturalness call, same as production. The two '
+      'architectures no longer share a first-pass call, since they now '
+      'use different prompts throughout both passes.',
     )
     ..writeln();
 
@@ -649,12 +791,13 @@ String buildLinearPipelineComparisonReport({
         )
         ..writeln()
         ..writeln(
-          '| Architecture | Naturalness signal | Final output | Score | '
+          '| Architecture | Pass 2 signal | Final output | Score | '
           'Reason |',
         )
         ..writeln('| --- | --- | --- | --- | --- |')
         ..writeln(
-          '| Linear (serial) | ${result.linearNaturalnessDescription} | '
+          '| Linear (serial) — lexical review | '
+          '${result.linearLexicalReviewDescription} | '
           '`${result.linearCorrectedText}` | '
           '${result.linearScore.reportLabel} | ${result.linearReason} |',
         )
@@ -803,6 +946,163 @@ void main() {
       });
     });
 
+    group('linearSecondPassPrompt (issue #127)', () {
+      test(
+        'matches the source document\'s exact wording — pinned so an '
+        'accidental future edit is caught rather than silently drifting '
+        'from Two-Pass_Prompt_Revision_Summary.docx',
+        () {
+          expect(
+            linearSecondPassPrompt,
+            'You are a Spanish language tutor reviewing text that has '
+            'already been checked for grammar, spelling, and '
+            'punctuation.\n'
+            '\n'
+            'Your task is to identify lexical issues that are not '
+            'recognised as correct by authoritative Spanish language '
+            'references.\n'
+            '\n'
+            'These include, but are not limited to:\n'
+            '\n'
+            '• lexical issues resulting from cross-linguistic '
+            'interference, including:\n'
+            '  - lexical calques (literal translations),\n'
+            '  - false friends (semantic transfer),\n'
+            '  - incorrect collocations resulting from language '
+            'transfer,\n'
+            '  - transferred idiomatic expressions.\n'
+            '\n'
+            '• other objectively incorrect lexical constructions.\n'
+            '\n'
+            'Do not report spelling, punctuation, or grammatical '
+            'errors.\n'
+            'If the only problem is grammar, spelling, or punctuation, '
+            'return no issue.\n'
+            '\n'
+            'Ignore spelling, punctuation, and grammar errors even if '
+            'they appear in the same sentence as a lexical issue.\n'
+            '\n'
+            'When correcting a lexical issue:\n'
+            '\n'
+            '• Replace only the lexical issue that you have '
+            'identified.\n'
+            '• Limit your changes to that lexical issue and any '
+            'unavoidable grammatical adjustments required by the '
+            'replacement.\n'
+            '• Preserve the original meaning.\n'
+            '• Do not add new information, new clauses, or new ideas.\n'
+            '• Do not remove information unless it forms part of the '
+            'lexical issue being corrected.\n'
+            '• Do not paraphrase or otherwise rewrite the sentence.\n'
+            '• Make only the smallest change necessary to eliminate the '
+            'lexical issue.\n'
+            '\n'
+            'Give exactly one replacement for each issue.\n'
+            'Never provide more than one replacement.\n'
+            'Never join alternatives with a slash, "or", or a list.\n'
+            'If more than one replacement is possible, choose the one '
+            'that requires the smallest change to the original sentence '
+            'while fully resolving the lexical issue.\n'
+            '\n'
+            'Return JSON only.',
+          );
+        },
+      );
+
+      test(
+        'ignores grammar, spelling, and punctuation as its own '
+        'categories (acceptance criteria)',
+        () {
+          expect(
+            linearSecondPassPrompt,
+            contains('Do not report spelling, punctuation, or grammatical errors'),
+          );
+          expect(
+            linearSecondPassPrompt,
+            contains(
+              'If the only problem is grammar, spelling, or punctuation, '
+              'return no issue',
+            ),
+          );
+          expect(
+            linearSecondPassPrompt,
+            contains(
+              'Ignore spelling, punctuation, and grammar errors even if '
+              'they appear in the same sentence as a lexical issue',
+            ),
+          );
+        },
+      );
+
+      test(
+        'is constrained to minimal lexical intervention (acceptance '
+        'criteria)',
+        () {
+          expect(
+            linearSecondPassPrompt,
+            contains('Replace only the lexical issue that you have identified'),
+          );
+          expect(
+            linearSecondPassPrompt,
+            contains('Preserve the original meaning'),
+          );
+          expect(
+            linearSecondPassPrompt,
+            contains('Do not paraphrase or otherwise rewrite the sentence'),
+          );
+          expect(
+            linearSecondPassPrompt,
+            contains(
+              'Make only the smallest change necessary to eliminate the '
+              'lexical issue',
+            ),
+          );
+        },
+      );
+
+      test(
+        'requires exactly one replacement, never multiple or '
+        'slash-separated alternatives (acceptance criteria)',
+        () {
+          expect(
+            linearSecondPassPrompt,
+            contains('Give exactly one replacement for each issue'),
+          );
+          expect(
+            linearSecondPassPrompt,
+            contains('Never provide more than one replacement'),
+          );
+          expect(
+            linearSecondPassPrompt,
+            contains(
+              'Never join alternatives with a slash, "or", or a list',
+            ),
+          );
+        },
+      );
+
+      test('targets the named objective lexical transfer categories', () {
+        expect(linearSecondPassPrompt, contains('lexical calques'));
+        expect(linearSecondPassPrompt, contains('false friends'));
+        expect(
+          linearSecondPassPrompt,
+          contains('incorrect collocations resulting from language transfer'),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains('transferred idiomatic expressions'),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains('other objectively incorrect lexical constructions'),
+        );
+      });
+
+      test('requests a plain JSON reply with no wrapper commentary', () {
+        expect(linearSecondPassPrompt, contains('Return JSON only.'));
+      });
+    });
+
     group('fixture-set selection', () {
       test('"comparison" returns the curated 17-fixture comparison set', () {
         expect(linearFixturesFor('comparison'), linearComparisonFixtures);
@@ -838,10 +1138,10 @@ void main() {
     });
 
     test(
-      'runLinearTwoPassPipeline uses linearFirstPassPrompt (issue #126, '
-      'not production\'s firstPassCorrectionSpanish), then reviews the '
-      'first pass\'s own corrected text, not the original — and makes '
-      'exactly two calls, never a third',
+      'runLinearTwoPassPipeline uses linearFirstPassPrompt (issue #126) '
+      'for its first pass and linearSecondPassPrompt (issue #127) for '
+      'its lexical review — never production\'s prompts — and makes '
+      'exactly two calls total',
       () async {
         const fixtureText = 'Vi mucho trafico ayer.';
         final client = _RoutingHttpClient(
@@ -849,13 +1149,14 @@ void main() {
           parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
           originalText: fixtureText,
           naturalnessOnOriginalReply: _naturalnessEnvelope(
-            '{"has_naturalness_issue": false, "issues": []}',
+            'unused in this test',
           ),
-          naturalnessOnFirstPassReply: _naturalnessEnvelope(
+          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+          linearLexicalReviewReply: _naturalnessEnvelope(
             '{"has_naturalness_issue": true, "issues": ['
             '{"span": "Vi mucho tráfico ayer.", '
             '"natural_replacement": "Había mucho tráfico ayer.", '
-            '"explanation": "Sounds more natural."}'
+            '"explanation": "Calque."}'
             ']}',
           ),
         );
@@ -870,20 +1171,31 @@ void main() {
           submittedText: fixtureText,
         );
 
-        // Applied the naturalness-on-first-pass reply, not the
-        // naturalness-on-original reply (which reported no issue).
+        // Applied the linear lexical review reply.
         expect(response.correctedText, 'Había mucho tráfico ayer.');
         expect(client.linearFirstPassCallCount, 1);
         expect(client.parallelFirstPassCallCount, 0);
-        expect(client.naturalnessCallCount, 1);
+        expect(client.linearLexicalReviewCallCount, 1);
+        // Never touches production's naturalnessReviewSpanish at all.
+        expect(client.naturalnessCallCount, 0);
+        // Issue #127's own "run the second pass on the first-pass
+        // corrected text, not on the original text" requirement: the
+        // lexical review call targeted the first-pass output ("Vi mucho
+        // tráfico ayer.", with accent), not the original submitted text
+        // ("Vi mucho trafico ayer.", without one).
+        expect(
+          client.capturedLinearLexicalReviewUserText,
+          buildNaturalnessUserContent('Vi mucho tráfico ayer.'),
+        );
       },
     );
 
     test(
-      'runLinearPipelineComparison (issue #126) makes two independent '
-      'first-pass calls — one per prompt — and genuinely re-issues the '
-      'parallel path\'s fallback naturalness call when the parallel '
-      'merge conflicts, rather than reusing the linear path\'s call',
+      'runLinearPipelineComparison (issues #126, #127) makes two '
+      'independent first-pass calls, a lexical review call for the '
+      'linear side (linearSecondPassPrompt), and genuinely re-issues the '
+      'parallel path\'s fallback naturalness call (production\'s '
+      'naturalnessReviewSpanish) when the parallel merge conflicts',
       () async {
         final fixture = allTwoPassFixtures.firstWhere(
           (f) => f.id == 'clean-grammar-only',
@@ -903,7 +1215,10 @@ void main() {
             '"explanation": "Sounds more natural."}'
             ']}',
           ),
-          naturalnessOnFirstPassReply: _naturalnessEnvelope(
+          parallelFallbackReply: _naturalnessEnvelope(
+            '{"has_naturalness_issue": false, "issues": []}',
+          ),
+          linearLexicalReviewReply: _naturalnessEnvelope(
             '{"has_naturalness_issue": false, "issues": []}',
           ),
         );
@@ -921,13 +1236,13 @@ void main() {
         expect(result.parallelUsedFallback, isTrue);
         expect(result.linearCorrectedText, 'Vi mucho tráfico ayer.');
         expect(result.parallelCorrectedText, 'Vi mucho tráfico ayer.');
-        // One first-pass call per architecture (no longer shared, issue
-        // #126) and three naturalness calls: linear's own call, the
-        // parallel merge's naturalness-on-original call, and a genuine
-        // third call for the parallel path's fallback.
+        // One first-pass call per architecture, one lexical review call
+        // for linear, and two naturalness calls for parallel (its
+        // naturalness-on-original call, plus a genuine fallback call).
         expect(client.linearFirstPassCallCount, 1);
         expect(client.parallelFirstPassCallCount, 1);
-        expect(client.naturalnessCallCount, 3);
+        expect(client.linearLexicalReviewCallCount, 1);
+        expect(client.naturalnessCallCount, 2);
       },
     );
 
@@ -941,7 +1256,7 @@ void main() {
         final result = LinearPipelineComparisonResult(
           fixture: fixture,
           linearFirstPassCorrectedText: fixture.expectedCorrectedText,
-          linearNaturalnessDescription: '(none)',
+          linearLexicalReviewDescription: '(none)',
           linearCorrectedText: fixture.expectedCorrectedText,
           linearScore: TwoPassScoreLabel.correctFix,
           linearReason: 'Matches expected output.',
@@ -1090,7 +1405,8 @@ class _RoutingHttpClient implements HttpClient {
     required this.parallelFirstPassReply,
     required this.originalText,
     required this.naturalnessOnOriginalReply,
-    required this.naturalnessOnFirstPassReply,
+    required this.parallelFallbackReply,
+    required this.linearLexicalReviewReply,
   });
 
   /// Reply for a first-pass call using [linearFirstPassPrompt] (issue
@@ -1101,16 +1417,40 @@ class _RoutingHttpClient implements HttpClient {
   /// `firstPassCorrectionSpanish`.
   final String parallelFirstPassReply;
   final String originalText;
+
+  /// Reply for the parallel path's naturalness-on-original call
+  /// (production's `naturalnessReviewSpanish`, reviewing [originalText]).
   final String naturalnessOnOriginalReply;
 
-  /// Reply for any naturalness call NOT targeting [originalText] —
-  /// covers both the linear path's own naturalness call and, when
-  /// triggered, the parallel path's genuine fallback call (issue #126
-  /// made these two separate HTTP requests again; tests that don't need
-  /// to tell them apart by content can share this one reply).
-  final String naturalnessOnFirstPassReply;
+  /// Reply for the parallel path's genuine fallback call (production's
+  /// `naturalnessReviewSpanish`, reviewing the parallel first-pass
+  /// output) — unambiguous since issue #127: the linear path's own
+  /// second-pass call now uses an entirely different system prompt
+  /// ([linearSecondPassPrompt]), with its own reply slot below, so this
+  /// slot is never shared between the two architectures.
+  final String parallelFallbackReply;
+
+  /// Reply for the linear path's own second-pass call
+  /// ([linearSecondPassPrompt], issue #127).
+  final String linearLexicalReviewReply;
+
   int linearFirstPassCallCount = 0;
   int parallelFirstPassCallCount = 0;
+  int linearLexicalReviewCallCount = 0;
+
+  /// The user text sent with the most recent [linearSecondPassPrompt]
+  /// call, captured so a test can assert it targeted the first-pass
+  /// output rather than the original text (issue #127's own "run the
+  /// second pass on the first-pass corrected text, not on the original
+  /// text" requirement) — otherwise unverifiable here, since this fake
+  /// routes that system prompt to [linearLexicalReviewReply]
+  /// unconditionally.
+  String? capturedLinearLexicalReviewUserText;
+
+  /// Count of calls using production's `naturalnessReviewSpanish` — the
+  /// parallel path's naturalness-on-original call plus, when triggered,
+  /// its fallback call. Never incremented by the linear path since
+  /// issue #127, which gave it its own distinct system prompt.
   int naturalnessCallCount = 0;
 
   @override
@@ -1152,14 +1492,24 @@ class _RoutingRequest implements HttpClientRequest {
         replyBody: client.parallelFirstPassReply,
       );
     }
+    if (systemPrompt == linearSecondPassPrompt) {
+      client.linearLexicalReviewCallCount++;
+      client.capturedLinearLexicalReviewUserText = userText;
+      return _FakeHttpClientResponse(
+        replyBody: client.linearLexicalReviewReply,
+      );
+    }
 
+    // Only production's naturalnessReviewSpanish reaches here since
+    // issue #127 — the parallel path's naturalness-on-original call or
+    // its genuine fallback call.
     client.naturalnessCallCount++;
     final isOnOriginal =
         userText == buildNaturalnessUserContent(client.originalText);
     return _FakeHttpClientResponse(
       replyBody: isOnOriginal
           ? client.naturalnessOnOriginalReply
-          : client.naturalnessOnFirstPassReply,
+          : client.parallelFallbackReply,
     );
   }
 
