@@ -2046,6 +2046,66 @@ void main() {
     );
 
     test(
+      'runLinearExecution (issue #133) never retries, falls back, or '
+      'touches the parallel path even when Pass 2 proposes an edit that '
+      'does not match Pass 1\'s own output — a scenario that would '
+      'trigger the parallel pipeline\'s fallback/conflict-resolution '
+      'path, but has no equivalent branch here at all',
+      () async {
+        final fixture = allTwoPassFixtures.firstWhere(
+          (f) => f.id == 'clean-grammar-only',
+        );
+        final client = _RoutingHttpClient(
+          linearFirstPassReply: _firstPassEnvelope(
+            fixture.expectedCorrectedText,
+          ),
+          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+          originalText: fixture.text,
+          naturalnessOnOriginalReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+          // Flags a span that only exists in the ORIGINAL text, not in
+          // Pass 1's own corrected output — the same kind of mismatch
+          // that makes the parallel pipeline's merge conflict and
+          // rerun naturalness as a fallback (see the
+          // runLinearPipelineComparison conflict test above). The
+          // merge here just skips the edit (spanNotFound); there is no
+          // retry/fallback code path in _runLinearSteps to trigger.
+          linearLexicalReviewReply: _naturalnessEnvelope(
+            '{"has_naturalness_issue": true, "issues": ['
+            '{"span": "${fixture.text}", '
+            '"natural_replacement": "Something else entirely.", '
+            '"explanation": "Does not match Pass 1 output."}'
+            ']}',
+          ),
+        );
+
+        final result = await runLinearExecution(
+          apiKey: 'test-key',
+          httpClient: client,
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          fixture: fixture,
+        );
+
+        // The mismatched edit was skipped, not retried or escalated —
+        // the final text is exactly Pass 1's own output, unchanged.
+        expect(result.finalCorrectedText, fixture.expectedCorrectedText);
+
+        // Exactly one call per pass — no retry of either.
+        expect(client.linearFirstPassCallCount, 1);
+        expect(client.linearLexicalReviewCallCount, 1);
+
+        // No parallel merge/conflict/fallback path was ever invoked —
+        // protects the serial architecture from an accidental
+        // reintroduction of that branch.
+        expect(client.parallelFirstPassCallCount, 0);
+        expect(client.naturalnessCallCount, 0);
+      },
+    );
+
+    test(
       'runLinearPipelineComparison (issues #126, #127) makes two '
       'independent first-pass calls, a lexical review call for the '
       'linear side (linearSecondPassPrompt), and genuinely re-issues the '
@@ -2345,6 +2405,74 @@ void main() {
           report,
           contains(
             '| All runs | 2 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |',
+          ),
+        );
+      },
+    );
+
+    test(
+      'buildLinearExecutionReport (issue #133) renders all five runs '
+      'for a fixture run through the 5x sweep — a regression that '
+      'silently dropped or truncated runs would be caught here',
+      () {
+        final fixture = allTwoPassFixtures.firstWhere(
+          (f) => f.id == 'clean-grammar-only',
+        );
+        final results = [
+          for (var runIndex = 1; runIndex <= 5; runIndex++)
+            LinearExecutionResult(
+              fixture: fixture,
+              runIndex: runIndex,
+              firstPassCorrectedText: fixture.expectedCorrectedText,
+              lexicalReviewDescription: '(none)',
+              finalCorrectedText: fixture.expectedCorrectedText,
+              score: TwoPassScoreLabel.correctFix,
+              reason: 'Matches expected output.',
+              firstPassStats: const CallStats(
+                wallClockMs: 10,
+                totalTokens: 5,
+                costUsd: 0.0001,
+              ),
+              secondPassStats: const CallStats(
+                wallClockMs: 20,
+                totalTokens: 10,
+                costUsd: 0.0002,
+              ),
+            ),
+        ];
+
+        final report = buildLinearExecutionReport(
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          results: results,
+          generatedAt: DateTime.utc(2026, 1, 1),
+        );
+
+        expect(report, contains('- Pass rate: 5/5'));
+        expect(report, contains('| Fixtures | 1 |'));
+        expect(report, contains('| Total runs | 5 |'));
+        expect(report, contains('| Pass rate | 5/5 |'));
+        // Every run row is present in both per-run tables — none
+        // dropped or truncated.
+        for (var runIndex = 1; runIndex <= 5; runIndex++) {
+          expect(
+            report,
+            contains(
+              '| $runIndex | `${fixture.expectedCorrectedText}` | (none) '
+              '| `${fixture.expectedCorrectedText}` | correct_fix | Pass '
+              '| Matches expected output.',
+            ),
+          );
+          expect(
+            report,
+            contains('| $runIndex | 10 | \$0.000100 | 20 | \$0.000200 | 30 | \$0.000300 |'),
+          );
+        }
+        expect(
+          report,
+          contains(
+            '| clean-grammar-only | ${fixture.languagePoint} | 5 | 5/5 | '
+            '`${fixture.expectedCorrectedText}` | 150 | \$0.001500 |',
           ),
         );
       },
