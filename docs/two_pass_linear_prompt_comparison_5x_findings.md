@@ -86,6 +86,11 @@ correct, occasionally swapping in a different valid synonym that doesn't
 match the fixture's specific expected wording, occasionally altering
 meaning. Concrete evidence:
 
+- `clean-grammar-only` (0/5): Pass 1's output is **already correct**
+  every run (`Vi mucho tráfico ayer.`, the exact expected text), but
+  Pass 2 unprompted-ly rewrites it to `Había mucho tráfico ayer.` in
+  all 5 runs — the same signature as the fixtures below, and the most
+  consistent (0/5, single output) example of it in the whole sweep.
 - `mixed-verb-agreement-and-missing-que` (0/5): Pass 1's output is
   **already correct** every run (`...que está bien terminar de estudiar
   hoy.`), but Pass 2 unprompted-ly substitutes `terminar` → `dejar` in
