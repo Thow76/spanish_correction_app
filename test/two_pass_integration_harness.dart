@@ -689,11 +689,17 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     note: 'Second "yo" is a redundant repeated subject pronoun. Already '
         'expects full pro-drop (both pronouns removed) as the primary '
         'answer — the precedent the other pro-drop fixtures above now '
-        'match via acceptableAlternatives (issue #112).',
+        'match via acceptableAlternatives (issue #112). Issue #152: this '
+        'fixture is the mirror image of "delete-repeated-yo-estudio" and '
+        '"delete-repeated-nosotros" above, whose primary expectation '
+        'keeps the first subject pronoun and drops only the repeat — '
+        'that same reading is equally valid here and accepted as an '
+        'alternative.',
     languagePoint: 'Unnecessary Extras / Deletions',
     operationType: TwoPassOperationType.deletion,
     expectedOwner: TwoPassExpectedOwner.firstPass,
     expectedCorrectedText: 'Fui al mercado y compré pan.',
+    acceptableAlternatives: ['Yo fui al mercado y compré pan.'],
   ),
   TwoPassFixture(
     id: 'delete-repeated-nosotros',
@@ -918,47 +924,76 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
   TwoPassFixture(
     id: 'naturalness-buen-tiempo',
     text: 'Tuvimos un buen tiempo.',
-    note: 'English-influenced "tener un buen tiempo" ("had a good time").',
+    note: 'English-influenced "tener un buen tiempo" ("had a good time"). '
+        'Issue #152: "tuvimos un buen rato" is a genuinely valid, more '
+        'minimal fix — a lexical substitution that keeps the original '
+        'sentence structure, unlike the more idiomatic impersonal '
+        'restructuring — and is accepted as an alternative.',
     languagePoint: 'Phrase-Level Naturalness',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
     expectedCorrectedText: 'Lo pasamos bien.',
+    acceptableAlternatives: ['Tuvimos un buen rato.'],
   ),
   TwoPassFixture(
     id: 'naturalness-corriendo-tarde',
     text: 'Estoy corriendo tarde para la reunión.',
-    note: 'English-influenced "corriendo tarde" ("running late").',
+    note: 'English-influenced "corriendo tarde" ("running late"). Issue '
+        '#152: "voy a llegar tarde"/"estoy llegando tarde" are both '
+        'genuinely valid, more minimal fixes that keep the original verb '
+        'structure closer to the source, and are accepted as '
+        'alternatives alongside the more idiomatic restructuring.',
     languagePoint: 'Phrase-Level Naturalness',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
     expectedCorrectedText: 'Voy tarde a la reunión.',
+    acceptableAlternatives: [
+      'Voy a llegar tarde a la reunión.',
+      'Estoy llegando tarde a la reunión.',
+    ],
   ),
   TwoPassFixture(
     id: 'naturalness-pasar-buen-tiempo',
     text: 'Quiero pasar un buen tiempo.',
-    note: 'English-influenced "pasar un buen tiempo" ("have a good time").',
+    note: 'English-influenced "pasar un buen tiempo" ("have a good '
+        'time"). Issue #152: "quiero pasar un buen rato" is a genuinely '
+        'valid, more minimal fix — a lexical substitution that keeps the '
+        'original sentence structure — and is accepted as an '
+        'alternative.',
     languagePoint: 'Phrase-Level Naturalness',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
     expectedCorrectedText: 'Quiero pasarlo bien.',
+    acceptableAlternatives: ['Quiero pasar un buen rato.'],
   ),
   TwoPassFixture(
     id: 'naturalness-puedo-tener-cerveza',
     text: '¿Puedo tener una cerveza?',
-    note: 'English-influenced "¿puedo tener?" ("can I have?").',
+    note: 'English-influenced "¿puedo tener?" ("can I have?"). Issue '
+        '#152: "¿puedo tomar una cerveza?" is a genuinely valid, more '
+        'minimal fix — a lexical substitution ("tener" -> "tomar") that '
+        'keeps the original sentence structure — and is accepted as an '
+        'alternative alongside the more idiomatic phrasing.',
     languagePoint: 'Phrase-Level Naturalness',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
     expectedCorrectedText: '¿Me pones una cerveza?',
+    acceptableAlternatives: ['¿Puedo tomar una cerveza?'],
   ),
   TwoPassFixture(
     id: 'naturalness-llamar-para-atras',
     text: 'Te llamo para atrás.',
-    note: 'English-influenced "llamar para atrás" ("call back").',
+    note: 'English-influenced "llamar para atrás" ("call back"). Issue '
+        '#152: "te llamo más tarde"/"te llamo después" both preserve '
+        'the "I will call you [at some later point]" meaning and are '
+        'accepted as alternatives. "Te llamo de nuevo." is deliberately '
+        'not added — it means "I\'ll call you again", not "I\'ll call '
+        'you back", so it does not preserve the original meaning.',
     languagePoint: 'Phrase-Level Naturalness',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
     expectedCorrectedText: 'Te devuelvo la llamada.',
+    acceptableAlternatives: ['Te llamo más tarde.', 'Te llamo después.'],
   ),
 
   // --- 14. Valid Regional / Should Not Flag — expected owner: no pass ---
@@ -4672,8 +4707,14 @@ void main() {
                 runIndex: 1,
               ),
               _fakeResult(
+                // Deliberately still the fixture's own uncorrected text,
+                // not any accepted correction — guaranteed to keep
+                // failing regardless of what acceptableAlternatives this
+                // fixture gains later (issue #152 added two for this
+                // fixture; a previously-used stand-in "wrong" answer,
+                // 'Voy a llegar tarde a la reunión.', became one of them).
                 fixture,
-                finalCorrectedText: 'Voy a llegar tarde a la reunión.',
+                finalCorrectedText: fixture.text,
                 runIndex: 2,
               ),
             ],
