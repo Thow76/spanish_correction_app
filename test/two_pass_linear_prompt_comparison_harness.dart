@@ -1383,14 +1383,16 @@ String buildLinearExecutionReport({
         buffer
           ..writeln(
             '| Run | Pass 1 output | Pass 2 signal | Final output | '
-            'Score | Reason |',
+            'Score | Pass/fail | Reason |',
           )
-          ..writeln('| --- | --- | --- | --- | --- | --- |');
+          ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
         for (final run in group.runs) {
           buffer.writeln(
             '| ${run.runIndex} | `${run.firstPassCorrectedText}` | '
             '${run.lexicalReviewDescription} | `${run.finalCorrectedText}` '
-            '| ${run.score.reportLabel} | ${run.reason} |',
+            '| ${run.score.reportLabel} | '
+            '${isPassingScore(run.score) ? 'Pass' : 'Fail'} | '
+            '${run.reason} |',
           );
         }
       } else {
@@ -1399,6 +1401,9 @@ String buildLinearExecutionReport({
           ..writeln('- Pass 1 output: `${run.firstPassCorrectedText}`')
           ..writeln('- Pass 2 signal: ${run.lexicalReviewDescription}')
           ..writeln('- Score: ${run.score.reportLabel}')
+          ..writeln(
+            '- Pass/fail: ${isPassingScore(run.score) ? 'Pass' : 'Fail'}',
+          )
           ..writeln('- Reason: ${run.reason}');
       }
       buffer.writeln();
@@ -2176,6 +2181,32 @@ void main() {
         expect(report, contains('## ${fixture.languagePoint}'));
         expect(report, contains('### clean-grammar-only'));
         expect(report, contains('- Pass rate: 1/2'));
+
+        // Issue #131 review finding: each run needs an explicit
+        // Pass/fail value alongside its Score, not just the fixture's
+        // rolled-up pass rate.
+        expect(
+          report,
+          contains(
+            '| Run | Pass 1 output | Pass 2 signal | Final output | '
+            'Score | Pass/fail | Reason |',
+          ),
+        );
+        expect(
+          report,
+          contains(
+            '| 1 | `${fixture.expectedCorrectedText}` | (none) | '
+            '`${fixture.expectedCorrectedText}` | correct_fix | Pass | '
+            'Matches expected output.',
+          ),
+        );
+        expect(
+          report,
+          contains(
+            '| 2 | `${fixture.text}` | (none) | `${fixture.text}` | '
+            'missed_issue | Fail | Did not match expected output.',
+          ),
+        );
 
         // Issue #130: per-run latency/cost by pass, plus overall totals
         // equal to Pass 1 + Pass 2 only (no fallback phase).
