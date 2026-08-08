@@ -82,6 +82,30 @@
 //   TWO_PASS_LINEAR_COMPARISON_LIVE=true \
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --tags live --timeout none
 //
+// Run the standalone serial execution flow live (issue #128 — no
+// parallel/fallback calls at all, so just 2 calls per run: 1 first pass
+// + 1 lexical review):
+//   OPENAI_API_KEY=sk-... \
+//   TWO_PASS_LINEAR_EXECUTION_LIVE=true \
+//   flutter test test/two_pass_linear_prompt_comparison_harness.dart --tags live --timeout none
+//
+// Run the standalone execution flow's all-fixtures, 5x-repeated-run
+// sweep (issue #131) — every fixture in allTwoPassFixtures (85 as of
+// this writing), 5 runs each, so live model variance is visible rather
+// than trusting a single-run result; up to 85 * 5 * 2 = 850 calls.
+// buildLinearExecutionReport (issues #128-130) already carries every
+// field this sweep needs per run — benchmark group, fixture id, run
+// number, original/expected/first-pass/final phrases, score taxonomy,
+// pass/fail, and per-pass latency/cost — laid out the same way
+// two_pass_fallback_pipeline_comparison_harness.dart's own 5x sweep is,
+// so the two stay directly comparable:
+//   OPENAI_API_KEY=sk-... \
+//   TWO_PASS_LINEAR_EXECUTION_LIVE=true \
+//   TWO_PASS_LINEAR_FIXTURE_SET=all \
+//   TWO_PASS_LINEAR_RUNS_PER_FIXTURE=5 \
+//   TWO_PASS_LINEAR_EXECUTION_OUTPUT=docs/two_pass_linear_prompt_comparison_all_5x.md \
+//   flutter test test/two_pass_linear_prompt_comparison_harness.dart --tags live --timeout none
+//
 // Optional runtime controls:
 // - TWO_PASS_LINEAR_FIRST_PASS_MODEL: defaults to gpt-4.1 (issue #126's
 //   own "use this prompt with gpt-4.1 unless the harness configuration
@@ -90,13 +114,21 @@
 //   own "use this prompt with gpt-5.1 unless the harness configuration
 //   overrides it" — used for both linear's lexical review and
 //   parallel's naturalness calls).
-// - TWO_PASS_LINEAR_OUTPUT: report path, defaults to
-//   docs/two_pass_linear_prompt_comparison.md.
+// - TWO_PASS_LINEAR_OUTPUT: linear-vs-parallel comparison report path
+//   (issues #125-127), defaults to docs/two_pass_linear_prompt_comparison.md.
+// - TWO_PASS_LINEAR_EXECUTION_OUTPUT: standalone execution flow report
+//   path (issues #128-131), defaults to docs/two_pass_linear_execution.md.
+//   Set to docs/two_pass_linear_prompt_comparison_all_5x.md for the
+//   named 5x sweep above.
 // - TWO_PASS_LINEAR_CALL_DELAY_MS: delay between fixtures, defaults to
 //   750.
 // - TWO_PASS_LINEAR_FIXTURE_SET: "comparison" (default — the curated
 //   17-fixture set below) or "all" (every fixture in
 //   allTwoPassFixtures).
+// - TWO_PASS_LINEAR_RUNS_PER_FIXTURE (issue #128): how many times to run
+//   each selected fixture through the standalone execution flow with
+//   the exact same submitted text. Defaults to 1; set to 5 for the named
+//   5x sweep above.
 
 import 'dart:async';
 import 'dart:convert';
@@ -851,6 +883,14 @@ String _reasonFor(TwoPassFixture fixture, String finalCorrectedText) {
 String _formatCost(double? usd) =>
     usd == null ? 'unknown' : '\$${usd.toStringAsFixed(6)}';
 
+/// Local copy of `two_pass_fallback_pipeline_comparison_harness.dart`'s
+/// own private `_formatOutputList` (issue #131) — same
+/// backtick-wrapped, semicolon-joined shape, so the two harnesses'
+/// summary tables read the same way side by side.
+String _formatOutputList(List<String> outputs) {
+  return outputs.map((text) => '`$text`').join('; ');
+}
+
 /// Renders a one-row-per-[rowLabel] markdown table counting [labels] by
 /// every [TwoPassScoreLabel] value (issue #129) — the full benchmark
 /// taxonomy (`correct_fix`, `partial_fix`, `missed_issue`,
@@ -1279,6 +1319,45 @@ String buildLinearExecutionReport({
     )
     ..writeln();
 
+  // Issue #131: a top-level per-fixture rollup, same shape as
+  // `two_pass_fallback_pipeline_comparison_harness.dart`'s own "Per-
+  // fixture summary" section (issues #117/#122), so a 5x sweep here
+  // reads side by side with that harness's own 5x sweep.
+  buffer
+    ..writeln('## Fixture summary')
+    ..writeln()
+    ..writeln(
+      'Pass rate is `passed/runs`; "distinct outputs" lists every '
+      'unique final output produced across a fixture\'s runs — more '
+      'than one entry means the model was not stable for that fixture.',
+    )
+    ..writeln()
+    ..writeln(
+      '| Fixture | Language point | Runs | Pass rate | Distinct final '
+      'outputs | Total latency (ms) | Total cost |',
+    )
+    ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
+  for (final fixtureId in grouped.fixtureIdOrder) {
+    final group = grouped.groups[fixtureId]!;
+    final totalLatencyMs = group.runs.fold<int>(
+      0,
+      (sum, r) => sum + r.totalStats.wallClockMs,
+    );
+    final anyUnknownCost = group.runs.any(
+      (r) => r.totalStats.costUsd == null,
+    );
+    final totalCostUsd = anyUnknownCost
+        ? null
+        : group.runs.fold<double>(0, (sum, r) => sum + r.totalStats.costUsd!);
+    buffer.writeln(
+      '| $fixtureId | ${group.fixture.languagePoint} | '
+      '${group.runs.length} | ${group.passCount}/${group.runs.length} | '
+      '${_formatOutputList(group.distinctFinalOutputs)} | '
+      '$totalLatencyMs | ${_formatCost(totalCostUsd)} |',
+    );
+  }
+  buffer.writeln();
+
   for (final languagePoint in grouped.languagePointOrder) {
     buffer
       ..writeln('## $languagePoint')
@@ -1304,14 +1383,16 @@ String buildLinearExecutionReport({
         buffer
           ..writeln(
             '| Run | Pass 1 output | Pass 2 signal | Final output | '
-            'Score | Reason |',
+            'Score | Pass/fail | Reason |',
           )
-          ..writeln('| --- | --- | --- | --- | --- | --- |');
+          ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
         for (final run in group.runs) {
           buffer.writeln(
             '| ${run.runIndex} | `${run.firstPassCorrectedText}` | '
             '${run.lexicalReviewDescription} | `${run.finalCorrectedText}` '
-            '| ${run.score.reportLabel} | ${run.reason} |',
+            '| ${run.score.reportLabel} | '
+            '${isPassingScore(run.score) ? 'Pass' : 'Fail'} | '
+            '${run.reason} |',
           );
         }
       } else {
@@ -1320,6 +1401,9 @@ String buildLinearExecutionReport({
           ..writeln('- Pass 1 output: `${run.firstPassCorrectedText}`')
           ..writeln('- Pass 2 signal: ${run.lexicalReviewDescription}')
           ..writeln('- Score: ${run.score.reportLabel}')
+          ..writeln(
+            '- Pass/fail: ${isPassingScore(run.score) ? 'Pass' : 'Fail'}',
+          )
           ..writeln('- Reason: ${run.reason}');
       }
       buffer.writeln();
@@ -2098,6 +2182,32 @@ void main() {
         expect(report, contains('### clean-grammar-only'));
         expect(report, contains('- Pass rate: 1/2'));
 
+        // Issue #131 review finding: each run needs an explicit
+        // Pass/fail value alongside its Score, not just the fixture's
+        // rolled-up pass rate.
+        expect(
+          report,
+          contains(
+            '| Run | Pass 1 output | Pass 2 signal | Final output | '
+            'Score | Pass/fail | Reason |',
+          ),
+        );
+        expect(
+          report,
+          contains(
+            '| 1 | `${fixture.expectedCorrectedText}` | (none) | '
+            '`${fixture.expectedCorrectedText}` | correct_fix | Pass | '
+            'Matches expected output.',
+          ),
+        );
+        expect(
+          report,
+          contains(
+            '| 2 | `${fixture.text}` | (none) | `${fixture.text}` | '
+            'missed_issue | Fail | Did not match expected output.',
+          ),
+        );
+
         // Issue #130: per-run latency/cost by pass, plus overall totals
         // equal to Pass 1 + Pass 2 only (no fallback phase).
         expect(
@@ -2126,6 +2236,26 @@ void main() {
         expect(
           report,
           contains('| **Total (Pass 1 + Pass 2)** | 700 | \$0.007000 |'),
+        );
+
+        // Issue #131: a top-level fixture summary row rolls up runs,
+        // pass rate, distinct outputs, and total latency/cost — same
+        // shape as the fallback harness's own "Per-fixture summary".
+        expect(report, contains('## Fixture summary'));
+        expect(
+          report,
+          contains(
+            '| Fixture | Language point | Runs | Pass rate | Distinct '
+            'final outputs | Total latency (ms) | Total cost |',
+          ),
+        );
+        expect(
+          report,
+          contains(
+            '| clean-grammar-only | ${fixture.languagePoint} | 2 | 1/2 | '
+            '`${fixture.expectedCorrectedText}`; `${fixture.text}` | 700 '
+            '| \$0.007000 |',
+          ),
         );
         expect(report, contains('`${fixture.expectedCorrectedText}`'));
         expect(report, contains('`${fixture.text}`'));
