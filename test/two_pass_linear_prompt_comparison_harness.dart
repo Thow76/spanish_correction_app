@@ -122,7 +122,8 @@ import 'two_pass_integration_harness.dart'
         TwoPassScoreLabelReportName,
         allTwoPassFixtures,
         isPassingScore,
-        scoreFixtureResult;
+        scoreFixtureResult,
+        statsFor;
 
 /// The revised first-pass prompt (issue #126), used as the linear
 /// (serial) pipeline's grammar/spelling/punctuation pass in this harness
@@ -488,20 +489,56 @@ int linearRunsPerFixtureFrom(Map<String, String> environment) {
   return runsPerFixture;
 }
 
+/// Runs [call], recording its [CallStats] (wall-clock latency plus every
+/// [ChatCompletionsUsage] logged to [usageLog] during the call) via
+/// [onStats] — always, whether [call] completes normally or throws.
+/// Local copy of `two_pass_integration_harness.dart`'s own private
+/// `_trackedCall` (issue #98) — kept separate per this harness's own
+/// "keep it separate" convention rather than a shared import. Unlike
+/// that function, [usageLog] here is always a phase-local list built
+/// fresh per call (see [_runLinearSteps]), not a shared log sliced by
+/// start index — safe because this harness's Pass 1 and Pass 2 calls are
+/// never concurrent with each other, unlike the parallel pipeline's own
+/// first-pass/naturalness-on-original phase.
+Future<T> _trackedLinearCall<T>(
+  List<ChatCompletionsUsage> usageLog,
+  Future<T> Function() call, {
+  required void Function(CallStats stats) onStats,
+}) async {
+  final stopwatch = Stopwatch()..start();
+  try {
+    return await call();
+  } finally {
+    stopwatch.stop();
+    onStats(statsFor(usageLog, wallClockMs: stopwatch.elapsedMilliseconds));
+  }
+}
+
 /// The intermediate values one serial Pass 1 -> Pass 2 execution
 /// produces, shared by [runLinearTwoPassPipeline] and
 /// [runLinearExecution] (issue #128) so the two never drift apart on
-/// what "the serial flow" actually does.
+/// what "the serial flow" actually does. [firstPassStats]/[secondPassStats]
+/// (issue #130) are real latency/token/cost, one [CallStats] per pass,
+/// captured the same way `two_pass_integration_harness.dart`'s own
+/// `runFixture` captures its phases' stats — no fallback stats field
+/// exists here at all, since this harness has no fallback call to
+/// measure (issue #130's own "do not include fallback latency or cost"
+/// scope, satisfied by construction rather than by an unused/zeroed
+/// field).
 class _LinearSteps {
   const _LinearSteps({
     required this.response,
     required this.firstPassCorrectedText,
     required this.lexicalReview,
+    required this.firstPassStats,
+    required this.secondPassStats,
   });
 
   final CorrectionResponse response;
   final String firstPassCorrectedText;
   final NaturalnessReview lexicalReview;
+  final CallStats firstPassStats;
+  final CallStats secondPassStats;
 }
 
 /// Runs the two-pass pipeline SERIALLY (issue #125, execution flow
@@ -525,22 +562,52 @@ class _LinearSteps {
 /// identically by production's own pipeline for its own single
 /// naturalness call), not a mechanism for choosing between competing
 /// pass results the way the parallel path's fallback decision is.
+///
+/// Builds one [OpenAiChatCompletionsClient] per pass (issue #130), each
+/// wrapping the same underlying [httpClient] transport but with its own
+/// isolated usage log — the same "one wrapper per phase, one shared
+/// transport" shape `two_pass_integration_harness.dart`'s own
+/// `runFixture` uses for its concurrent phase, needed here too so a
+/// call's [CallStats] never mixes in the other pass's tokens.
 Future<_LinearSteps> _runLinearSteps({
-  required OpenAiChatCompletionsClient client,
+  required String apiKey,
+  required HttpClient httpClient,
   required String firstPassModel,
   required String naturalnessModel,
   required String submittedText,
 }) async {
-  final firstPassResponse = await _callLinearFirstPassCorrection(
-    client: client,
-    model: firstPassModel,
-    submittedText: submittedText,
+  var firstPassStats = CallStats.zero;
+  final firstPassUsage = <ChatCompletionsUsage>[];
+  final firstPassClient = OpenAiChatCompletionsClient(
+    apiKey: apiKey,
+    httpClient: httpClient,
+    onUsage: firstPassUsage.add,
+  );
+  final firstPassResponse = await _trackedLinearCall(
+    firstPassUsage,
+    () => _callLinearFirstPassCorrection(
+      client: firstPassClient,
+      model: firstPassModel,
+      submittedText: submittedText,
+    ),
+    onStats: (stats) => firstPassStats = stats,
   );
 
-  final lexicalReview = await _callLinearLexicalReview(
-    client: client,
-    model: naturalnessModel,
-    text: firstPassResponse.correctedText,
+  var secondPassStats = CallStats.zero;
+  final secondPassUsage = <ChatCompletionsUsage>[];
+  final secondPassClient = OpenAiChatCompletionsClient(
+    apiKey: apiKey,
+    httpClient: httpClient,
+    onUsage: secondPassUsage.add,
+  );
+  final lexicalReview = await _trackedLinearCall(
+    secondPassUsage,
+    () => _callLinearLexicalReview(
+      client: secondPassClient,
+      model: naturalnessModel,
+      text: firstPassResponse.correctedText,
+    ),
+    onStats: (stats) => secondPassStats = stats,
   );
 
   final merge = mergeNaturalnessReview(
@@ -558,6 +625,8 @@ Future<_LinearSteps> _runLinearSteps({
     response: response,
     firstPassCorrectedText: firstPassResponse.correctedText,
     lexicalReview: lexicalReview,
+    firstPassStats: firstPassStats,
+    secondPassStats: secondPassStats,
   );
 }
 
@@ -568,13 +637,15 @@ Future<_LinearSteps> _runLinearSteps({
 /// when compared side-by-side against the parallel/production-equivalent
 /// path. See [_runLinearSteps] for what "serially" means here.
 Future<CorrectionResponse> runLinearTwoPassPipeline({
-  required OpenAiChatCompletionsClient client,
+  required String apiKey,
+  required HttpClient httpClient,
   required String firstPassModel,
   required String naturalnessModel,
   required String submittedText,
 }) async {
   final steps = await _runLinearSteps(
-    client: client,
+    apiKey: apiKey,
+    httpClient: httpClient,
     firstPassModel: firstPassModel,
     naturalnessModel: naturalnessModel,
     submittedText: submittedText,
@@ -596,6 +667,8 @@ class LinearExecutionResult {
     required this.finalCorrectedText,
     required this.score,
     required this.reason,
+    required this.firstPassStats,
+    required this.secondPassStats,
   });
 
   final TwoPassFixture fixture;
@@ -620,6 +693,20 @@ class LinearExecutionResult {
   final String finalCorrectedText;
   final TwoPassScoreLabel score;
   final String reason;
+
+  /// Real latency/tokens/cost for Pass 1 only (issue #130).
+  final CallStats firstPassStats;
+
+  /// Real latency/tokens/cost for Pass 2 (the lexical review) only
+  /// (issue #130).
+  final CallStats secondPassStats;
+
+  /// Pass 1 + Pass 2 only (issue #130's own "latency/cost totals equal
+  /// Pass 1 + Pass 2 only" acceptance criterion) — there is no fallback
+  /// stats field to add in, unlike
+  /// `two_pass_integration_harness.dart`'s `FixtureResult.totalStats`,
+  /// which also sums a (possibly zero) fallback phase.
+  CallStats get totalStats => firstPassStats + secondPassStats;
 }
 
 /// Runs [fixture] once (or once per call — see [runIndex]) through the
@@ -628,14 +715,16 @@ class LinearExecutionResult {
 /// wrapped with scoring. No parallel call, no fallback call, no
 /// comparison — for that, see [runLinearPipelineComparison].
 Future<LinearExecutionResult> runLinearExecution({
-  required OpenAiChatCompletionsClient client,
+  required String apiKey,
+  required HttpClient httpClient,
   required String firstPassModel,
   required String naturalnessModel,
   required TwoPassFixture fixture,
   int runIndex = 1,
 }) async {
   final steps = await _runLinearSteps(
-    client: client,
+    apiKey: apiKey,
+    httpClient: httpClient,
     firstPassModel: firstPassModel,
     naturalnessModel: naturalnessModel,
     submittedText: fixture.text,
@@ -646,6 +735,8 @@ Future<LinearExecutionResult> runLinearExecution({
     runIndex: runIndex,
     firstPassCorrectedText: steps.firstPassCorrectedText,
     lexicalReviewDescription: _describeReview(steps.lexicalReview),
+    firstPassStats: steps.firstPassStats,
+    secondPassStats: steps.secondPassStats,
     finalCorrectedText: steps.response.correctedText,
     score: _score(fixture, steps.response.correctedText),
     reason: _reasonFor(fixture, steps.response.correctedText),
@@ -752,6 +843,13 @@ String _reasonFor(TwoPassFixture fixture, String finalCorrectedText) {
       : 'Changed the text to something that does not match the expected '
             'output.';
 }
+
+/// Local copy of `two_pass_integration_harness.dart`'s own private
+/// `_formatCost` — same "unknown" fallback for a `null` estimate (a
+/// model with no verified pricing entry), kept separate per this
+/// harness's own "keep it separate" convention.
+String _formatCost(double? usd) =>
+    usd == null ? 'unknown' : '\$${usd.toStringAsFixed(6)}';
 
 /// Renders a one-row-per-[rowLabel] markdown table counting [labels] by
 /// every [TwoPassScoreLabel] value (issue #129) — the full benchmark
@@ -1225,10 +1323,59 @@ String buildLinearExecutionReport({
           ..writeln('- Reason: ${run.reason}');
       }
       buffer.writeln();
+
+      // Issue #130: per-run latency/cost by pass, so a slow or expensive
+      // run stays diagnosable even after the pass/fail rollup above
+      // discards it. No fallback column — this harness has none.
+      buffer
+        ..writeln(
+          '| Run | Pass 1 latency (ms) | Pass 1 cost | Pass 2 latency '
+          '(ms) | Pass 2 cost | Total latency (ms) | Total cost |',
+        )
+        ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
+      for (final run in group.runs) {
+        buffer.writeln(
+          '| ${run.runIndex} | ${run.firstPassStats.wallClockMs} | '
+          '${_formatCost(run.firstPassStats.costUsd)} | '
+          '${run.secondPassStats.wallClockMs} | '
+          '${_formatCost(run.secondPassStats.costUsd)} | '
+          '${run.totalStats.wallClockMs} | '
+          '${_formatCost(run.totalStats.costUsd)} |',
+        );
+      }
+      buffer.writeln();
     }
   }
 
   final totalPassCount = results.where((r) => isPassingScore(r.score)).length;
+  final totalFirstPassLatencyMs = results.fold<int>(
+    0,
+    (sum, r) => sum + r.firstPassStats.wallClockMs,
+  );
+  final totalSecondPassLatencyMs = results.fold<int>(
+    0,
+    (sum, r) => sum + r.secondPassStats.wallClockMs,
+  );
+  final totalLatencyMs = results.fold<int>(
+    0,
+    (sum, r) => sum + r.totalStats.wallClockMs,
+  );
+  final anyUnknownFirstPassCost = results.any(
+    (r) => r.firstPassStats.costUsd == null,
+  );
+  final anyUnknownSecondPassCost = results.any(
+    (r) => r.secondPassStats.costUsd == null,
+  );
+  final totalFirstPassCostUsd = anyUnknownFirstPassCost
+      ? null
+      : results.fold<double>(0, (sum, r) => sum + r.firstPassStats.costUsd!);
+  final totalSecondPassCostUsd = anyUnknownSecondPassCost
+      ? null
+      : results.fold<double>(0, (sum, r) => sum + r.secondPassStats.costUsd!);
+  final totalCostUsd = anyUnknownFirstPassCost || anyUnknownSecondPassCost
+      ? null
+      : totalFirstPassCostUsd! + totalSecondPassCostUsd!;
+
   buffer
     ..writeln('---')
     ..writeln()
@@ -1249,6 +1396,26 @@ String buildLinearExecutionReport({
       _scoreLabelBreakdownTable(
         rows: {'All runs': results.map((r) => r.score)},
       ),
+    )
+    ..writeln()
+    ..writeln(
+      '### Latency / cost by pass (issue #130 — no fallback phase '
+      'exists in this harness, so totals equal Pass 1 + Pass 2 only)',
+    )
+    ..writeln()
+    ..writeln('| Phase | Total latency (ms) | Total est. cost (USD) |')
+    ..writeln('| --- | --- | --- |')
+    ..writeln(
+      '| Pass 1 (first pass) | $totalFirstPassLatencyMs | '
+      '${_formatCost(totalFirstPassCostUsd)} |',
+    )
+    ..writeln(
+      '| Pass 2 (lexical review) | $totalSecondPassLatencyMs | '
+      '${_formatCost(totalSecondPassCostUsd)} |',
+    )
+    ..writeln(
+      '| **Total (Pass 1 + Pass 2)** | $totalLatencyMs | '
+      '${_formatCost(totalCostUsd)} |',
     );
 
   return buffer.toString();
@@ -1597,10 +1764,8 @@ void main() {
         );
 
         final response = await runLinearTwoPassPipeline(
-          client: OpenAiChatCompletionsClient(
-            apiKey: 'test-key',
-            httpClient: client,
-          ),
+          apiKey: 'test-key',
+          httpClient: client,
           firstPassModel: 'gpt-4.1',
           naturalnessModel: 'gpt-5.1',
           submittedText: fixtureText,
@@ -1649,10 +1814,8 @@ void main() {
         );
 
         final result = await runLinearExecution(
-          client: OpenAiChatCompletionsClient(
-            apiKey: 'test-key',
-            httpClient: client,
-          ),
+          apiKey: 'test-key',
+          httpClient: client,
           firstPassModel: 'gpt-4.1',
           naturalnessModel: 'gpt-5.1',
           fixture: fixture,
@@ -1667,6 +1830,12 @@ void main() {
         );
         expect(result.finalCorrectedText, fixture.expectedCorrectedText);
         expect(result.score, TwoPassScoreLabel.correctFix);
+        // Issue #130: each pass's own stats are captured, and the total
+        // is exactly their sum — no fallback contribution exists.
+        expect(
+          result.totalStats.wallClockMs,
+          result.firstPassStats.wallClockMs + result.secondPassStats.wallClockMs,
+        );
 
         // Issue #128's own acceptance criteria: Pass 2 receives Pass 1's
         // output, not the original text.
@@ -1681,6 +1850,81 @@ void main() {
         expect(client.naturalnessCallCount, 0);
         expect(client.linearFirstPassCallCount, 1);
         expect(client.linearLexicalReviewCallCount, 1);
+      },
+    );
+
+    test(
+      'runLinearExecution (issue #130) captures real per-pass latency '
+      'and cost, isolated per pass, with the total equal to exactly '
+      'Pass 1 + Pass 2',
+      () async {
+        final fixture = allTwoPassFixtures.firstWhere(
+          (f) => f.id == 'clean-grammar-only',
+        );
+        final client = _RoutingHttpClient(
+          linearFirstPassReply: jsonEncode({
+            'choices': [
+              {
+                'message': {
+                  'role': 'assistant',
+                  'content': jsonEncode({
+                    'corrected_text': fixture.expectedCorrectedText,
+                  }),
+                },
+              },
+            ],
+            'usage': {
+              'prompt_tokens': 100,
+              'completion_tokens': 20,
+              'total_tokens': 120,
+            },
+          }),
+          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+          originalText: fixture.text,
+          naturalnessOnOriginalReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+          linearLexicalReviewReply: jsonEncode({
+            'choices': [
+              {
+                'message': {
+                  'role': 'assistant',
+                  'content': '{"has_naturalness_issue": false, "issues": []}',
+                },
+              },
+            ],
+            'usage': {
+              'prompt_tokens': 40,
+              'completion_tokens': 10,
+              'total_tokens': 50,
+            },
+          }),
+        );
+
+        final result = await runLinearExecution(
+          apiKey: 'test-key',
+          httpClient: client,
+          firstPassModel: 'gpt-4.1',
+          naturalnessModel: 'gpt-5.1',
+          fixture: fixture,
+        );
+
+        // Each pass's own tokens are captured in isolation — never mixed
+        // with the other pass's usage.
+        expect(result.firstPassStats.totalTokens, 120);
+        expect(result.secondPassStats.totalTokens, 50);
+        expect(result.totalStats.totalTokens, 170);
+
+        // Real cost estimated from known gpt-4.1/gpt-5.1 pricing (never
+        // null here), and the total is exactly Pass 1 + Pass 2 — there
+        // is no fallback contribution to add in.
+        expect(result.firstPassStats.costUsd, isNotNull);
+        expect(result.secondPassStats.costUsd, isNotNull);
+        expect(
+          result.totalStats.costUsd,
+          result.firstPassStats.costUsd! + result.secondPassStats.costUsd!,
+        );
       },
     );
 
@@ -1811,6 +2055,16 @@ void main() {
             finalCorrectedText: fixture.expectedCorrectedText,
             score: TwoPassScoreLabel.correctFix,
             reason: 'Matches expected output.',
+            firstPassStats: const CallStats(
+              wallClockMs: 100,
+              totalTokens: 50,
+              costUsd: 0.001,
+            ),
+            secondPassStats: const CallStats(
+              wallClockMs: 200,
+              totalTokens: 80,
+              costUsd: 0.002,
+            ),
           ),
           LinearExecutionResult(
             fixture: fixture,
@@ -1820,6 +2074,16 @@ void main() {
             finalCorrectedText: fixture.text,
             score: TwoPassScoreLabel.missedIssue,
             reason: 'Did not match expected output.',
+            firstPassStats: const CallStats(
+              wallClockMs: 150,
+              totalTokens: 60,
+              costUsd: 0.0015,
+            ),
+            secondPassStats: const CallStats(
+              wallClockMs: 250,
+              totalTokens: 90,
+              costUsd: 0.0025,
+            ),
           ),
         ];
 
@@ -1833,6 +2097,36 @@ void main() {
         expect(report, contains('## ${fixture.languagePoint}'));
         expect(report, contains('### clean-grammar-only'));
         expect(report, contains('- Pass rate: 1/2'));
+
+        // Issue #130: per-run latency/cost by pass, plus overall totals
+        // equal to Pass 1 + Pass 2 only (no fallback phase).
+        expect(
+          report,
+          contains(
+            '| Run | Pass 1 latency (ms) | Pass 1 cost | Pass 2 latency '
+            '(ms) | Pass 2 cost | Total latency (ms) | Total cost |',
+          ),
+        );
+        expect(
+          report,
+          contains('| 1 | 100 | \$0.001000 | 200 | \$0.002000 | 300 | \$0.003000 |'),
+        );
+        expect(
+          report,
+          contains('| 2 | 150 | \$0.001500 | 250 | \$0.002500 | 400 | \$0.004000 |'),
+        );
+        expect(
+          report,
+          contains('| Pass 1 (first pass) | 250 | \$0.002500 |'),
+        );
+        expect(
+          report,
+          contains('| Pass 2 (lexical review) | 450 | \$0.004500 |'),
+        );
+        expect(
+          report,
+          contains('| **Total (Pass 1 + Pass 2)** | 700 | \$0.007000 |'),
+        );
         expect(report, contains('`${fixture.expectedCorrectedText}`'));
         expect(report, contains('`${fixture.text}`'));
         expect(report, contains('| Fixtures | 1 |'));
@@ -2013,16 +2307,13 @@ void main() {
       final fixtures = linearFixturesFrom(environment);
       final runsPerFixture = linearRunsPerFixtureFrom(environment);
       final httpClient = HttpClient();
-      final client = OpenAiChatCompletionsClient(
-        apiKey: apiKey,
-        httpClient: httpClient,
-      );
 
       final results = <LinearExecutionResult>[];
       for (final fixture in fixtures) {
         for (var runIndex = 1; runIndex <= runsPerFixture; runIndex++) {
           final result = await runLinearExecution(
-            client: client,
+            apiKey: apiKey,
+            httpClient: httpClient,
             firstPassModel: firstPassModel,
             naturalnessModel: naturalnessModel,
             fixture: fixture,
@@ -2033,7 +2324,9 @@ void main() {
           print(
             '=== ${fixture.id} (run $runIndex/$runsPerFixture) === '
             'final="${result.finalCorrectedText}" '
-            '(${result.score.reportLabel})',
+            '(${result.score.reportLabel}) '
+            'latency=${result.totalStats.wallClockMs}ms '
+            'cost=${_formatCost(result.totalStats.costUsd)}',
           );
           await Future<void>.delayed(Duration(milliseconds: callDelayMs));
         }
