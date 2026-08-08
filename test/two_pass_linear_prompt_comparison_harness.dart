@@ -1298,6 +1298,51 @@ String buildLinearExecutionReport({
   final buffer = StringBuffer()
     ..writeln('# Two-Pass Linear (Serial) Execution Flow (issue #128)')
     ..writeln()
+    ..writeln('## Methodology (issue #132)')
+    ..writeln()
+    ..writeln(
+      '**This is a proof-of-concept report for a SERIAL two-pass '
+      'architecture, not the production parallel/fallback pipeline.** '
+      'Numbers here describe a prototype under evaluation, not '
+      'production behavior — for the production-equivalent pipeline\'s '
+      'own report, see `buildLinearPipelineComparisonReport` (linear '
+      'vs. parallel, side by side) or '
+      '`two_pass_fallback_pipeline_comparison_harness.dart`\'s reports.',
+    )
+    ..writeln()
+    ..writeln(
+      '- **Pass 1** corrects grammar, spelling, and punctuation using '
+      'the revised first-pass prompt (issue #126, '
+      '`linearFirstPassPrompt`, sourced from '
+      '`Two-Pass_Prompt_Revision_Summary.docx`) with model '
+      '`$firstPassModel`.',
+    )
+    ..writeln(
+      '- **Pass 2** is a lexical-transfer review using the revised '
+      'second-pass prompt (issue #127, `linearSecondPassPrompt`, same '
+      'source document) with model `$naturalnessModel`. Pass 2 '
+      'reviews Pass 1\'s OWN corrected text, never the original '
+      'submitted text.',
+    )
+    ..writeln(
+      '- **No fallback path**: production\'s parallel pipeline re-runs '
+      'naturalness against the first-pass output only when its '
+      'concurrent merge conflicts. This serial flow never needs that '
+      '— Pass 2 always reviews the exact text it will be merged into, '
+      'so there is nothing left to fall back from.',
+    )
+    ..writeln(
+      '- **No parallel merge step**: Pass 1 and Pass 2 run one after '
+      'another, never concurrently, so there are never two independent '
+      'naturalness calls to reconcile the way production\'s pipeline '
+      'has.',
+    )
+    ..writeln(
+      '- **Purpose**: measure whether this simpler serial architecture '
+      'is as reliable, as fast, and as cheap as production\'s parallel '
+      '+ conditional-fallback design.',
+    )
+    ..writeln()
     ..writeln('## Run configuration')
     ..writeln()
     ..writeln('- First-pass model: `$firstPassModel`')
@@ -1305,18 +1350,6 @@ String buildLinearExecutionReport({
     ..writeln('- Fixture count: `${grouped.fixtureCount}`')
     ..writeln('- Total runs: `${results.length}`')
     ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
-    ..writeln()
-    ..writeln(
-      'Each fixture is sent through the standalone serial execution '
-      'flow (issue #128, `runLinearExecution`): Pass 1 uses the '
-      'revised first-pass prompt (issue #126, `linearFirstPassPrompt`); '
-      'Pass 2, a lexical review (issue #127, `linearSecondPassPrompt`), '
-      'receives Pass 1\'s own corrected text — never the original — and '
-      'its output is treated as the final corrected text directly. '
-      'There is no parallel call, no fallback call, and no comparison '
-      'against production in this report — for that, see '
-      '`buildLinearPipelineComparisonReport`.',
-    )
     ..writeln();
 
   // Issue #131: a top-level per-fixture rollup, same shape as
@@ -2176,6 +2209,47 @@ void main() {
           naturalnessModel: 'gpt-5.1',
           results: results,
           generatedAt: DateTime.utc(2026, 1, 1),
+        );
+
+        // Issue #132: methodology notes appear at the top, in plain
+        // English, explicitly distinguishing this from the production
+        // parallel/fallback report, and naming both the prompt source
+        // and the model configuration.
+        expect(report, contains('## Methodology'));
+        expect(
+          report,
+          contains(
+            'This is a proof-of-concept report for a SERIAL two-pass '
+            'architecture, not the production parallel/fallback '
+            'pipeline.',
+          ),
+        );
+        expect(
+          report,
+          contains('Pass 1\'s OWN corrected text, never the original'),
+        );
+        expect(report, contains('No fallback path'));
+        expect(report, contains('No parallel merge step'));
+        expect(
+          report,
+          contains(
+            'measure whether this simpler serial architecture is as '
+            'reliable, as fast, and as cheap as production\'s parallel '
+            '+ conditional-fallback design',
+          ),
+        );
+        expect(report, contains('Two-Pass_Prompt_Revision_Summary.docx'));
+        expect(report, contains('model `gpt-4.1`'));
+        expect(report, contains('model `gpt-5.1`'));
+        // Methodology appears before Run configuration, which appears
+        // before the per-fixture detail — "at the top" per the issue.
+        expect(
+          report.indexOf('## Methodology'),
+          lessThan(report.indexOf('## Run configuration')),
+        );
+        expect(
+          report.indexOf('## Run configuration'),
+          lessThan(report.indexOf('## Fixture summary')),
         );
 
         expect(report, contains('## ${fixture.languagePoint}'));
