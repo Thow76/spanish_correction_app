@@ -1121,9 +1121,7 @@ String buildLinearPipelineComparisonReport({
           '- Pass 1, parallel (current prompt): '
           '`${result.parallelFirstPassCorrectedText}`',
         )
-        ..writeln(
-          '- Parallel used fallback: ${result.parallelUsedFallback}',
-        )
+        ..writeln('- Parallel used fallback: ${result.parallelUsedFallback}')
         ..writeln()
         ..writeln(
           '| Architecture | Pass 2 signal | Final output | Score | '
@@ -1171,15 +1169,9 @@ String buildLinearPipelineComparisonReport({
     ..writeln('| Metric | Value |')
     ..writeln('| --- | --- |')
     ..writeln('| Fixtures | ${results.length} |')
-    ..writeln(
-      '| Fixtures where parallel would use fallback | $fallbackCount |',
-    )
-    ..writeln(
-      '| Linear pass rate | $linearPassCount/${results.length} |',
-    )
-    ..writeln(
-      '| Parallel pass rate | $parallelPassCount/${results.length} |',
-    )
+    ..writeln('| Fixtures where parallel would use fallback | $fallbackCount |')
+    ..writeln('| Linear pass rate | $linearPassCount/${results.length} |')
+    ..writeln('| Parallel pass rate | $parallelPassCount/${results.length} |')
     ..writeln('| Linear wins | $linearWins |')
     ..writeln('| Parallel wins | $parallelWins |')
     ..writeln('| Ties | $ties |')
@@ -1376,9 +1368,7 @@ String buildLinearExecutionReport({
       0,
       (sum, r) => sum + r.totalStats.wallClockMs,
     );
-    final anyUnknownCost = group.runs.any(
-      (r) => r.totalStats.costUsd == null,
-    );
+    final anyUnknownCost = group.runs.any((r) => r.totalStats.costUsd == null);
     final totalCostUsd = anyUnknownCost
         ? null
         : group.runs.fold<double>(0, (sum, r) => sum + r.totalStats.costUsd!);
@@ -1553,76 +1543,70 @@ void main() {
     });
 
     group('linearFirstPassPrompt (issue #126)', () {
-      test(
-        'matches the source document\'s exact wording — pinned so an '
-        'accidental future edit is caught rather than silently drifting '
-        'from Two-Pass_Prompt_Revision_Summary.docx',
-        () {
-          expect(
-            linearFirstPassPrompt,
-            'You are a Spanish language tutor reviewing a student\'s '
-            'writing.\n'
-            '\n'
-            'Your task is to correct only objective Spanish grammar, '
-            'spelling, and punctuation errors.\n'
-            '\n'
+      test('matches the source document\'s exact wording — pinned so an '
+          'accidental future edit is caught rather than silently drifting '
+          'from Two-Pass_Prompt_Revision_Summary.docx', () {
+        expect(
+          linearFirstPassPrompt,
+          'You are a Spanish language tutor reviewing a student\'s '
+          'writing.\n'
+          '\n'
+          'Your task is to correct only objective Spanish grammar, '
+          'spelling, and punctuation errors.\n'
+          '\n'
+          'Do not rewrite wording solely because another expression '
+          'would be more common, more idiomatic, more fluent, or '
+          'stylistically preferable.\n'
+          'Do not replace wording that is recognised as correct by '
+          'authoritative Spanish language references with another '
+          'accepted alternative.\n'
+          'Do not treat awkward but grammatically valid Spanish as an '
+          'error.\n'
+          '\n'
+          'Correct every objective grammar, spelling, and punctuation '
+          'error that you find.\n'
+          '\n'
+          'When a sentence contains more than one objective grammar '
+          'error, correct every instance, not only the first one. For '
+          'example:\n'
+          '\n'
+          '"Tengo cita con médico mañana."\n'
+          '\n'
+          'is missing both "una" before "cita" and "el" before '
+          '"médico", so correct it to:\n'
+          '\n'
+          '"Tengo una cita con el médico mañana."\n'
+          '\n'
+          'Return JSON only. Do not include Markdown or commentary.',
+        );
+      });
+
+      test('says only objective grammar/spelling/punctuation are in scope, '
+          'and explicitly excludes word choice, style, fluency, general '
+          'naturalness, and valid regional Spanish (acceptance criteria)', () {
+        expect(
+          linearFirstPassPrompt,
+          contains(
+            'correct only objective Spanish grammar, spelling, and '
+            'punctuation errors',
+          ),
+        );
+        expect(
+          linearFirstPassPrompt,
+          contains(
             'Do not rewrite wording solely because another expression '
             'would be more common, more idiomatic, more fluent, or '
-            'stylistically preferable.\n'
-            'Do not replace wording that is recognised as correct by '
-            'authoritative Spanish language references with another '
-            'accepted alternative.\n'
-            'Do not treat awkward but grammatically valid Spanish as an '
-            'error.\n'
-            '\n'
-            'Correct every objective grammar, spelling, and punctuation '
-            'error that you find.\n'
-            '\n'
-            'When a sentence contains more than one objective grammar '
-            'error, correct every instance, not only the first one. For '
-            'example:\n'
-            '\n'
-            '"Tengo cita con médico mañana."\n'
-            '\n'
-            'is missing both "una" before "cita" and "el" before '
-            '"médico", so correct it to:\n'
-            '\n'
-            '"Tengo una cita con el médico mañana."\n'
-            '\n'
-            'Return JSON only. Do not include Markdown or commentary.',
-          );
-        },
-      );
-
-      test(
-        'says only objective grammar/spelling/punctuation are in scope, '
-        'and explicitly excludes word choice, style, fluency, general '
-        'naturalness, and valid regional Spanish (acceptance criteria)',
-        () {
-          expect(
-            linearFirstPassPrompt,
-            contains(
-              'correct only objective Spanish grammar, spelling, and '
-              'punctuation errors',
-            ),
-          );
-          expect(
-            linearFirstPassPrompt,
-            contains(
-              'Do not rewrite wording solely because another expression '
-              'would be more common, more idiomatic, more fluent, or '
-              'stylistically preferable',
-            ),
-          );
-          expect(
-            linearFirstPassPrompt,
-            contains(
-              'Do not treat awkward but grammatically valid Spanish as '
-              'an error',
-            ),
-          );
-        },
-      );
+            'stylistically preferable',
+          ),
+        );
+        expect(
+          linearFirstPassPrompt,
+          contains(
+            'Do not treat awkward but grammatically valid Spanish as '
+            'an error',
+          ),
+        );
+      });
 
       test('requests a plain JSON reply with no wrapper commentary', () {
         expect(
@@ -1633,139 +1617,127 @@ void main() {
     });
 
     group('linearSecondPassPrompt (issue #127)', () {
-      test(
-        'matches the source document\'s exact wording — pinned so an '
-        'accidental future edit is caught rather than silently drifting '
-        'from Two-Pass_Prompt_Revision_Summary.docx',
-        () {
-          expect(
-            linearSecondPassPrompt,
-            'You are a Spanish language tutor reviewing text that has '
-            'already been checked for grammar, spelling, and '
-            'punctuation.\n'
-            '\n'
-            'Your task is to identify lexical issues that are not '
-            'recognised as correct by authoritative Spanish language '
-            'references.\n'
-            '\n'
-            'These include, but are not limited to:\n'
-            '\n'
-            '• lexical issues resulting from cross-linguistic '
-            'interference, including:\n'
-            '  - lexical calques (literal translations),\n'
-            '  - false friends (semantic transfer),\n'
-            '  - incorrect collocations resulting from language '
-            'transfer,\n'
-            '  - transferred idiomatic expressions.\n'
-            '\n'
-            '• other objectively incorrect lexical constructions.\n'
-            '\n'
-            'Do not report spelling, punctuation, or grammatical '
-            'errors.\n'
+      test('matches the source document\'s exact wording — pinned so an '
+          'accidental future edit is caught rather than silently drifting '
+          'from Two-Pass_Prompt_Revision_Summary.docx', () {
+        expect(
+          linearSecondPassPrompt,
+          'You are a Spanish language tutor reviewing text that has '
+          'already been checked for grammar, spelling, and '
+          'punctuation.\n'
+          '\n'
+          'Your task is to identify lexical issues that are not '
+          'recognised as correct by authoritative Spanish language '
+          'references.\n'
+          '\n'
+          'These include, but are not limited to:\n'
+          '\n'
+          '• lexical issues resulting from cross-linguistic '
+          'interference, including:\n'
+          '  - lexical calques (literal translations),\n'
+          '  - false friends (semantic transfer),\n'
+          '  - incorrect collocations resulting from language '
+          'transfer,\n'
+          '  - transferred idiomatic expressions.\n'
+          '\n'
+          '• other objectively incorrect lexical constructions.\n'
+          '\n'
+          'Do not report spelling, punctuation, or grammatical '
+          'errors.\n'
+          'If the only problem is grammar, spelling, or punctuation, '
+          'return no issue.\n'
+          '\n'
+          'Ignore spelling, punctuation, and grammar errors even if '
+          'they appear in the same sentence as a lexical issue.\n'
+          '\n'
+          'When correcting a lexical issue:\n'
+          '\n'
+          '• Replace only the lexical issue that you have '
+          'identified.\n'
+          '• Limit your changes to that lexical issue and any '
+          'unavoidable grammatical adjustments required by the '
+          'replacement.\n'
+          '• Preserve the original meaning.\n'
+          '• Do not add new information, new clauses, or new ideas.\n'
+          '• Do not remove information unless it forms part of the '
+          'lexical issue being corrected.\n'
+          '• Do not paraphrase or otherwise rewrite the sentence.\n'
+          '• Make only the smallest change necessary to eliminate the '
+          'lexical issue.\n'
+          '\n'
+          'Give exactly one replacement for each issue.\n'
+          'Never provide more than one replacement.\n'
+          'Never join alternatives with a slash, "or", or a list.\n'
+          'If more than one replacement is possible, choose the one '
+          'that requires the smallest change to the original sentence '
+          'while fully resolving the lexical issue.\n'
+          '\n'
+          'Return JSON only.',
+        );
+      });
+
+      test('ignores grammar, spelling, and punctuation as its own '
+          'categories (acceptance criteria)', () {
+        expect(
+          linearSecondPassPrompt,
+          contains(
+            'Do not report spelling, punctuation, or grammatical errors',
+          ),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains(
             'If the only problem is grammar, spelling, or punctuation, '
-            'return no issue.\n'
-            '\n'
+            'return no issue',
+          ),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains(
             'Ignore spelling, punctuation, and grammar errors even if '
-            'they appear in the same sentence as a lexical issue.\n'
-            '\n'
-            'When correcting a lexical issue:\n'
-            '\n'
-            '• Replace only the lexical issue that you have '
-            'identified.\n'
-            '• Limit your changes to that lexical issue and any '
-            'unavoidable grammatical adjustments required by the '
-            'replacement.\n'
-            '• Preserve the original meaning.\n'
-            '• Do not add new information, new clauses, or new ideas.\n'
-            '• Do not remove information unless it forms part of the '
-            'lexical issue being corrected.\n'
-            '• Do not paraphrase or otherwise rewrite the sentence.\n'
-            '• Make only the smallest change necessary to eliminate the '
-            'lexical issue.\n'
-            '\n'
-            'Give exactly one replacement for each issue.\n'
-            'Never provide more than one replacement.\n'
-            'Never join alternatives with a slash, "or", or a list.\n'
-            'If more than one replacement is possible, choose the one '
-            'that requires the smallest change to the original sentence '
-            'while fully resolving the lexical issue.\n'
-            '\n'
-            'Return JSON only.',
-          );
-        },
-      );
+            'they appear in the same sentence as a lexical issue',
+          ),
+        );
+      });
 
-      test(
-        'ignores grammar, spelling, and punctuation as its own '
-        'categories (acceptance criteria)',
-        () {
-          expect(
-            linearSecondPassPrompt,
-            contains('Do not report spelling, punctuation, or grammatical errors'),
-          );
-          expect(
-            linearSecondPassPrompt,
-            contains(
-              'If the only problem is grammar, spelling, or punctuation, '
-              'return no issue',
-            ),
-          );
-          expect(
-            linearSecondPassPrompt,
-            contains(
-              'Ignore spelling, punctuation, and grammar errors even if '
-              'they appear in the same sentence as a lexical issue',
-            ),
-          );
-        },
-      );
+      test('is constrained to minimal lexical intervention (acceptance '
+          'criteria)', () {
+        expect(
+          linearSecondPassPrompt,
+          contains('Replace only the lexical issue that you have identified'),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains('Preserve the original meaning'),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains('Do not paraphrase or otherwise rewrite the sentence'),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains(
+            'Make only the smallest change necessary to eliminate the '
+            'lexical issue',
+          ),
+        );
+      });
 
-      test(
-        'is constrained to minimal lexical intervention (acceptance '
-        'criteria)',
-        () {
-          expect(
-            linearSecondPassPrompt,
-            contains('Replace only the lexical issue that you have identified'),
-          );
-          expect(
-            linearSecondPassPrompt,
-            contains('Preserve the original meaning'),
-          );
-          expect(
-            linearSecondPassPrompt,
-            contains('Do not paraphrase or otherwise rewrite the sentence'),
-          );
-          expect(
-            linearSecondPassPrompt,
-            contains(
-              'Make only the smallest change necessary to eliminate the '
-              'lexical issue',
-            ),
-          );
-        },
-      );
-
-      test(
-        'requires exactly one replacement, never multiple or '
-        'slash-separated alternatives (acceptance criteria)',
-        () {
-          expect(
-            linearSecondPassPrompt,
-            contains('Give exactly one replacement for each issue'),
-          );
-          expect(
-            linearSecondPassPrompt,
-            contains('Never provide more than one replacement'),
-          );
-          expect(
-            linearSecondPassPrompt,
-            contains(
-              'Never join alternatives with a slash, "or", or a list',
-            ),
-          );
-        },
-      );
+      test('requires exactly one replacement, never multiple or '
+          'slash-separated alternatives (acceptance criteria)', () {
+        expect(
+          linearSecondPassPrompt,
+          contains('Give exactly one replacement for each issue'),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains('Never provide more than one replacement'),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains('Never join alternatives with a slash, "or", or a list'),
+        );
+      });
 
       test('targets the named objective lexical transfer categories', () {
         expect(linearSecondPassPrompt, contains('lexical calques'));
@@ -1802,17 +1774,14 @@ void main() {
         expect(() => linearFixturesFor('bogus'), throwsArgumentError);
       });
 
-      test(
-        'linearFixturesFrom reads TWO_PASS_LINEAR_FIXTURE_SET from a '
-        'real environment, defaulting to "comparison" when unset',
-        () {
-          expect(linearFixturesFrom(const {}), linearComparisonFixtures);
-          expect(
-            linearFixturesFrom(const {'TWO_PASS_LINEAR_FIXTURE_SET': 'all'}),
-            allTwoPassFixtures,
-          );
-        },
-      );
+      test('linearFixturesFrom reads TWO_PASS_LINEAR_FIXTURE_SET from a '
+          'real environment, defaulting to "comparison" when unset', () {
+        expect(linearFixturesFrom(const {}), linearComparisonFixtures);
+        expect(
+          linearFixturesFrom(const {'TWO_PASS_LINEAR_FIXTURE_SET': 'all'}),
+          allTwoPassFixtures,
+        );
+      });
     });
 
     group('linearRunsPerFixtureFrom (issue #128)', () {
@@ -1856,254 +1825,227 @@ void main() {
       expect(linearCallDelayMsFrom(const {}), 750);
     });
 
-    test(
-      'runLinearTwoPassPipeline uses linearFirstPassPrompt (issue #126) '
-      'for its first pass and linearSecondPassPrompt (issue #127) for '
-      'its lexical review — never production\'s prompts — and makes '
-      'exactly two calls total',
-      () async {
-        const fixtureText = 'Vi mucho trafico ayer.';
-        final client = _RoutingHttpClient(
-          linearFirstPassReply: _firstPassEnvelope('Vi mucho tráfico ayer.'),
-          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
-          originalText: fixtureText,
-          naturalnessOnOriginalReply: _naturalnessEnvelope(
-            'unused in this test',
-          ),
-          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
-          linearLexicalReviewReply: _naturalnessEnvelope(
-            '{"has_naturalness_issue": true, "issues": ['
-            '{"span": "Vi mucho tráfico ayer.", '
-            '"natural_replacement": "Había mucho tráfico ayer.", '
-            '"explanation": "Calque."}'
-            ']}',
-          ),
-        );
+    test('runLinearTwoPassPipeline uses linearFirstPassPrompt (issue #126) '
+        'for its first pass and linearSecondPassPrompt (issue #127) for '
+        'its lexical review — never production\'s prompts — and makes '
+        'exactly two calls total', () async {
+      const fixtureText = 'Vi mucho trafico ayer.';
+      final client = _RoutingHttpClient(
+        linearFirstPassReply: _firstPassEnvelope('Vi mucho tráfico ayer.'),
+        parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+        originalText: fixtureText,
+        naturalnessOnOriginalReply: _naturalnessEnvelope('unused in this test'),
+        parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+        linearLexicalReviewReply: _naturalnessEnvelope(
+          '{"has_naturalness_issue": true, "issues": ['
+          '{"span": "Vi mucho tráfico ayer.", '
+          '"natural_replacement": "Había mucho tráfico ayer.", '
+          '"explanation": "Calque."}'
+          ']}',
+        ),
+      );
 
-        final response = await runLinearTwoPassPipeline(
-          apiKey: 'test-key',
-          httpClient: client,
-          firstPassModel: 'gpt-4.1',
-          naturalnessModel: 'gpt-5.1',
-          submittedText: fixtureText,
-        );
+      final response = await runLinearTwoPassPipeline(
+        apiKey: 'test-key',
+        httpClient: client,
+        firstPassModel: 'gpt-4.1',
+        naturalnessModel: 'gpt-5.1',
+        submittedText: fixtureText,
+      );
 
-        // Applied the linear lexical review reply.
-        expect(response.correctedText, 'Había mucho tráfico ayer.');
-        expect(client.linearFirstPassCallCount, 1);
-        expect(client.parallelFirstPassCallCount, 0);
-        expect(client.linearLexicalReviewCallCount, 1);
-        // Never touches production's naturalnessReviewSpanish at all.
-        expect(client.naturalnessCallCount, 0);
-        // Issue #127's own "run the second pass on the first-pass
-        // corrected text, not on the original text" requirement: the
-        // lexical review call targeted the first-pass output ("Vi mucho
-        // tráfico ayer.", with accent), not the original submitted text
-        // ("Vi mucho trafico ayer.", without one).
-        expect(
-          client.capturedLinearLexicalReviewUserText,
-          buildNaturalnessUserContent('Vi mucho tráfico ayer.'),
-        );
-      },
-    );
+      // Applied the linear lexical review reply.
+      expect(response.correctedText, 'Había mucho tráfico ayer.');
+      expect(client.linearFirstPassCallCount, 1);
+      expect(client.parallelFirstPassCallCount, 0);
+      expect(client.linearLexicalReviewCallCount, 1);
+      // Never touches production's naturalnessReviewSpanish at all.
+      expect(client.naturalnessCallCount, 0);
+      // Issue #127's own "run the second pass on the first-pass
+      // corrected text, not on the original text" requirement: the
+      // lexical review call targeted the first-pass output ("Vi mucho
+      // tráfico ayer.", with accent), not the original submitted text
+      // ("Vi mucho trafico ayer.", without one).
+      expect(
+        client.capturedLinearLexicalReviewUserText,
+        buildNaturalnessUserContent('Vi mucho tráfico ayer.'),
+      );
+    });
 
-    test(
-      'runLinearExecution (issue #128) runs the serial flow with no '
-      'parallel call and no fallback call, and its Pass 2 receives Pass '
-      '1\'s output, not the original text',
-      () async {
-        final fixture = allTwoPassFixtures.firstWhere(
-          (f) => f.id == 'clean-grammar-only',
-        );
-        final client = _RoutingHttpClient(
-          linearFirstPassReply: _firstPassEnvelope(
-            fixture.expectedCorrectedText,
-          ),
-          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
-          originalText: fixture.text,
-          naturalnessOnOriginalReply: _naturalnessEnvelope(
-            'unused in this test',
-          ),
-          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
-          linearLexicalReviewReply: _naturalnessEnvelope(
-            '{"has_naturalness_issue": false, "issues": []}',
-          ),
-        );
+    test('runLinearExecution (issue #128) runs the serial flow with no '
+        'parallel call and no fallback call, and its Pass 2 receives Pass '
+        '1\'s output, not the original text', () async {
+      final fixture = allTwoPassFixtures.firstWhere(
+        (f) => f.id == 'clean-grammar-only',
+      );
+      final client = _RoutingHttpClient(
+        linearFirstPassReply: _firstPassEnvelope(fixture.expectedCorrectedText),
+        parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+        originalText: fixture.text,
+        naturalnessOnOriginalReply: _naturalnessEnvelope('unused in this test'),
+        parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+        linearLexicalReviewReply: _naturalnessEnvelope(
+          '{"has_naturalness_issue": false, "issues": []}',
+        ),
+      );
 
-        final result = await runLinearExecution(
-          apiKey: 'test-key',
-          httpClient: client,
-          firstPassModel: 'gpt-4.1',
-          naturalnessModel: 'gpt-5.1',
-          fixture: fixture,
-          runIndex: 3,
-        );
+      final result = await runLinearExecution(
+        apiKey: 'test-key',
+        httpClient: client,
+        firstPassModel: 'gpt-4.1',
+        naturalnessModel: 'gpt-5.1',
+        fixture: fixture,
+        runIndex: 3,
+      );
 
-        expect(result.fixture, fixture);
-        expect(result.runIndex, 3);
-        expect(
-          result.firstPassCorrectedText,
-          fixture.expectedCorrectedText,
-        );
-        expect(result.finalCorrectedText, fixture.expectedCorrectedText);
-        expect(result.score, TwoPassScoreLabel.correctFix);
-        // Issue #130: each pass's own stats are captured, and the total
-        // is exactly their sum — no fallback contribution exists.
-        expect(
-          result.totalStats.wallClockMs,
-          result.firstPassStats.wallClockMs + result.secondPassStats.wallClockMs,
-        );
+      expect(result.fixture, fixture);
+      expect(result.runIndex, 3);
+      expect(result.firstPassCorrectedText, fixture.expectedCorrectedText);
+      expect(result.finalCorrectedText, fixture.expectedCorrectedText);
+      expect(result.score, TwoPassScoreLabel.correctFix);
+      // Issue #130: each pass's own stats are captured, and the total
+      // is exactly their sum — no fallback contribution exists.
+      expect(
+        result.totalStats.wallClockMs,
+        result.firstPassStats.wallClockMs + result.secondPassStats.wallClockMs,
+      );
 
-        // Issue #128's own acceptance criteria: Pass 2 receives Pass 1's
-        // output, not the original text.
-        expect(
-          client.capturedLinearLexicalReviewUserText,
-          buildNaturalnessUserContent(fixture.expectedCorrectedText),
-        );
+      // Issue #128's own acceptance criteria: Pass 2 receives Pass 1's
+      // output, not the original text.
+      expect(
+        client.capturedLinearLexicalReviewUserText,
+        buildNaturalnessUserContent(fixture.expectedCorrectedText),
+      );
 
-        // No parallel merge path and no fallback call are ever invoked
-        // by the standalone serial execution flow.
-        expect(client.parallelFirstPassCallCount, 0);
-        expect(client.naturalnessCallCount, 0);
-        expect(client.linearFirstPassCallCount, 1);
-        expect(client.linearLexicalReviewCallCount, 1);
-      },
-    );
+      // No parallel merge path and no fallback call are ever invoked
+      // by the standalone serial execution flow.
+      expect(client.parallelFirstPassCallCount, 0);
+      expect(client.naturalnessCallCount, 0);
+      expect(client.linearFirstPassCallCount, 1);
+      expect(client.linearLexicalReviewCallCount, 1);
+    });
 
-    test(
-      'runLinearExecution (issue #130) captures real per-pass latency '
-      'and cost, isolated per pass, with the total equal to exactly '
-      'Pass 1 + Pass 2',
-      () async {
-        final fixture = allTwoPassFixtures.firstWhere(
-          (f) => f.id == 'clean-grammar-only',
-        );
-        final client = _RoutingHttpClient(
-          linearFirstPassReply: jsonEncode({
-            'choices': [
-              {
-                'message': {
-                  'role': 'assistant',
-                  'content': jsonEncode({
-                    'corrected_text': fixture.expectedCorrectedText,
-                  }),
-                },
+    test('runLinearExecution (issue #130) captures real per-pass latency '
+        'and cost, isolated per pass, with the total equal to exactly '
+        'Pass 1 + Pass 2', () async {
+      final fixture = allTwoPassFixtures.firstWhere(
+        (f) => f.id == 'clean-grammar-only',
+      );
+      final client = _RoutingHttpClient(
+        linearFirstPassReply: jsonEncode({
+          'choices': [
+            {
+              'message': {
+                'role': 'assistant',
+                'content': jsonEncode({
+                  'corrected_text': fixture.expectedCorrectedText,
+                }),
               },
-            ],
-            'usage': {
-              'prompt_tokens': 100,
-              'completion_tokens': 20,
-              'total_tokens': 120,
             },
-          }),
-          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
-          originalText: fixture.text,
-          naturalnessOnOriginalReply: _naturalnessEnvelope(
-            'unused in this test',
-          ),
-          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
-          linearLexicalReviewReply: jsonEncode({
-            'choices': [
-              {
-                'message': {
-                  'role': 'assistant',
-                  'content': '{"has_naturalness_issue": false, "issues": []}',
-                },
+          ],
+          'usage': {
+            'prompt_tokens': 100,
+            'completion_tokens': 20,
+            'total_tokens': 120,
+          },
+        }),
+        parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+        originalText: fixture.text,
+        naturalnessOnOriginalReply: _naturalnessEnvelope('unused in this test'),
+        parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+        linearLexicalReviewReply: jsonEncode({
+          'choices': [
+            {
+              'message': {
+                'role': 'assistant',
+                'content': '{"has_naturalness_issue": false, "issues": []}',
               },
-            ],
-            'usage': {
-              'prompt_tokens': 40,
-              'completion_tokens': 10,
-              'total_tokens': 50,
             },
-          }),
-        );
+          ],
+          'usage': {
+            'prompt_tokens': 40,
+            'completion_tokens': 10,
+            'total_tokens': 50,
+          },
+        }),
+      );
 
-        final result = await runLinearExecution(
-          apiKey: 'test-key',
-          httpClient: client,
-          firstPassModel: 'gpt-4.1',
-          naturalnessModel: 'gpt-5.1',
-          fixture: fixture,
-        );
+      final result = await runLinearExecution(
+        apiKey: 'test-key',
+        httpClient: client,
+        firstPassModel: 'gpt-4.1',
+        naturalnessModel: 'gpt-5.1',
+        fixture: fixture,
+      );
 
-        // Each pass's own tokens are captured in isolation — never mixed
-        // with the other pass's usage.
-        expect(result.firstPassStats.totalTokens, 120);
-        expect(result.secondPassStats.totalTokens, 50);
-        expect(result.totalStats.totalTokens, 170);
+      // Each pass's own tokens are captured in isolation — never mixed
+      // with the other pass's usage.
+      expect(result.firstPassStats.totalTokens, 120);
+      expect(result.secondPassStats.totalTokens, 50);
+      expect(result.totalStats.totalTokens, 170);
 
-        // Real cost estimated from known gpt-4.1/gpt-5.1 pricing (never
-        // null here), and the total is exactly Pass 1 + Pass 2 — there
-        // is no fallback contribution to add in.
-        expect(result.firstPassStats.costUsd, isNotNull);
-        expect(result.secondPassStats.costUsd, isNotNull);
-        expect(
-          result.totalStats.costUsd,
-          result.firstPassStats.costUsd! + result.secondPassStats.costUsd!,
-        );
-      },
-    );
+      // Real cost estimated from known gpt-4.1/gpt-5.1 pricing (never
+      // null here), and the total is exactly Pass 1 + Pass 2 — there
+      // is no fallback contribution to add in.
+      expect(result.firstPassStats.costUsd, isNotNull);
+      expect(result.secondPassStats.costUsd, isNotNull);
+      expect(
+        result.totalStats.costUsd,
+        result.firstPassStats.costUsd! + result.secondPassStats.costUsd!,
+      );
+    });
 
-    test(
-      'runLinearExecution (issue #133) never retries, falls back, or '
-      'touches the parallel path even when Pass 2 proposes an edit that '
-      'does not match Pass 1\'s own output — a scenario that would '
-      'trigger the parallel pipeline\'s fallback/conflict-resolution '
-      'path, but has no equivalent branch here at all',
-      () async {
-        final fixture = allTwoPassFixtures.firstWhere(
-          (f) => f.id == 'clean-grammar-only',
-        );
-        final client = _RoutingHttpClient(
-          linearFirstPassReply: _firstPassEnvelope(
-            fixture.expectedCorrectedText,
-          ),
-          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
-          originalText: fixture.text,
-          naturalnessOnOriginalReply: _naturalnessEnvelope(
-            'unused in this test',
-          ),
-          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
-          // Flags a span that only exists in the ORIGINAL text, not in
-          // Pass 1's own corrected output — the same kind of mismatch
-          // that makes the parallel pipeline's merge conflict and
-          // rerun naturalness as a fallback (see the
-          // runLinearPipelineComparison conflict test above). The
-          // merge here just skips the edit (spanNotFound); there is no
-          // retry/fallback code path in _runLinearSteps to trigger.
-          linearLexicalReviewReply: _naturalnessEnvelope(
-            '{"has_naturalness_issue": true, "issues": ['
-            '{"span": "${fixture.text}", '
-            '"natural_replacement": "Something else entirely.", '
-            '"explanation": "Does not match Pass 1 output."}'
-            ']}',
-          ),
-        );
+    test('runLinearExecution (issue #133) never retries, falls back, or '
+        'touches the parallel path even when Pass 2 proposes an edit that '
+        'does not match Pass 1\'s own output — a scenario that would '
+        'trigger the parallel pipeline\'s fallback/conflict-resolution '
+        'path, but has no equivalent branch here at all', () async {
+      final fixture = allTwoPassFixtures.firstWhere(
+        (f) => f.id == 'clean-grammar-only',
+      );
+      final client = _RoutingHttpClient(
+        linearFirstPassReply: _firstPassEnvelope(fixture.expectedCorrectedText),
+        parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+        originalText: fixture.text,
+        naturalnessOnOriginalReply: _naturalnessEnvelope('unused in this test'),
+        parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+        // Flags a span that only exists in the ORIGINAL text, not in
+        // Pass 1's own corrected output — the same kind of mismatch
+        // that makes the parallel pipeline's merge conflict and
+        // rerun naturalness as a fallback (see the
+        // runLinearPipelineComparison conflict test above). The
+        // merge here just skips the edit (spanNotFound); there is no
+        // retry/fallback code path in _runLinearSteps to trigger.
+        linearLexicalReviewReply: _naturalnessEnvelope(
+          '{"has_naturalness_issue": true, "issues": ['
+          '{"span": "${fixture.text}", '
+          '"natural_replacement": "Something else entirely.", '
+          '"explanation": "Does not match Pass 1 output."}'
+          ']}',
+        ),
+      );
 
-        final result = await runLinearExecution(
-          apiKey: 'test-key',
-          httpClient: client,
-          firstPassModel: 'gpt-4.1',
-          naturalnessModel: 'gpt-5.1',
-          fixture: fixture,
-        );
+      final result = await runLinearExecution(
+        apiKey: 'test-key',
+        httpClient: client,
+        firstPassModel: 'gpt-4.1',
+        naturalnessModel: 'gpt-5.1',
+        fixture: fixture,
+      );
 
-        // The mismatched edit was skipped, not retried or escalated —
-        // the final text is exactly Pass 1's own output, unchanged.
-        expect(result.finalCorrectedText, fixture.expectedCorrectedText);
+      // The mismatched edit was skipped, not retried or escalated —
+      // the final text is exactly Pass 1's own output, unchanged.
+      expect(result.finalCorrectedText, fixture.expectedCorrectedText);
 
-        // Exactly one call per pass — no retry of either.
-        expect(client.linearFirstPassCallCount, 1);
-        expect(client.linearLexicalReviewCallCount, 1);
+      // Exactly one call per pass — no retry of either.
+      expect(client.linearFirstPassCallCount, 1);
+      expect(client.linearLexicalReviewCallCount, 1);
 
-        // No parallel merge/conflict/fallback path was ever invoked —
-        // protects the serial architecture from an accidental
-        // reintroduction of that branch.
-        expect(client.parallelFirstPassCallCount, 0);
-        expect(client.naturalnessCallCount, 0);
-      },
-    );
+      // No parallel merge/conflict/fallback path was ever invoked —
+      // protects the serial architecture from an accidental
+      // reintroduction of that branch.
+      expect(client.parallelFirstPassCallCount, 0);
+      expect(client.naturalnessCallCount, 0);
+    });
 
     test(
       'runLinearPipelineComparison (issues #126, #127) makes two '
@@ -2161,360 +2103,340 @@ void main() {
       },
     );
 
-    test(
-      'buildLinearPipelineComparisonReport groups fixtures by language '
-      'point and renders both architectures',
-      () {
-        final fixture = allTwoPassFixtures.firstWhere(
-          (f) => f.id == 'clean-grammar-only',
-        );
-        final result = LinearPipelineComparisonResult(
+    test('buildLinearPipelineComparisonReport groups fixtures by language '
+        'point and renders both architectures', () {
+      final fixture = allTwoPassFixtures.firstWhere(
+        (f) => f.id == 'clean-grammar-only',
+      );
+      final result = LinearPipelineComparisonResult(
+        fixture: fixture,
+        linearFirstPassCorrectedText: fixture.expectedCorrectedText,
+        linearLexicalReviewDescription: '(none)',
+        linearCorrectedText: fixture.expectedCorrectedText,
+        linearScore: TwoPassScoreLabel.correctFix,
+        linearReason: 'Matches expected output.',
+        parallelFirstPassCorrectedText: fixture.expectedCorrectedText,
+        parallelNaturalnessOnOriginalDescription: '(none)',
+        parallelUsedFallback: false,
+        parallelCorrectedText: fixture.expectedCorrectedText,
+        parallelScore: TwoPassScoreLabel.correctFix,
+        parallelReason: 'Matches expected output.',
+      );
+
+      final report = buildLinearPipelineComparisonReport(
+        firstPassModel: 'gpt-4.1',
+        naturalnessModel: 'gpt-5.1',
+        results: [result],
+        generatedAt: DateTime.utc(2026, 1, 1),
+      );
+
+      expect(report, contains('## ${fixture.languagePoint}'));
+      expect(report, contains('### clean-grammar-only'));
+      expect(report, contains('Linear (serial)'));
+      expect(report, contains('Parallel (production-equivalent)'));
+      expect(report, contains('| Linear pass rate | 1/1 |'));
+      expect(report, contains('| Parallel pass rate | 1/1 |'));
+
+      // Issue #129: the full benchmark taxonomy is preserved in the
+      // overall summary, not collapsed to only pass/fail.
+      expect(report, contains('### Score breakdown'));
+      expect(
+        report,
+        contains(
+          '| | Total | correct_fix | partial_fix | missed_issue | '
+          'overcorrection | acceptable_no_change | ambiguous | error |',
+        ),
+      );
+      expect(report, contains('| Linear | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'));
+      expect(report, contains('| Parallel | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'));
+    });
+
+    test('buildLinearExecutionReport (issue #128) groups fixtures by '
+        'language point and rolls up repeated runs into a pass count and '
+        'distinct outputs', () {
+      final fixture = allTwoPassFixtures.firstWhere(
+        (f) => f.id == 'clean-grammar-only',
+      );
+      final results = [
+        LinearExecutionResult(
           fixture: fixture,
-          linearFirstPassCorrectedText: fixture.expectedCorrectedText,
-          linearLexicalReviewDescription: '(none)',
-          linearCorrectedText: fixture.expectedCorrectedText,
-          linearScore: TwoPassScoreLabel.correctFix,
-          linearReason: 'Matches expected output.',
-          parallelFirstPassCorrectedText: fixture.expectedCorrectedText,
-          parallelNaturalnessOnOriginalDescription: '(none)',
-          parallelUsedFallback: false,
-          parallelCorrectedText: fixture.expectedCorrectedText,
-          parallelScore: TwoPassScoreLabel.correctFix,
-          parallelReason: 'Matches expected output.',
-        );
-
-        final report = buildLinearPipelineComparisonReport(
-          firstPassModel: 'gpt-4.1',
-          naturalnessModel: 'gpt-5.1',
-          results: [result],
-          generatedAt: DateTime.utc(2026, 1, 1),
-        );
-
-        expect(report, contains('## ${fixture.languagePoint}'));
-        expect(report, contains('### clean-grammar-only'));
-        expect(report, contains('Linear (serial)'));
-        expect(report, contains('Parallel (production-equivalent)'));
-        expect(report, contains('| Linear pass rate | 1/1 |'));
-        expect(report, contains('| Parallel pass rate | 1/1 |'));
-
-        // Issue #129: the full benchmark taxonomy is preserved in the
-        // overall summary, not collapsed to only pass/fail.
-        expect(report, contains('### Score breakdown'));
-        expect(
-          report,
-          contains(
-            '| | Total | correct_fix | partial_fix | missed_issue | '
-            'overcorrection | acceptable_no_change | ambiguous | error |',
+          runIndex: 1,
+          firstPassCorrectedText: fixture.expectedCorrectedText,
+          lexicalReviewDescription: '(none)',
+          finalCorrectedText: fixture.expectedCorrectedText,
+          score: TwoPassScoreLabel.correctFix,
+          reason: 'Matches expected output.',
+          firstPassStats: const CallStats(
+            wallClockMs: 100,
+            totalTokens: 50,
+            costUsd: 0.001,
           ),
-        );
-        expect(report, contains('| Linear | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'));
-        expect(
-          report,
-          contains('| Parallel | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'),
-        );
-      },
-    );
+          secondPassStats: const CallStats(
+            wallClockMs: 200,
+            totalTokens: 80,
+            costUsd: 0.002,
+          ),
+        ),
+        LinearExecutionResult(
+          fixture: fixture,
+          runIndex: 2,
+          firstPassCorrectedText: fixture.text,
+          lexicalReviewDescription: '(none)',
+          finalCorrectedText: fixture.text,
+          score: TwoPassScoreLabel.missedIssue,
+          reason: 'Did not match expected output.',
+          firstPassStats: const CallStats(
+            wallClockMs: 150,
+            totalTokens: 60,
+            costUsd: 0.0015,
+          ),
+          secondPassStats: const CallStats(
+            wallClockMs: 250,
+            totalTokens: 90,
+            costUsd: 0.0025,
+          ),
+        ),
+      ];
 
-    test(
-      'buildLinearExecutionReport (issue #128) groups fixtures by '
-      'language point and rolls up repeated runs into a pass count and '
-      'distinct outputs',
-      () {
-        final fixture = allTwoPassFixtures.firstWhere(
-          (f) => f.id == 'clean-grammar-only',
-        );
-        final results = [
+      final report = buildLinearExecutionReport(
+        firstPassModel: 'gpt-4.1',
+        naturalnessModel: 'gpt-5.1',
+        results: results,
+        generatedAt: DateTime.utc(2026, 1, 1),
+      );
+
+      // Issue #132: methodology notes appear at the top, in plain
+      // English, explicitly distinguishing this from the production
+      // parallel/fallback report, and naming both the prompt source
+      // and the model configuration.
+      expect(report, contains('## Methodology'));
+      expect(
+        report,
+        contains(
+          'This is a proof-of-concept report for a SERIAL two-pass '
+          'architecture, not the production parallel/fallback '
+          'pipeline.',
+        ),
+      );
+      expect(
+        report,
+        contains('Pass 1\'s OWN corrected text, never the original'),
+      );
+      expect(report, contains('No fallback path'));
+      expect(report, contains('No parallel merge step'));
+      expect(
+        report,
+        contains(
+          'measure whether this simpler serial architecture is as '
+          'reliable, as fast, and as cheap as production\'s parallel '
+          '+ conditional-fallback design',
+        ),
+      );
+      expect(report, contains('Two-Pass_Prompt_Revision_Summary.docx'));
+      expect(report, contains('model `gpt-4.1`'));
+      expect(report, contains('model `gpt-5.1`'));
+      // Methodology appears before Run configuration, which appears
+      // before the per-fixture detail — "at the top" per the issue.
+      expect(
+        report.indexOf('## Methodology'),
+        lessThan(report.indexOf('## Run configuration')),
+      );
+      expect(
+        report.indexOf('## Run configuration'),
+        lessThan(report.indexOf('## Fixture summary')),
+      );
+
+      expect(report, contains('## ${fixture.languagePoint}'));
+      expect(report, contains('### clean-grammar-only'));
+      expect(report, contains('- Pass rate: 1/2'));
+
+      // Issue #131 review finding: each run needs an explicit
+      // Pass/fail value alongside its Score, not just the fixture's
+      // rolled-up pass rate.
+      expect(
+        report,
+        contains(
+          '| Run | Pass 1 output | Pass 2 signal | Final output | '
+          'Score | Pass/fail | Reason |',
+        ),
+      );
+      expect(
+        report,
+        contains(
+          '| 1 | `${fixture.expectedCorrectedText}` | (none) | '
+          '`${fixture.expectedCorrectedText}` | correct_fix | Pass | '
+          'Matches expected output.',
+        ),
+      );
+      expect(
+        report,
+        contains(
+          '| 2 | `${fixture.text}` | (none) | `${fixture.text}` | '
+          'missed_issue | Fail | Did not match expected output.',
+        ),
+      );
+
+      // Issue #130: per-run latency/cost by pass, plus overall totals
+      // equal to Pass 1 + Pass 2 only (no fallback phase).
+      expect(
+        report,
+        contains(
+          '| Run | Pass 1 latency (ms) | Pass 1 cost | Pass 2 latency '
+          '(ms) | Pass 2 cost | Total latency (ms) | Total cost |',
+        ),
+      );
+      expect(
+        report,
+        contains(
+          '| 1 | 100 | \$0.001000 | 200 | \$0.002000 | 300 | \$0.003000 |',
+        ),
+      );
+      expect(
+        report,
+        contains(
+          '| 2 | 150 | \$0.001500 | 250 | \$0.002500 | 400 | \$0.004000 |',
+        ),
+      );
+      expect(report, contains('| Pass 1 (first pass) | 250 | \$0.002500 |'));
+      expect(
+        report,
+        contains('| Pass 2 (lexical review) | 450 | \$0.004500 |'),
+      );
+      expect(
+        report,
+        contains('| **Total (Pass 1 + Pass 2)** | 700 | \$0.007000 |'),
+      );
+
+      // Issue #131: a top-level fixture summary row rolls up runs,
+      // pass rate, distinct outputs, and total latency/cost — same
+      // shape as the fallback harness's own "Per-fixture summary".
+      expect(report, contains('## Fixture summary'));
+      expect(
+        report,
+        contains(
+          '| Fixture | Language point | Runs | Pass rate | Distinct '
+          'final outputs | Total latency (ms) | Total cost |',
+        ),
+      );
+      expect(
+        report,
+        contains(
+          '| clean-grammar-only | ${fixture.languagePoint} | 2 | 1/2 | '
+          '`${fixture.expectedCorrectedText}`; `${fixture.text}` | 700 '
+          '| \$0.007000 |',
+        ),
+      );
+      expect(report, contains('`${fixture.expectedCorrectedText}`'));
+      expect(report, contains('`${fixture.text}`'));
+      expect(report, contains('| Fixtures | 1 |'));
+      expect(report, contains('| Total runs | 2 |'));
+      expect(report, contains('| Pass rate | 1/2 |'));
+
+      // Issue #129: one correct_fix run and one missed_issue run stay
+      // distinguishable in the overall summary, not merged into a
+      // single pass/fail count.
+      expect(report, contains('### Score breakdown'));
+      expect(report, contains('| All runs | 2 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |'));
+    });
+
+    test('buildLinearExecutionReport (issue #133) renders all five runs '
+        'for a fixture run through the 5x sweep — a regression that '
+        'silently dropped or truncated runs would be caught here', () {
+      final fixture = allTwoPassFixtures.firstWhere(
+        (f) => f.id == 'clean-grammar-only',
+      );
+      final results = [
+        for (var runIndex = 1; runIndex <= 5; runIndex++)
           LinearExecutionResult(
             fixture: fixture,
-            runIndex: 1,
+            runIndex: runIndex,
             firstPassCorrectedText: fixture.expectedCorrectedText,
             lexicalReviewDescription: '(none)',
             finalCorrectedText: fixture.expectedCorrectedText,
             score: TwoPassScoreLabel.correctFix,
             reason: 'Matches expected output.',
             firstPassStats: const CallStats(
-              wallClockMs: 100,
-              totalTokens: 50,
-              costUsd: 0.001,
+              wallClockMs: 10,
+              totalTokens: 5,
+              costUsd: 0.0001,
             ),
             secondPassStats: const CallStats(
-              wallClockMs: 200,
-              totalTokens: 80,
-              costUsd: 0.002,
+              wallClockMs: 20,
+              totalTokens: 10,
+              costUsd: 0.0002,
             ),
           ),
-          LinearExecutionResult(
-            fixture: fixture,
-            runIndex: 2,
-            firstPassCorrectedText: fixture.text,
-            lexicalReviewDescription: '(none)',
-            finalCorrectedText: fixture.text,
-            score: TwoPassScoreLabel.missedIssue,
-            reason: 'Did not match expected output.',
-            firstPassStats: const CallStats(
-              wallClockMs: 150,
-              totalTokens: 60,
-              costUsd: 0.0015,
-            ),
-            secondPassStats: const CallStats(
-              wallClockMs: 250,
-              totalTokens: 90,
-              costUsd: 0.0025,
-            ),
-          ),
-        ];
+      ];
 
-        final report = buildLinearExecutionReport(
-          firstPassModel: 'gpt-4.1',
-          naturalnessModel: 'gpt-5.1',
-          results: results,
-          generatedAt: DateTime.utc(2026, 1, 1),
-        );
+      final report = buildLinearExecutionReport(
+        firstPassModel: 'gpt-4.1',
+        naturalnessModel: 'gpt-5.1',
+        results: results,
+        generatedAt: DateTime.utc(2026, 1, 1),
+      );
 
-        // Issue #132: methodology notes appear at the top, in plain
-        // English, explicitly distinguishing this from the production
-        // parallel/fallback report, and naming both the prompt source
-        // and the model configuration.
-        expect(report, contains('## Methodology'));
+      expect(report, contains('- Pass rate: 5/5'));
+      expect(report, contains('| Fixtures | 1 |'));
+      expect(report, contains('| Total runs | 5 |'));
+      expect(report, contains('| Pass rate | 5/5 |'));
+      // Every run row is present in both per-run tables — none
+      // dropped or truncated.
+      for (var runIndex = 1; runIndex <= 5; runIndex++) {
         expect(
           report,
           contains(
-            'This is a proof-of-concept report for a SERIAL two-pass '
-            'architecture, not the production parallel/fallback '
-            'pipeline.',
-          ),
-        );
-        expect(
-          report,
-          contains('Pass 1\'s OWN corrected text, never the original'),
-        );
-        expect(report, contains('No fallback path'));
-        expect(report, contains('No parallel merge step'));
-        expect(
-          report,
-          contains(
-            'measure whether this simpler serial architecture is as '
-            'reliable, as fast, and as cheap as production\'s parallel '
-            '+ conditional-fallback design',
-          ),
-        );
-        expect(report, contains('Two-Pass_Prompt_Revision_Summary.docx'));
-        expect(report, contains('model `gpt-4.1`'));
-        expect(report, contains('model `gpt-5.1`'));
-        // Methodology appears before Run configuration, which appears
-        // before the per-fixture detail — "at the top" per the issue.
-        expect(
-          report.indexOf('## Methodology'),
-          lessThan(report.indexOf('## Run configuration')),
-        );
-        expect(
-          report.indexOf('## Run configuration'),
-          lessThan(report.indexOf('## Fixture summary')),
-        );
-
-        expect(report, contains('## ${fixture.languagePoint}'));
-        expect(report, contains('### clean-grammar-only'));
-        expect(report, contains('- Pass rate: 1/2'));
-
-        // Issue #131 review finding: each run needs an explicit
-        // Pass/fail value alongside its Score, not just the fixture's
-        // rolled-up pass rate.
-        expect(
-          report,
-          contains(
-            '| Run | Pass 1 output | Pass 2 signal | Final output | '
-            'Score | Pass/fail | Reason |',
+            '| $runIndex | `${fixture.expectedCorrectedText}` | (none) '
+            '| `${fixture.expectedCorrectedText}` | correct_fix | Pass '
+            '| Matches expected output.',
           ),
         );
         expect(
           report,
           contains(
-            '| 1 | `${fixture.expectedCorrectedText}` | (none) | '
-            '`${fixture.expectedCorrectedText}` | correct_fix | Pass | '
-            'Matches expected output.',
+            '| $runIndex | 10 | \$0.000100 | 20 | \$0.000200 | 30 | \$0.000300 |',
           ),
         );
-        expect(
-          report,
-          contains(
-            '| 2 | `${fixture.text}` | (none) | `${fixture.text}` | '
-            'missed_issue | Fail | Did not match expected output.',
-          ),
-        );
+      }
+      expect(
+        report,
+        contains(
+          '| clean-grammar-only | ${fixture.languagePoint} | 5 | 5/5 | '
+          '`${fixture.expectedCorrectedText}` | 150 | \$0.001500 |',
+        ),
+      );
+    });
 
-        // Issue #130: per-run latency/cost by pass, plus overall totals
-        // equal to Pass 1 + Pass 2 only (no fallback phase).
-        expect(
-          report,
-          contains(
-            '| Run | Pass 1 latency (ms) | Pass 1 cost | Pass 2 latency '
-            '(ms) | Pass 2 cost | Total latency (ms) | Total cost |',
-          ),
-        );
-        expect(
-          report,
-          contains('| 1 | 100 | \$0.001000 | 200 | \$0.002000 | 300 | \$0.003000 |'),
-        );
-        expect(
-          report,
-          contains('| 2 | 150 | \$0.001500 | 250 | \$0.002500 | 400 | \$0.004000 |'),
-        );
-        expect(
-          report,
-          contains('| Pass 1 (first pass) | 250 | \$0.002500 |'),
-        );
-        expect(
-          report,
-          contains('| Pass 2 (lexical review) | 450 | \$0.004500 |'),
-        );
-        expect(
-          report,
-          contains('| **Total (Pass 1 + Pass 2)** | 700 | \$0.007000 |'),
-        );
+    test('_scoreLabelBreakdownTable (issue #129) always shows every '
+        'taxonomy column, even at zero, and pass/fail is not the only '
+        'signal it reports', () {
+      final table = _scoreLabelBreakdownTable(
+        rows: {
+          'Row A': [TwoPassScoreLabel.correctFix],
+          'Row B': [
+            TwoPassScoreLabel.partialFix,
+            TwoPassScoreLabel.overcorrection,
+            TwoPassScoreLabel.ambiguous,
+          ],
+        },
+      );
 
-        // Issue #131: a top-level fixture summary row rolls up runs,
-        // pass rate, distinct outputs, and total latency/cost — same
-        // shape as the fallback harness's own "Per-fixture summary".
-        expect(report, contains('## Fixture summary'));
-        expect(
-          report,
-          contains(
-            '| Fixture | Language point | Runs | Pass rate | Distinct '
-            'final outputs | Total latency (ms) | Total cost |',
-          ),
-        );
-        expect(
-          report,
-          contains(
-            '| clean-grammar-only | ${fixture.languagePoint} | 2 | 1/2 | '
-            '`${fixture.expectedCorrectedText}`; `${fixture.text}` | 700 '
-            '| \$0.007000 |',
-          ),
-        );
-        expect(report, contains('`${fixture.expectedCorrectedText}`'));
-        expect(report, contains('`${fixture.text}`'));
-        expect(report, contains('| Fixtures | 1 |'));
-        expect(report, contains('| Total runs | 2 |'));
-        expect(report, contains('| Pass rate | 1/2 |'));
+      for (final label in TwoPassScoreLabel.values) {
+        expect(table, contains(label.reportLabel));
+      }
+      expect(table, contains('| Row A | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'));
+      expect(table, contains('| Row B | 3 | 0 | 1 | 0 | 1 | 0 | 1 | 0 |'));
+    });
 
-        // Issue #129: one correct_fix run and one missed_issue run stay
-        // distinguishable in the overall summary, not merged into a
-        // single pass/fail count.
-        expect(report, contains('### Score breakdown'));
-        expect(
-          report,
-          contains(
-            '| All runs | 2 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |',
-          ),
-        );
-      },
-    );
-
-    test(
-      'buildLinearExecutionReport (issue #133) renders all five runs '
-      'for a fixture run through the 5x sweep — a regression that '
-      'silently dropped or truncated runs would be caught here',
-      () {
-        final fixture = allTwoPassFixtures.firstWhere(
-          (f) => f.id == 'clean-grammar-only',
-        );
-        final results = [
-          for (var runIndex = 1; runIndex <= 5; runIndex++)
-            LinearExecutionResult(
-              fixture: fixture,
-              runIndex: runIndex,
-              firstPassCorrectedText: fixture.expectedCorrectedText,
-              lexicalReviewDescription: '(none)',
-              finalCorrectedText: fixture.expectedCorrectedText,
-              score: TwoPassScoreLabel.correctFix,
-              reason: 'Matches expected output.',
-              firstPassStats: const CallStats(
-                wallClockMs: 10,
-                totalTokens: 5,
-                costUsd: 0.0001,
-              ),
-              secondPassStats: const CallStats(
-                wallClockMs: 20,
-                totalTokens: 10,
-                costUsd: 0.0002,
-              ),
-            ),
-        ];
-
-        final report = buildLinearExecutionReport(
-          firstPassModel: 'gpt-4.1',
-          naturalnessModel: 'gpt-5.1',
-          results: results,
-          generatedAt: DateTime.utc(2026, 1, 1),
-        );
-
-        expect(report, contains('- Pass rate: 5/5'));
-        expect(report, contains('| Fixtures | 1 |'));
-        expect(report, contains('| Total runs | 5 |'));
-        expect(report, contains('| Pass rate | 5/5 |'));
-        // Every run row is present in both per-run tables — none
-        // dropped or truncated.
-        for (var runIndex = 1; runIndex <= 5; runIndex++) {
-          expect(
-            report,
-            contains(
-              '| $runIndex | `${fixture.expectedCorrectedText}` | (none) '
-              '| `${fixture.expectedCorrectedText}` | correct_fix | Pass '
-              '| Matches expected output.',
-            ),
-          );
-          expect(
-            report,
-            contains('| $runIndex | 10 | \$0.000100 | 20 | \$0.000200 | 30 | \$0.000300 |'),
-          );
-        }
-        expect(
-          report,
-          contains(
-            '| clean-grammar-only | ${fixture.languagePoint} | 5 | 5/5 | '
-            '`${fixture.expectedCorrectedText}` | 150 | \$0.001500 |',
-          ),
-        );
-      },
-    );
-
-    test(
-      '_scoreLabelBreakdownTable (issue #129) always shows every '
-      'taxonomy column, even at zero, and pass/fail is not the only '
-      'signal it reports',
-      () {
-        final table = _scoreLabelBreakdownTable(
-          rows: {
-            'Row A': [TwoPassScoreLabel.correctFix],
-            'Row B': [
-              TwoPassScoreLabel.partialFix,
-              TwoPassScoreLabel.overcorrection,
-              TwoPassScoreLabel.ambiguous,
-            ],
-          },
-        );
-
-        for (final label in TwoPassScoreLabel.values) {
-          expect(table, contains(label.reportLabel));
-        }
-        expect(table, contains('| Row A | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |'));
-        expect(table, contains('| Row B | 3 | 0 | 1 | 0 | 1 | 0 | 1 | 0 |'));
-      },
-    );
-
-    test(
-      'isPassingScore (issue #129) matches this harness\'s own pass/fail '
-      'mapping: pass is exactly correct_fix or acceptable_no_change',
-      () {
-        expect(isPassingScore(TwoPassScoreLabel.correctFix), isTrue);
-        expect(isPassingScore(TwoPassScoreLabel.acceptableNoChange), isTrue);
-        expect(isPassingScore(TwoPassScoreLabel.partialFix), isFalse);
-        expect(isPassingScore(TwoPassScoreLabel.missedIssue), isFalse);
-        expect(isPassingScore(TwoPassScoreLabel.overcorrection), isFalse);
-        expect(isPassingScore(TwoPassScoreLabel.ambiguous), isFalse);
-        expect(isPassingScore(TwoPassScoreLabel.error), isFalse);
-      },
-    );
+    test('isPassingScore (issue #129) matches this harness\'s own pass/fail '
+        'mapping: pass is exactly correct_fix or acceptable_no_change', () {
+      expect(isPassingScore(TwoPassScoreLabel.correctFix), isTrue);
+      expect(isPassingScore(TwoPassScoreLabel.acceptableNoChange), isTrue);
+      expect(isPassingScore(TwoPassScoreLabel.partialFix), isFalse);
+      expect(isPassingScore(TwoPassScoreLabel.missedIssue), isFalse);
+      expect(isPassingScore(TwoPassScoreLabel.overcorrection), isFalse);
+      expect(isPassingScore(TwoPassScoreLabel.ambiguous), isFalse);
+      expect(isPassingScore(TwoPassScoreLabel.error), isFalse);
+    });
   });
 
   test(
@@ -2801,9 +2723,7 @@ class _RoutingRequest implements HttpClientRequest {
     }
     if (systemPrompt == firstPassCorrectionSpanish) {
       client.parallelFirstPassCallCount++;
-      return _FakeHttpClientResponse(
-        replyBody: client.parallelFirstPassReply,
-      );
+      return _FakeHttpClientResponse(replyBody: client.parallelFirstPassReply);
     }
     if (systemPrompt == linearSecondPassPrompt) {
       client.linearLexicalReviewCallCount++;
