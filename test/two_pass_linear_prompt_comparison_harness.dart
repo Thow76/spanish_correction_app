@@ -230,11 +230,12 @@ const String linearFirstPassPrompt =
     '\n'
     '"Tengo una cita con el médico mañana."\n'
     '\n'
-    'Alongside the corrected text, list each correction you made as a '
-    'JSON object with the original phrase you changed, the phrase you '
-    'changed it to, and a short category label of your own choosing '
-    'for the kind of error it was. If you made no corrections, return '
-    'an empty list.\n'
+    'Alongside the corrected text, list each change you made as a JSON '
+    'object with the text as it was before the change, the text as it '
+    'is after the change, and a short label of your own choosing for '
+    'what kind of change it was. Where you removed words, give enough '
+    'surrounding text on both sides that the change is clear. If you '
+    'made no changes, return an empty list.\n'
     '\n'
     'Return JSON only. Do not include Markdown or commentary.';
 
@@ -1920,11 +1921,29 @@ void main() {
           // rather than one clean sentence indistinguishable from
           // untouched text — the #135 evidence behind follow-up #147's
           // largest failure cluster.
-          'Alongside the corrected text, list each correction you made '
-          'as a JSON object with the original phrase you changed, the '
-          'phrase you changed it to, and a short category label of '
-          'your own choosing for the kind of error it was. If you made '
-          'no corrections, return an empty list.\n'
+          //
+          // Issue #164: reframed this same paragraph — still a
+          // divergence from the source document, not a new one. The
+          // original wording ("each correction... the original phrase
+          // you changed... the kind of error it was") framed every
+          // change as a substitution-of-one-phrase-for-another and as
+          // an "error". A deletion (removing a redundant repeated
+          // subject pronoun — grammatically correct Spanish, just
+          // unnecessary) is neither: #164's own probe evidence showed
+          // Pass 1 simply stopped making that edit once the reporting
+          // requirement excluded it from the frame. Reworded to "each
+          // change... the text as it was before/after... what kind of
+          // change" so a deletion fits, with an explicit removal
+          // instruction (give enough surrounding text that the change
+          // is clear) making explicit what the one still-passing
+          // control fixture already did spontaneously.
+          'Alongside the corrected text, list each change you made as '
+          'a JSON object with the text as it was before the change, '
+          'the text as it is after the change, and a short label of '
+          'your own choosing for what kind of change it was. Where '
+          'you removed words, give enough surrounding text on both '
+          'sides that the change is clear. If you made no changes, '
+          'return an empty list.\n'
           '\n'
           'Return JSON only. Do not include Markdown or commentary.',
         );
