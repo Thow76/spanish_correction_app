@@ -202,9 +202,9 @@ const String linearFirstPassPrompt =
     'Do not rewrite wording solely because another expression would be '
     'more common, more idiomatic, more fluent, or stylistically '
     'preferable.\n'
-    'Do not replace wording that is recognised as correct by '
-    'authoritative Spanish language references with another accepted '
-    'alternative.\n'
+    'Do not add, remove, or replace words in a phrase that is '
+    'recognised as correct by authoritative Spanish language '
+    'references, even when the result would also be correct.\n'
     'Do not treat awkward but grammatically valid Spanish as an error.\n'
     '\n'
     'Correct every objective grammar, spelling, and punctuation error '
@@ -1543,9 +1543,10 @@ void main() {
     });
 
     group('linearFirstPassPrompt (issue #126)', () {
-      test('matches the source document\'s exact wording — pinned so an '
+      test('matches the source document\'s exact wording (with one '
+          'deliberate, recorded divergence — see below) — pinned so an '
           'accidental future edit is caught rather than silently drifting '
-          'from Two-Pass_Prompt_Revision_Summary.docx', () {
+          'further from Two-Pass_Prompt_Revision_Summary.docx', () {
         expect(
           linearFirstPassPrompt,
           'You are a Spanish language tutor reviewing a student\'s '
@@ -1557,9 +1558,18 @@ void main() {
           'Do not rewrite wording solely because another expression '
           'would be more common, more idiomatic, more fluent, or '
           'stylistically preferable.\n'
-          'Do not replace wording that is recognised as correct by '
-          'authoritative Spanish language references with another '
-          'accepted alternative.\n'
+          // Issue #154: deliberately diverges from the source document
+          // here. The original "do not replace" line only forbade
+          // swapping in an alternative — it said nothing about adding
+          // to a phrase that's already correct, which is exactly what
+          // #150's live evidence showed the first pass doing (inserting
+          // an unrequested article into valid regional Spanish,
+          // "voy para casa" -> "voy para la casa"). This line now
+          // forbids adding, removing, or replacing words in an
+          // already-correct phrase, not just replacing them.
+          'Do not add, remove, or replace words in a phrase that is '
+          'recognised as correct by authoritative Spanish language '
+          'references, even when the result would also be correct.\n'
           'Do not treat awkward but grammatically valid Spanish as an '
           'error.\n'
           '\n'
