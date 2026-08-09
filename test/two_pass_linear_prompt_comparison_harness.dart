@@ -140,7 +140,9 @@ import 'package:spanish_correction_app/core/services/prompts/correction_prompt.d
 import 'package:spanish_correction_app/features/corrections/data/first_pass_correction_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/naturalness_review_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
+import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_correction_mapper.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_merge.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
@@ -220,22 +222,219 @@ const String linearFirstPassPrompt =
     '\n'
     '"Tengo una cita con el médico mañana."\n'
     '\n'
+    'Alongside the corrected text, list each correction you made as a '
+    'JSON object with the original phrase you changed, the phrase you '
+    'changed it to, and a short category label of your own choosing '
+    'for the kind of error it was. If you made no corrections, return '
+    'an empty list.\n'
+    '\n'
     'Return JSON only. Do not include Markdown or commentary.';
+
+/// The JSON shape [linearFirstPassPrompt] now requires (issue #156):
+/// `{"corrected_text": "string", "corrections": [{"original_phrase",
+/// "corrected_phrase", "category"}, ...]}`. **Not**
+/// [firstPassCorrectionResponseFormat] (`correction_prompt.dart`) — that
+/// schema is production's own, used directly by production's
+/// `callFirstPassCorrection`, and its `additionalProperties: false`
+/// means a model constrained to it literally cannot return a
+/// `corrections` field at all. This is a harness-local schema, not a
+/// modification of the production one. `category` is deliberately left
+/// as an unconstrained string in the schema (no enum) — issue #156's own
+/// "observe what vocabulary the model naturally produces... do not add
+/// a category list to the prompt" — and `occurrence`/position data is
+/// deliberately not requested at all (also issue #156, "explicitly out
+/// of scope").
+const Map<String, Object?> _linearFirstPassResponseFormat = {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'linear_first_pass_correction_response',
+    'strict': true,
+    'schema': {
+      'type': 'object',
+      'additionalProperties': false,
+      'required': ['corrected_text', 'corrections'],
+      'properties': {
+        'corrected_text': {'type': 'string'},
+        'corrections': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'additionalProperties': false,
+            'required': ['original_phrase', 'corrected_phrase', 'category'],
+            'properties': {
+              'original_phrase': {'type': 'string'},
+              'corrected_phrase': {'type': 'string'},
+              'category': {'type': 'string'},
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+/// One correction as [linearFirstPassPrompt]'s reply reports it, before
+/// validation (issue #156) — [category] is the model's own raw,
+/// unconstrained label, not yet mapped to [ErrorCategory].
+class _LinearFirstPassRawCorrection {
+  const _LinearFirstPassRawCorrection({
+    required this.originalPhrase,
+    required this.correctedPhrase,
+    required this.category,
+  });
+
+  final String originalPhrase;
+  final String correctedPhrase;
+  final String category;
+}
+
+/// A parsed (not yet validated) [_linearFirstPassResponseFormat] reply.
+class _LinearFirstPassParsedReply {
+  const _LinearFirstPassParsedReply({
+    required this.correctedText,
+    required this.corrections,
+  });
+
+  final String correctedText;
+  final List<_LinearFirstPassRawCorrection> corrections;
+}
+
+/// Parses a [linearFirstPassPrompt] reply into [_LinearFirstPassParsedReply]
+/// — same defensive brace-extraction approach as production's
+/// `parseFirstPassCorrectionResponse` (tolerates Markdown fences or
+/// trailing commentary around the JSON object), extended to also read
+/// the `corrections` array this harness-local schema adds. Throws a
+/// [FormatException] under the same conditions
+/// `parseFirstPassCorrectionResponse` does — no object found, doesn't
+/// decode to one, or `corrected_text` missing/not a string. A missing or
+/// malformed `corrections` array is tolerated as empty rather than
+/// thrown on, since `additionalProperties: false` plus `required`
+/// already makes the API itself enforce the field's presence and shape
+/// under `strict: true` — this fallback is defense in depth, not the
+/// primary guarantee.
+_LinearFirstPassParsedReply _parseLinearFirstPassResponse(
+  String replyText,
+) {
+  final trimmed = replyText.trim();
+  final start = trimmed.indexOf('{');
+  final end = trimmed.lastIndexOf('}');
+  if (start == -1 || end == -1 || end <= start) {
+    throw const FormatException(
+      'No JSON object found in linear first-pass correction reply.',
+    );
+  }
+
+  final decoded = jsonDecode(trimmed.substring(start, end + 1));
+  if (decoded is! Map<String, Object?>) {
+    throw const FormatException(
+      'Linear first-pass correction reply did not decode to an object.',
+    );
+  }
+
+  final correctedText = decoded['corrected_text'];
+  if (correctedText is! String) {
+    throw const FormatException(
+      'Linear first-pass correction reply is missing "corrected_text".',
+    );
+  }
+
+  final rawCorrections = decoded['corrections'];
+  final corrections = rawCorrections is List
+      ? rawCorrections
+            .whereType<Map<String, Object?>>()
+            .map(
+              (item) => _LinearFirstPassRawCorrection(
+                originalPhrase: item['original_phrase'] as String? ?? '',
+                correctedPhrase: item['corrected_phrase'] as String? ?? '',
+                category: item['category'] as String? ?? '',
+              ),
+            )
+            .toList()
+      : const <_LinearFirstPassRawCorrection>[];
+
+  return _LinearFirstPassParsedReply(
+    correctedText: correctedText,
+    corrections: corrections,
+  );
+}
+
+/// Validates each raw correction against [submittedText]/[correctedText]
+/// (issue #156's own "model-reported spans can't be trusted blindly" —
+/// `mergeNaturalnessReview` already drops a non-matching span silently
+/// elsewhere in this harness, and the same risk applies here) and builds
+/// real [CorrectionItem]s for the ones that pass. A correction is kept
+/// only if [_LinearFirstPassRawCorrection.originalPhrase] is a genuine,
+/// non-empty substring of [submittedText] AND
+/// [_LinearFirstPassRawCorrection.correctedPhrase] is a genuine,
+/// non-empty substring of [correctedText] — the empty-string checks
+/// matter because `''.contains('')` and `x.contains('')` are always
+/// true in Dart, so an empty phrase would otherwise pass a bare
+/// `.contains` check on any text. Anything that fails is dropped and
+/// logged (printed), never silently discarded, per issue #156's own
+/// explicit requirement.
+///
+/// [CorrectionItem.category] requires an [ErrorCategory] enum value,
+/// but this harness's own [category] input is deliberately unconstrained
+/// free text (issue #156) — there is no list to map against yet ("map
+/// to the project's seven categories mechanically in the service layer
+/// later" is explicitly out of scope here). `ErrorCategory.fromLabel`
+/// (not the stricter `fromApiLabel`, which throws on an unrecognized
+/// label) is used so an unmapped raw category never crashes the
+/// harness, falling back to [ErrorCategory.other] — and the raw label
+/// itself is preserved in [CorrectionItem.shortExplanation] rather than
+/// silently lost to that fallback, so the actual vocabulary the model
+/// produced stays observable on the item, not just the mapped bucket.
+List<CorrectionItem> _validateLinearFirstPassCorrections({
+  required String submittedText,
+  required String correctedText,
+  required List<_LinearFirstPassRawCorrection> raw,
+}) {
+  final validated = <CorrectionItem>[];
+  for (final correction in raw) {
+    final originalFound =
+        correction.originalPhrase.isNotEmpty &&
+        submittedText.contains(correction.originalPhrase);
+    final correctedFound =
+        correction.correctedPhrase.isNotEmpty &&
+        correctedText.contains(correction.correctedPhrase);
+    if (!originalFound || !correctedFound) {
+      // ignore: avoid_print
+      print(
+        '[linear_first_pass_correction] dropped unverifiable correction: '
+        'original_phrase="${correction.originalPhrase}" (found in '
+        'submitted text: $originalFound), corrected_phrase='
+        '"${correction.correctedPhrase}" (found in corrected text: '
+        '$correctedFound), category="${correction.category}"',
+      );
+      continue;
+    }
+    validated.add(
+      CorrectionItem(
+        originalPhrase: correction.originalPhrase,
+        correctedPhrase: correction.correctedPhrase,
+        category: ErrorCategory.fromLabel(correction.category),
+        shortExplanation: correction.category,
+      ),
+    );
+  }
+  return validated;
+}
 
 /// Calls [linearFirstPassPrompt] against [submittedText] and parses the
 /// reply, mirroring `callFirstPassCorrection`'s exact call shape
 /// (`first_pass_correction_client.dart`) — same `stageLabel`, same
-/// [firstPassCorrectionResponseFormat] JSON schema (reused unchanged:
-/// issue #126's own "add [the JSON wrapper] mechanically without
-/// changing the prompt's intended contract" — the revised prompt's
-/// contract is still exactly `{"corrected_text": "string"}`, so the
-/// existing schema is reused rather than redefined), and the same
-/// [buildFirstPassCorrectionUserContent]/[parseFirstPassCorrectionResponse]
-/// helpers — with only the system prompt text swapped for
-/// [linearFirstPassPrompt]. Cannot call `callFirstPassCorrection`
-/// directly, since that function hardcodes production's
-/// `firstPassCorrectionSpanish` as its system prompt with no override
-/// parameter.
+/// [buildFirstPassCorrectionUserContent] user-content builder (unaffected
+/// by issue #156 — it carries no schema, just the plain instruction/text
+/// pair) — with only the system prompt text swapped for
+/// [linearFirstPassPrompt], and (issue #156) the response format and
+/// parser swapped for this harness's own
+/// [_linearFirstPassResponseFormat]/[_parseLinearFirstPassResponse]/
+/// [_validateLinearFirstPassCorrections], since production's
+/// `firstPassCorrectionResponseFormat`/`parseFirstPassCorrectionResponse`
+/// have no `corrections` field to give. Cannot call
+/// `callFirstPassCorrection` directly, since that function hardcodes
+/// production's `firstPassCorrectionSpanish` as its system prompt with
+/// no override parameter.
 Future<CorrectionResponse> _callLinearFirstPassCorrection({
   required OpenAiChatCompletionsClient client,
   required String model,
@@ -246,14 +445,19 @@ Future<CorrectionResponse> _callLinearFirstPassCorrection({
     systemPrompt: linearFirstPassPrompt,
     userText: buildFirstPassCorrectionUserContent(submittedText),
     stageLabel: 'linear_first_pass_correction',
-    responseFormat: firstPassCorrectionResponseFormat,
+    responseFormat: _linearFirstPassResponseFormat,
   );
-  final correctedText = parseFirstPassCorrectionResponse(replyText);
+  final parsed = _parseLinearFirstPassResponse(replyText);
+  final corrections = _validateLinearFirstPassCorrections(
+    submittedText: submittedText,
+    correctedText: parsed.correctedText,
+    raw: parsed.corrections,
+  );
 
   return CorrectionResponse(
     originalText: submittedText,
-    correctedText: correctedText,
-    corrections: const [],
+    correctedText: parsed.correctedText,
+    corrections: corrections,
   );
 }
 
@@ -1543,8 +1747,8 @@ void main() {
     });
 
     group('linearFirstPassPrompt (issue #126)', () {
-      test('matches the source document\'s exact wording (with one '
-          'deliberate, recorded divergence — see below) — pinned so an '
+      test('matches the source document\'s exact wording (with two '
+          'deliberate, recorded divergences — see below) — pinned so an '
           'accidental future edit is caught rather than silently drifting '
           'further from Two-Pass_Prompt_Revision_Summary.docx', () {
         expect(
@@ -1586,6 +1790,20 @@ void main() {
           '"médico", so correct it to:\n'
           '\n'
           '"Tengo una cita con el médico mañana."\n'
+          '\n'
+          // Issue #156: a second deliberate divergence from the source
+          // document. Pass 1's response contract has grown a
+          // "corrections" array (harness-local schema, issue #156's own
+          // "not production's firstPassCorrectionResponseFormat") so
+          // Pass 2 can eventually see what Pass 1 actually changed,
+          // rather than one clean sentence indistinguishable from
+          // untouched text — the #135 evidence behind follow-up #147's
+          // largest failure cluster.
+          'Alongside the corrected text, list each correction you made '
+          'as a JSON object with the original phrase you changed, the '
+          'phrase you changed it to, and a short category label of '
+          'your own choosing for the kind of error it was. If you made '
+          'no corrections, return an empty list.\n'
           '\n'
           'Return JSON only. Do not include Markdown or commentary.',
         );
@@ -1833,6 +2051,142 @@ void main() {
         2000,
       );
       expect(linearCallDelayMsFrom(const {}), 750);
+    });
+
+    group('_callLinearFirstPassCorrection corrections reporting (issue #156)', () {
+      test('a valid corrections array parses correctly into '
+          'CorrectionResponse.corrections', () async {
+        const submittedText = 'Vi mucho trafico ayer.';
+        final client = _RoutingHttpClient(
+          linearFirstPassReply: _linearFirstPassEnvelope(
+            correctedText: 'Vi mucho tráfico ayer.',
+            corrections: const [
+              {
+                'original_phrase': 'trafico',
+                'corrected_phrase': 'tráfico',
+                'category': 'accent',
+              },
+            ],
+          ),
+          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+          originalText: submittedText,
+          naturalnessOnOriginalReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+          linearLexicalReviewReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+        );
+
+        final response = await _callLinearFirstPassCorrection(
+          client: OpenAiChatCompletionsClient(
+            apiKey: 'test-key',
+            httpClient: client,
+          ),
+          model: 'gpt-4.1',
+          submittedText: submittedText,
+        );
+
+        expect(response.correctedText, 'Vi mucho tráfico ayer.');
+        expect(response.corrections, hasLength(1));
+        final correction = response.corrections.single;
+        expect(correction.originalPhrase, 'trafico');
+        expect(correction.correctedPhrase, 'tráfico');
+        // The raw, unconstrained category label is preserved via
+        // shortExplanation even though it doesn't map onto a known
+        // ErrorCategory (falls back to .other) — issue #156's own
+        // "observe what vocabulary the model naturally produces".
+        expect(correction.shortExplanation, 'accent');
+        expect(correction.category, ErrorCategory.other);
+      });
+
+      test('an empty corrections array parses correctly into an empty '
+          'CorrectionResponse.corrections list', () async {
+        const submittedText = 'Buenos días, ¿cómo estás?';
+        final client = _RoutingHttpClient(
+          linearFirstPassReply: _linearFirstPassEnvelope(
+            correctedText: submittedText,
+          ),
+          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+          originalText: submittedText,
+          naturalnessOnOriginalReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+          linearLexicalReviewReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+        );
+
+        final response = await _callLinearFirstPassCorrection(
+          client: OpenAiChatCompletionsClient(
+            apiKey: 'test-key',
+            httpClient: client,
+          ),
+          model: 'gpt-4.1',
+          submittedText: submittedText,
+        );
+
+        expect(response.correctedText, submittedText);
+        expect(response.corrections, isEmpty);
+      });
+
+      test('a correction whose phrases don\'t appear in the submitted/'
+          'corrected text is dropped by validation, not passed downstream '
+          'unverified', () async {
+        const submittedText = 'Vi mucho trafico ayer.';
+        final client = _RoutingHttpClient(
+          linearFirstPassReply: _linearFirstPassEnvelope(
+            correctedText: 'Vi mucho tráfico ayer.',
+            corrections: const [
+              // Genuine, verifiable correction — should survive.
+              {
+                'original_phrase': 'trafico',
+                'corrected_phrase': 'tráfico',
+                'category': 'accent',
+              },
+              // original_phrase never appears in the submitted text —
+              // an unverifiable, hallucinated span — should be dropped.
+              {
+                'original_phrase': 'palabra inventada',
+                'corrected_phrase': 'tráfico',
+                'category': 'accent',
+              },
+              // corrected_phrase never appears in the corrected text —
+              // also unverifiable — should be dropped.
+              {
+                'original_phrase': 'trafico',
+                'corrected_phrase': 'palabra inventada',
+                'category': 'accent',
+              },
+            ],
+          ),
+          parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
+          originalText: submittedText,
+          naturalnessOnOriginalReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+          parallelFallbackReply: _naturalnessEnvelope('unused in this test'),
+          linearLexicalReviewReply: _naturalnessEnvelope(
+            'unused in this test',
+          ),
+        );
+
+        final response = await _callLinearFirstPassCorrection(
+          client: OpenAiChatCompletionsClient(
+            apiKey: 'test-key',
+            httpClient: client,
+          ),
+          model: 'gpt-4.1',
+          submittedText: submittedText,
+        );
+
+        // Only the genuine, verifiable correction survives — the two
+        // unverifiable ones were dropped, not passed downstream.
+        expect(response.corrections, hasLength(1));
+        expect(response.corrections.single.originalPhrase, 'trafico');
+      });
     });
 
     test('runLinearTwoPassPipeline uses linearFirstPassPrompt (issue #126) '
@@ -2618,6 +2972,30 @@ String _firstPassEnvelope(String correctedText) => jsonEncode({
       'message': {
         'role': 'assistant',
         'content': jsonEncode({'corrected_text': correctedText}),
+      },
+    },
+  ],
+});
+
+/// Same shape as [_firstPassEnvelope], but for
+/// [_linearFirstPassResponseFormat]'s own schema (issue #156), which adds
+/// a `corrections` array `_firstPassEnvelope` knows nothing about. Kept
+/// as its own helper rather than adding an optional parameter to
+/// `_firstPassEnvelope`, since that one is also used to fake the
+/// PARALLEL path's first-pass reply (production's own narrower
+/// contract), which must stay exactly `{"corrected_text": "string"}`.
+String _linearFirstPassEnvelope({
+  required String correctedText,
+  List<Map<String, String>> corrections = const [],
+}) => jsonEncode({
+  'choices': [
+    {
+      'message': {
+        'role': 'assistant',
+        'content': jsonEncode({
+          'corrected_text': correctedText,
+          'corrections': corrections,
+        }),
       },
     },
   ],
