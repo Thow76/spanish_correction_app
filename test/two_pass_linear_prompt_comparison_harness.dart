@@ -497,46 +497,58 @@ const String linearSecondPassPrompt =
     'You are a Spanish language tutor reviewing text that has already '
     'been checked for grammar, spelling, and punctuation.\n'
     '\n'
-    'Your task is to identify lexical issues that are not recognised as '
-    'correct by authoritative Spanish language references.\n'
+    'Most text you review will contain no lexical issue at all. '
+    'Returning no issue is the expected outcome. Only report a phrase '
+    'when you are confident it is not recognised as correct by '
+    'authoritative Spanish language references.\n'
     '\n'
-    'These include, but are not limited to:\n'
+    'Before reporting anything, apply this test:\n'
     '\n'
-    '• lexical issues resulting from cross-linguistic interference, '
+    'Is the phrase recognised as correct by authoritative Spanish '
+    'language references?\n'
+    '\n'
+    'If yes, return no issue for that phrase — even if another '
+    'phrasing is more common, more idiomatic, more regionally typical, '
+    'or would read better. The existence of a preferable alternative '
+    'is not grounds for reporting an issue.\n'
+    '\n'
+    'Only if the phrase fails that test, consider whether it is one of '
+    'the following:\n'
+    '\n'
+    '- a lexical issue resulting from cross-linguistic interference, '
     'including:\n'
     '  - lexical calques (literal translations),\n'
     '  - false friends (semantic transfer),\n'
     '  - incorrect collocations resulting from language transfer,\n'
     '  - transferred idiomatic expressions.\n'
     '\n'
-    '• other objectively incorrect lexical constructions.\n'
+    '- another objectively incorrect lexical construction.\n'
     '\n'
-    'Do not report spelling, punctuation, or grammatical errors.\n'
-    'If the only problem is grammar, spelling, or punctuation, return no '
-    'issue.\n'
+    'Do not report spelling, punctuation, or grammatical errors. If '
+    'the only problem is grammar, spelling, or punctuation, return no '
+    'issue. Ignore them even when they appear in the same sentence as '
+    'a lexical issue.\n'
     '\n'
-    'Ignore spelling, punctuation, and grammar errors even if they '
-    'appear in the same sentence as a lexical issue.\n'
+    'When you have identified a genuine lexical issue:\n'
     '\n'
-    'When correcting a lexical issue:\n'
-    '\n'
-    '• Replace only the lexical issue that you have identified.\n'
-    '• Limit your changes to that lexical issue and any unavoidable '
-    'grammatical adjustments required by the replacement.\n'
-    '• Preserve the original meaning.\n'
-    '• Do not add new information, new clauses, or new ideas.\n'
-    '• Do not remove information unless it forms part of the lexical '
+    '- Replace only that lexical issue.\n'
+    '- Limit your changes to it, plus any unavoidable grammatical '
+    'adjustments required by the replacement.\n'
+    '- Preserve the original meaning. Do not substitute a verb or '
+    'noun whose meaning differs from the original, even slightly.\n'
+    '- Do not add new information, new clauses, or new ideas.\n'
+    '- Do not remove information unless it forms part of the lexical '
     'issue being corrected.\n'
-    '• Do not paraphrase or otherwise rewrite the sentence.\n'
-    '• Make only the smallest change necessary to eliminate the lexical '
-    'issue.\n'
+    '- Do not paraphrase or otherwise rewrite the sentence.\n'
+    '- Make only the smallest change necessary to eliminate the '
+    'lexical issue.\n'
     '\n'
     'Give exactly one replacement for each issue.\n'
     'Never provide more than one replacement.\n'
     'Never join alternatives with a slash, "or", or a list.\n'
     'If more than one replacement is possible, choose the one that '
-    'requires the smallest change to the original sentence while fully '
-    'resolving the lexical issue.\n'
+    'requires the smallest change while fully resolving the lexical '
+    'issue.\n'
     '\n'
     'Return JSON only.';
 
@@ -1845,22 +1857,51 @@ void main() {
     });
 
     group('linearSecondPassPrompt (issue #127)', () {
-      test('matches the source document\'s exact wording — pinned so an '
-          'accidental future edit is caught rather than silently drifting '
-          'from Two-Pass_Prompt_Revision_Summary.docx', () {
+      test('matches the source document\'s exact wording (with one '
+          'deliberate, recorded divergence — see below) — pinned so an '
+          'accidental future edit is caught rather than silently '
+          'drifting further from Two-Pass_Prompt_Revision_Summary.docx', () {
         expect(
           linearSecondPassPrompt,
           'You are a Spanish language tutor reviewing text that has '
           'already been checked for grammar, spelling, and '
           'punctuation.\n'
           '\n'
-          'Your task is to identify lexical issues that are not '
-          'recognised as correct by authoritative Spanish language '
-          'references.\n'
+          // Issue #158: deliberately diverges from the source document
+          // starting here. The original prompt stated the "recognised
+          // as correct" standard only as a description of what to hunt
+          // for (inside "your task is to identify..."), never as a
+          // prohibition on acting — restraint sat entirely in the "how
+          // to edit" block, which only applies once the model has
+          // already decided to make a change, with no gate on the
+          // firing decision itself. The #135 5x-sweep evidence behind
+          // follow-up #147 showed Pass 2 damaging already-correct
+          // Spanish (e.g. "Vi" -> "Había", "terminar de" -> "dejar
+          // de") despite passing every existing scope rule — what
+          // those failures actually failed was this standard, which
+          // was never checked before acting. Restructured so restraint
+          // comes before scope: an explicit go/no-go test now sits
+          // between the task statement and the category list.
+          'Most text you review will contain no lexical issue at all. '
+          'Returning no issue is the expected outcome. Only report a '
+          'phrase when you are confident it is not recognised as '
+          'correct by authoritative Spanish language references.\n'
           '\n'
-          'These include, but are not limited to:\n'
+          'Before reporting anything, apply this test:\n'
           '\n'
-          '• lexical issues resulting from cross-linguistic '
+          'Is the phrase recognised as correct by authoritative '
+          'Spanish language references?\n'
+          '\n'
+          'If yes, return no issue for that phrase — even if another '
+          'phrasing is more common, more idiomatic, more regionally '
+          'typical, or would read better. The existence of a '
+          'preferable alternative is not grounds for reporting an '
+          'issue.\n'
+          '\n'
+          'Only if the phrase fails that test, consider whether it is '
+          'one of the following:\n'
+          '\n'
+          '- a lexical issue resulting from cross-linguistic '
           'interference, including:\n'
           '  - lexical calques (literal translations),\n'
           '  - false friends (semantic transfer),\n'
@@ -1868,37 +1909,34 @@ void main() {
           'transfer,\n'
           '  - transferred idiomatic expressions.\n'
           '\n'
-          '• other objectively incorrect lexical constructions.\n'
+          '- another objectively incorrect lexical construction.\n'
           '\n'
           'Do not report spelling, punctuation, or grammatical '
-          'errors.\n'
-          'If the only problem is grammar, spelling, or punctuation, '
-          'return no issue.\n'
+          'errors. If the only problem is grammar, spelling, or '
+          'punctuation, return no issue. Ignore them even when they '
+          'appear in the same sentence as a lexical issue.\n'
           '\n'
-          'Ignore spelling, punctuation, and grammar errors even if '
-          'they appear in the same sentence as a lexical issue.\n'
+          'When you have identified a genuine lexical issue:\n'
           '\n'
-          'When correcting a lexical issue:\n'
-          '\n'
-          '• Replace only the lexical issue that you have '
-          'identified.\n'
-          '• Limit your changes to that lexical issue and any '
-          'unavoidable grammatical adjustments required by the '
-          'replacement.\n'
-          '• Preserve the original meaning.\n'
-          '• Do not add new information, new clauses, or new ideas.\n'
-          '• Do not remove information unless it forms part of the '
+          '- Replace only that lexical issue.\n'
+          '- Limit your changes to it, plus any unavoidable '
+          'grammatical adjustments required by the replacement.\n'
+          '- Preserve the original meaning. Do not substitute a verb '
+          'or noun whose meaning differs from the original, even '
+          'slightly.\n'
+          '- Do not add new information, new clauses, or new ideas.\n'
+          '- Do not remove information unless it forms part of the '
           'lexical issue being corrected.\n'
-          '• Do not paraphrase or otherwise rewrite the sentence.\n'
-          '• Make only the smallest change necessary to eliminate the '
+          '- Do not paraphrase or otherwise rewrite the sentence.\n'
+          '- Make only the smallest change necessary to eliminate the '
           'lexical issue.\n'
           '\n'
           'Give exactly one replacement for each issue.\n'
           'Never provide more than one replacement.\n'
           'Never join alternatives with a slash, "or", or a list.\n'
           'If more than one replacement is possible, choose the one '
-          'that requires the smallest change to the original sentence '
-          'while fully resolving the lexical issue.\n'
+          'that requires the smallest change while fully resolving '
+          'the lexical issue.\n'
           '\n'
           'Return JSON only.',
         );
@@ -1922,8 +1960,8 @@ void main() {
         expect(
           linearSecondPassPrompt,
           contains(
-            'Ignore spelling, punctuation, and grammar errors even if '
-            'they appear in the same sentence as a lexical issue',
+            'Ignore them even when they appear in the same sentence as '
+            'a lexical issue',
           ),
         );
       });
@@ -1932,7 +1970,7 @@ void main() {
           'criteria)', () {
         expect(
           linearSecondPassPrompt,
-          contains('Replace only the lexical issue that you have identified'),
+          contains('Replace only that lexical issue'),
         );
         expect(
           linearSecondPassPrompt,
@@ -1980,7 +2018,36 @@ void main() {
         );
         expect(
           linearSecondPassPrompt,
-          contains('other objectively incorrect lexical constructions'),
+          contains('another objectively incorrect lexical construction'),
+        );
+      });
+
+      test('gates reporting on the "recognised as correct" test before '
+          'considering scope (issue #158)', () {
+        expect(
+          linearSecondPassPrompt,
+          contains('Returning no issue is the expected outcome'),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains(
+            'Is the phrase recognised as correct by authoritative '
+            'Spanish language references?',
+          ),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains(
+            'The existence of a preferable alternative is not grounds '
+            'for reporting an issue',
+          ),
+        );
+        expect(
+          linearSecondPassPrompt,
+          contains(
+            'Do not substitute a verb or noun whose meaning differs '
+            'from the original, even slightly',
+          ),
         );
       });
 
