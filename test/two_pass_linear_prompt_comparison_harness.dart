@@ -765,6 +765,7 @@ class _LinearSteps {
   const _LinearSteps({
     required this.response,
     required this.firstPassCorrectedText,
+    required this.firstPassCorrections,
     required this.lexicalReview,
     required this.firstPassStats,
     required this.secondPassStats,
@@ -772,6 +773,14 @@ class _LinearSteps {
 
   final CorrectionResponse response;
   final String firstPassCorrectedText;
+
+  /// Pass 1's own reported corrections (issue #156's schema change),
+  /// already validated (issue #156's substring checks) — what Pass 2
+  /// receives no visibility into today, but this harness now can
+  /// observe. Kept raw here, same precedent as [lexicalReview]; only a
+  /// formatted description of it reaches [LinearExecutionResult]
+  /// (issue #160).
+  final List<CorrectionItem> firstPassCorrections;
   final NaturalnessReview lexicalReview;
   final CallStats firstPassStats;
   final CallStats secondPassStats;
@@ -860,6 +869,7 @@ Future<_LinearSteps> _runLinearSteps({
   return _LinearSteps(
     response: response,
     firstPassCorrectedText: firstPassResponse.correctedText,
+    firstPassCorrections: firstPassResponse.corrections,
     lexicalReview: lexicalReview,
     firstPassStats: firstPassStats,
     secondPassStats: secondPassStats,
@@ -899,6 +909,7 @@ class LinearExecutionResult {
     required this.fixture,
     required this.runIndex,
     required this.firstPassCorrectedText,
+    required this.firstPassCorrectionsDescription,
     required this.lexicalReviewDescription,
     required this.finalCorrectedText,
     required this.score,
@@ -920,6 +931,15 @@ class LinearExecutionResult {
   /// own "Pass 2 receives Pass 1 output, not original text" acceptance
   /// criterion).
   final String firstPassCorrectedText;
+
+  /// What Pass 1 reported changing (issue #156's schema change,
+  /// surfaced here per issue #160) — same "formatted description only,
+  /// raw data stays on `_LinearSteps`" precedent
+  /// [lexicalReviewDescription] already established. `(none)` when
+  /// Pass 1 reported no corrections; `original_phrase -> corrected_phrase
+  /// (category)` per entry otherwise, joined with `<br>` for multiple —
+  /// see [_describeCorrections].
+  final String firstPassCorrectionsDescription;
   final String lexicalReviewDescription;
 
   /// Pass 2's output, treated as the final corrected text directly
@@ -970,6 +990,9 @@ Future<LinearExecutionResult> runLinearExecution({
     fixture: fixture,
     runIndex: runIndex,
     firstPassCorrectedText: steps.firstPassCorrectedText,
+    firstPassCorrectionsDescription: _describeCorrections(
+      steps.firstPassCorrections,
+    ),
     lexicalReviewDescription: _describeReview(steps.lexicalReview),
     firstPassStats: steps.firstPassStats,
     secondPassStats: steps.secondPassStats,
@@ -1043,6 +1066,30 @@ String _describeReview(NaturalnessReview review) {
   }
   return review.issues
       .map((issue) => '${issue.span} -> ${issue.naturalReplacement}')
+      .join('<br>');
+}
+
+/// Formats Pass 1's own reported corrections (issue #156's schema
+/// change) for the report (issue #160) — same `(none)`-when-empty,
+/// `<br>`-joined-when-multiple convention [_describeReview] already
+/// established for Pass 2's signal. `category` here is the raw label
+/// Pass 1 reported, preserved in [CorrectionItem.shortExplanation]
+/// (issue #156's own "observe what vocabulary the model naturally
+/// produces" — [CorrectionItem.category] itself is the [ErrorCategory]
+/// enum a raw, unconstrained label like this maps onto, usually
+/// [ErrorCategory.other], which isn't the informative value to show
+/// here). Omitted from an entry when Pass 1 reported an empty category.
+String _describeCorrections(List<CorrectionItem> corrections) {
+  if (corrections.isEmpty) {
+    return '(none)';
+  }
+  return corrections
+      .map((correction) {
+        final category = correction.shortExplanation;
+        final edit =
+            '${correction.originalPhrase} -> ${correction.correctedPhrase}';
+        return category.isEmpty ? edit : '$edit ($category)';
+      })
       .join('<br>');
 }
 
@@ -1609,13 +1656,14 @@ String buildLinearExecutionReport({
       if (group.runs.length > 1) {
         buffer
           ..writeln(
-            '| Run | Pass 1 output | Pass 2 signal | Final output | '
-            'Score | Pass/fail | Reason |',
+            '| Run | Pass 1 output | Pass 1 corrections | Pass 2 signal '
+            '| Final output | Score | Pass/fail | Reason |',
           )
-          ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
+          ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- |');
         for (final run in group.runs) {
           buffer.writeln(
             '| ${run.runIndex} | `${run.firstPassCorrectedText}` | '
+            '${run.firstPassCorrectionsDescription} | '
             '${run.lexicalReviewDescription} | `${run.finalCorrectedText}` '
             '| ${run.score.reportLabel} | '
             '${isPassingScore(run.score) ? 'Pass' : 'Fail'} | '
@@ -1626,6 +1674,9 @@ String buildLinearExecutionReport({
         final run = group.runs.single;
         buffer
           ..writeln('- Pass 1 output: `${run.firstPassCorrectedText}`')
+          ..writeln(
+            '- Pass 1 corrections: ${run.firstPassCorrectionsDescription}',
+          )
           ..writeln('- Pass 2 signal: ${run.lexicalReviewDescription}')
           ..writeln('- Score: ${run.score.reportLabel}')
           ..writeln(
@@ -2242,7 +2293,16 @@ void main() {
         (f) => f.id == 'clean-grammar-only',
       );
       final client = _RoutingHttpClient(
-        linearFirstPassReply: _firstPassEnvelope(fixture.expectedCorrectedText),
+        linearFirstPassReply: _linearFirstPassEnvelope(
+          correctedText: fixture.expectedCorrectedText,
+          corrections: const [
+            {
+              'original_phrase': 'trafico',
+              'corrected_phrase': 'tráfico',
+              'category': 'accent',
+            },
+          ],
+        ),
         parallelFirstPassReply: _firstPassEnvelope('unused in this test'),
         originalText: fixture.text,
         naturalnessOnOriginalReply: _naturalnessEnvelope('unused in this test'),
@@ -2266,6 +2326,13 @@ void main() {
       expect(result.firstPassCorrectedText, fixture.expectedCorrectedText);
       expect(result.finalCorrectedText, fixture.expectedCorrectedText);
       expect(result.score, TwoPassScoreLabel.correctFix);
+      // Issue #160: Pass 1's own reported corrections (issue #156) flow
+      // through runLinearExecution end to end, formatted the same way
+      // Pass 2's signal already is.
+      expect(
+        result.firstPassCorrectionsDescription,
+        'trafico -> tráfico (accent)',
+      );
       // Issue #130: each pass's own stats are captured, and the total
       // is exactly their sum — no fallback contribution exists.
       expect(
@@ -2526,6 +2593,9 @@ void main() {
           fixture: fixture,
           runIndex: 1,
           firstPassCorrectedText: fixture.expectedCorrectedText,
+          // Issue #160: non-empty on this run, so the new column is
+          // exercised with real content, not just the "(none)" case.
+          firstPassCorrectionsDescription: 'trafico -> tráfico (accent)',
           lexicalReviewDescription: '(none)',
           finalCorrectedText: fixture.expectedCorrectedText,
           score: TwoPassScoreLabel.correctFix,
@@ -2545,6 +2615,7 @@ void main() {
           fixture: fixture,
           runIndex: 2,
           firstPassCorrectedText: fixture.text,
+          firstPassCorrectionsDescription: '(none)',
           lexicalReviewDescription: '(none)',
           finalCorrectedText: fixture.text,
           score: TwoPassScoreLabel.missedIssue,
@@ -2620,14 +2691,17 @@ void main() {
       expect(
         report,
         contains(
-          '| Run | Pass 1 output | Pass 2 signal | Final output | '
-          'Score | Pass/fail | Reason |',
+          '| Run | Pass 1 output | Pass 1 corrections | Pass 2 signal | '
+          'Final output | Score | Pass/fail | Reason |',
         ),
       );
+      // Issue #160: Pass 1's own reported corrections now appear as
+      // their own column, between "Pass 1 output" and "Pass 2 signal".
       expect(
         report,
         contains(
-          '| 1 | `${fixture.expectedCorrectedText}` | (none) | '
+          '| 1 | `${fixture.expectedCorrectedText}` | trafico -> '
+          'tráfico (accent) | (none) | '
           '`${fixture.expectedCorrectedText}` | correct_fix | Pass | '
           'Matches expected output.',
         ),
@@ -2635,8 +2709,8 @@ void main() {
       expect(
         report,
         contains(
-          '| 2 | `${fixture.text}` | (none) | `${fixture.text}` | '
-          'missed_issue | Fail | Did not match expected output.',
+          '| 2 | `${fixture.text}` | (none) | (none) | `${fixture.text}` '
+          '| missed_issue | Fail | Did not match expected output.',
         ),
       );
 
@@ -2715,6 +2789,7 @@ void main() {
             fixture: fixture,
             runIndex: runIndex,
             firstPassCorrectedText: fixture.expectedCorrectedText,
+            firstPassCorrectionsDescription: '(none)',
             lexicalReviewDescription: '(none)',
             finalCorrectedText: fixture.expectedCorrectedText,
             score: TwoPassScoreLabel.correctFix,
@@ -2750,8 +2825,8 @@ void main() {
           report,
           contains(
             '| $runIndex | `${fixture.expectedCorrectedText}` | (none) '
-            '| `${fixture.expectedCorrectedText}` | correct_fix | Pass '
-            '| Matches expected output.',
+            '| (none) | `${fixture.expectedCorrectedText}` | correct_fix '
+            '| Pass | Matches expected output.',
           ),
         );
         expect(
