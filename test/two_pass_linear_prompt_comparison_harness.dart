@@ -122,9 +122,17 @@
 //   named 5x sweep above.
 // - TWO_PASS_LINEAR_CALL_DELAY_MS: delay between fixtures, defaults to
 //   750.
-// - TWO_PASS_LINEAR_FIXTURE_SET: "comparison" (default — the curated
-//   17-fixture set below) or "all" (every fixture in
-//   allTwoPassFixtures).
+// - TWO_PASS_LINEAR_FIXTURE_SET (issue #162 adds the last two values):
+//   "comparison" (default — the curated 17-fixture set below), "all"
+//   (every fixture in allTwoPassFixtures), "fixture_id" (exactly the
+//   fixture named by TWO_PASS_LINEAR_FIXTURE_ID), or "language_point"
+//   (every fixture whose languagePoint matches
+//   TWO_PASS_LINEAR_LANGUAGE_POINT exactly).
+// - TWO_PASS_LINEAR_FIXTURE_ID (issue #162): the fixture id to run when
+//   TWO_PASS_LINEAR_FIXTURE_SET=fixture_id.
+// - TWO_PASS_LINEAR_LANGUAGE_POINT (issue #162): the language-point
+//   group to run when TWO_PASS_LINEAR_FIXTURE_SET=language_point, e.g.
+//   "Unnecessary Extras / Deletions".
 // - TWO_PASS_LINEAR_RUNS_PER_FIXTURE (issue #128): how many times to run
 //   each selected fixture through the standalone execution flow with
 //   the exact same submitted text. Defaults to 1; set to 5 for the named
@@ -623,26 +631,74 @@ List<TwoPassFixture> get linearComparisonFixtures => linearComparisonFixtureIds
 /// set above, unchanged from before this option existed.
 const String defaultLinearFixtureSet = 'comparison';
 
-/// Which fixtures `fixtureSet` selects: `"comparison"` (the curated set
-/// above) or `"all"` (every fixture in [allTwoPassFixtures]). Throws
-/// [ArgumentError] for anything else — same "fail fast rather than
-/// silently run the wrong thing" precedent used throughout this
-/// project's other harnesses.
-List<TwoPassFixture> linearFixturesFor(String fixtureSet) {
+/// Which fixtures `fixtureSet` selects (issue #162 extends the original
+/// `"comparison"`/`"all"` pair): `"comparison"` (the curated set above),
+/// `"all"` (every fixture in [allTwoPassFixtures]), `"fixture_id"`
+/// (exactly the one fixture whose id equals [fixtureId]), or
+/// `"language_point"` (every fixture whose
+/// [TwoPassFixture.languagePoint] equals [languagePoint] exactly).
+///
+/// Mirrors `two_pass_integration_harness.dart`'s own `selectFixtures`
+/// structure and error messages exactly (same fail-fast-on-missing-
+/// parameter, fail-fast-on-empty-match-set precedent — issue #162's own
+/// "a silently-empty live run producing a valid-looking report with
+/// zero fixtures is a worse failure mode than an immediate error") —
+/// this is a deliberate mirror, not a shared import, per this file's own
+/// "keep it separate" convention already applied to
+/// [_trackedLinearCall]/[_describeReview]/[_formatCost].
+///
+/// Throws [ArgumentError] for an unrecognized [fixtureSet], a
+/// `fixture_id`/`language_point` selection that matches nothing, or a
+/// missing/empty required parameter for the chosen [fixtureSet].
+List<TwoPassFixture> linearFixturesFor(
+  String fixtureSet, {
+  String? fixtureId,
+  String? languagePoint,
+}) {
   switch (fixtureSet) {
     case 'comparison':
       return linearComparisonFixtures;
     case 'all':
       return allTwoPassFixtures;
+    case 'fixture_id':
+      if (fixtureId == null || fixtureId.isEmpty) {
+        throw ArgumentError(
+          'TWO_PASS_LINEAR_FIXTURE_SET "fixture_id" requires a non-empty '
+          'TWO_PASS_LINEAR_FIXTURE_ID.',
+        );
+      }
+      final matches = allTwoPassFixtures.where((f) => f.id == fixtureId);
+      if (matches.isEmpty) {
+        throw ArgumentError('No fixture with id "$fixtureId".');
+      }
+      return [matches.single];
+    case 'language_point':
+      if (languagePoint == null || languagePoint.isEmpty) {
+        throw ArgumentError(
+          'TWO_PASS_LINEAR_FIXTURE_SET "language_point" requires a '
+          'non-empty TWO_PASS_LINEAR_LANGUAGE_POINT.',
+        );
+      }
+      final matches = allTwoPassFixtures
+          .where((f) => f.languagePoint == languagePoint)
+          .toList();
+      if (matches.isEmpty) {
+        throw ArgumentError(
+          'No fixtures with languagePoint "$languagePoint".',
+        );
+      }
+      return matches;
     default:
       throw ArgumentError(
         'Unknown TWO_PASS_LINEAR_FIXTURE_SET "$fixtureSet" — expected '
-        '"comparison" or "all".',
+        'one of: comparison, all, fixture_id, language_point.',
       );
   }
 }
 
-/// Reads `TWO_PASS_LINEAR_FIXTURE_SET` from a real environment, same
+/// Reads `TWO_PASS_LINEAR_FIXTURE_SET` (plus, for the two selectors
+/// issue #162 adds, its companion `TWO_PASS_LINEAR_FIXTURE_ID`/
+/// `TWO_PASS_LINEAR_LANGUAGE_POINT`) from a real environment, same
 /// real-environment-variable convention as [linearCallDelayMsFrom].
 List<TwoPassFixture> linearFixturesFrom(Map<String, String> environment) {
   return linearFixturesFor(
@@ -651,6 +707,8 @@ List<TwoPassFixture> linearFixturesFrom(Map<String, String> environment) {
       key: 'TWO_PASS_LINEAR_FIXTURE_SET',
       defaultValue: defaultLinearFixtureSet,
     ),
+    fixtureId: environment['TWO_PASS_LINEAR_FIXTURE_ID']?.trim(),
+    languagePoint: environment['TWO_PASS_LINEAR_LANGUAGE_POINT']?.trim(),
   );
 }
 
@@ -2126,6 +2184,97 @@ void main() {
         expect(
           linearFixturesFrom(const {'TWO_PASS_LINEAR_FIXTURE_SET': 'all'}),
           allTwoPassFixtures,
+        );
+      });
+
+      group('"fixture_id" (issue #162)', () {
+        test('returns exactly the one matching fixture', () {
+          final fixture = allTwoPassFixtures.firstWhere(
+            (f) => f.id == 'clean-grammar-only',
+          );
+          expect(
+            linearFixturesFor(
+              'fixture_id',
+              fixtureId: 'clean-grammar-only',
+            ),
+            [fixture],
+          );
+        });
+
+        test('throws when the id is unknown', () {
+          expect(
+            () => linearFixturesFor(
+              'fixture_id',
+              fixtureId: 'no-such-fixture',
+            ),
+            throwsArgumentError,
+          );
+        });
+
+        test('throws when no id is supplied', () {
+          expect(
+            () => linearFixturesFor('fixture_id'),
+            throwsArgumentError,
+          );
+        });
+      });
+
+      group('"language_point" (issue #162)', () {
+        test('returns every fixture in that group', () {
+          final expected = allTwoPassFixtures
+              .where((f) => f.languagePoint == 'Unnecessary Extras / Deletions')
+              .toList();
+          expect(expected, isNotEmpty);
+          expect(
+            linearFixturesFor(
+              'language_point',
+              languagePoint: 'Unnecessary Extras / Deletions',
+            ),
+            expected,
+          );
+        });
+
+        test('throws for an unknown group', () {
+          expect(
+            () => linearFixturesFor(
+              'language_point',
+              languagePoint: 'No Such Language Point',
+            ),
+            throwsArgumentError,
+          );
+        });
+
+        test('throws when no group is supplied', () {
+          expect(
+            () => linearFixturesFor('language_point'),
+            throwsArgumentError,
+          );
+        });
+      });
+
+      test('linearFixturesFrom reads the new fixture_id/language_point '
+          'environment variables (issue #162)', () {
+        final fixture = allTwoPassFixtures.firstWhere(
+          (f) => f.id == 'clean-grammar-only',
+        );
+        expect(
+          linearFixturesFrom(const {
+            'TWO_PASS_LINEAR_FIXTURE_SET': 'fixture_id',
+            'TWO_PASS_LINEAR_FIXTURE_ID': 'clean-grammar-only',
+          }),
+          [fixture],
+        );
+
+        final languagePointFixtures = allTwoPassFixtures
+            .where((f) => f.languagePoint == 'Unnecessary Extras / Deletions')
+            .toList();
+        expect(
+          linearFixturesFrom(const {
+            'TWO_PASS_LINEAR_FIXTURE_SET': 'language_point',
+            'TWO_PASS_LINEAR_LANGUAGE_POINT':
+                'Unnecessary Extras / Deletions',
+          }),
+          languagePointFixtures,
         );
       });
     });
