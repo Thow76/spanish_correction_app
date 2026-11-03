@@ -386,3 +386,18 @@ The following each come one at a time once the app is in use:
 ### Suggested next single task for Claude Code
 
 Once Andrew has done the merge (0.1): task 1.2, the profile model and file store with offline tests. It touches no screens and no AI calls, and the introduction (1.3) builds on it.
+
+### Build progress
+
+Kept by the scheduled build run. One step per run, in the order of this section. A step is done only when it is recorded here.
+
+- [ ] **0.1 Merge `correction_pipeline_refactor` into `main` (Andrew, on his Mac).** Waiting for Andrew (set 3 Nov 2026). Checked that day: `main` does not yet contain the summer branch's work, and the branch is not on GitHub, so it exists only on Andrew's Mac.
+- [ ] E.1 Prices
+- [ ] E.2 Baseline run (Andrew, on his Mac)
+- [ ] E.3 Rework the two-step prompts in the harness
+- [ ] E.4 Partner prompt harness
+- [ ] 1.1 to 1.5 Slice 1: onboarding
+- [ ] 2.1 to 2.5 Slice 2: the new check
+- [ ] 3.1 to 3.5 Slice 3: Home and chats
+- [ ] 4.1 to 4.4 Slice 4: feedback from chats, and History
+- [ ] 5.1 to 5.3 Slice 5: the partner's greetings
