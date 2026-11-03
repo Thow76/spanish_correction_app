@@ -86,6 +86,33 @@ const Map<String, VerifiedModelPricing> verifiedPricingPerModel = {
         'uplifts not applied',
     dateChecked: '2026-07-28',
   ),
+  // GPT-6 family, prices from decision P3 (19 Oct 2026, Andrew's decision log)
+  // and re-confirmed against OpenAI's own model pages on 3 Nov 2026. Cached
+  // input rates are not modelled here (only standard input and output).
+  'gpt-6-luna': VerifiedModelPricing(
+    modelId: 'gpt-6-luna',
+    inputPerMillionUsd: 0.10,
+    outputPerMillionUsd: 0.50,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-6-luna',
+    pricingVersionOrEffectiveDate:
+        'OpenAI model page standard text-token pricing; verified 19 Oct '
+        '2026 (decision P3); cached input not applied',
+    dateChecked: '2026-11-03',
+  ),
+  'gpt-6-sol': VerifiedModelPricing(
+    modelId: 'gpt-6-sol',
+    inputPerMillionUsd: 2.00,
+    outputPerMillionUsd: 10.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://openai.com/index/introducing-gpt-6-sol-and-luna/',
+    pricingVersionOrEffectiveDate:
+        'OpenAI GPT-6 launch post standard text-token pricing; verified 19 '
+        'Oct 2026 (decision P3); cached input not applied',
+    dateChecked: '2026-11-03',
+  ),
   'gpt-5.4': VerifiedModelPricing(
     modelId: 'gpt-5.4',
     inputPerMillionUsd: 2.50,
