@@ -182,8 +182,7 @@ You are a Spanish tutor proofreading a learner's work. Identify anything a nativ
 Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["volví para casa", "trafico"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
 ''';
 
-// ── Stage 1 dialect-flagging variant (experimental, not wired into any live
-// path) ──────────────────────────────────────────────────────────────────
+// ── Stage 1 dialect-flagging variant ─────────────────────────────────────
 //
 // A variant of `stage1DetectionSpanish` above, kept side by side rather than
 // replacing it, so the two can be run against the same battery for direct
@@ -197,16 +196,18 @@ Return only a JSON array of the quoted phrases, exactly as they appear in the te
 // `stage3FeedbackSpanish`: no `_es`/`_pt` prefix, so
 // `correction_prompt_symmetry_test.dart`'s scrape doesn't pick it up.
 //
-// Referenced only by `test/stage1_detection_dialect_harness.dart`. Nothing
-// in `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+// Live as of this writing (issue #73 correction — this comment previously,
+// and incorrectly, said the opposite): used in production by
+// `stage1_detection_client.dart`, reached via `runStagedCorrectionPipeline`
+// / `OpenAiCorrectionService.correctText` for Spanish. Also exercised in
+// isolation by `test/stage1_detection_dialect_harness.dart`.
 const String stage1DetectionDialectSpanish = '''
 You are a Spanish tutor proofreading a learner's work. Identify anything a native speaker would consider wrong or would not naturally say. Flag standard dialect differences. Do not rework correct language for style, elegance, or register. Quote each problematic phrase exactly as it appears in the work. If there is nothing wrong, return none.
 
 Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["volví para casa", "trafico"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
 ''';
 
-// ── Stage 1B dedicated redundancy pass (experimental, not wired into any
-// live path) ────────────────────────────────────────────────────────────
+// ── Stage 1B dedicated redundancy pass ───────────────────────────────────
 //
 // A separate, narrower detection pass whose only job is unnecessary
 // repeated subject pronouns and unnecessary emphatic pronoun phrases — see
@@ -223,8 +224,11 @@ Return only a JSON array of the quoted phrases, exactly as they appear in the te
 // stage1/2/3 constants: no `_es`/`_pt` prefix, so
 // `correction_prompt_symmetry_test.dart`'s scrape doesn't pick it up.
 //
-// Referenced only by `test/stage1_redundancy_pass_harness.dart`. Nothing in
-// `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+// Live as of this writing (issue #73 correction — this comment previously,
+// and incorrectly, said the opposite): used in production by
+// `stage1_detection_client.dart`, reached via `runStagedCorrectionPipeline`
+// / `OpenAiCorrectionService.correctText` for Spanish. Also exercised in
+// isolation by `test/stage1_redundancy_pass_harness.dart`.
 const String stage1RedundancyDetectionSpanish = '''
 You are a Spanish tutor reviewing a learner's work for one specific pattern: unnecessary repeated subject pronouns and unnecessary emphatic pronoun phrases.
 
@@ -281,8 +285,7 @@ If there is nothing to flag, return none.
 Return only a JSON array of the quoted phrases, exactly as they appear in the text, e.g. ["Levantó", "Quejó"]. Return an empty array [] when nothing is wrong. Do not include indices, categories, corrected text, explanations, Markdown, or code fences — quoted phrases only.
 ''';
 
-// ── Stage 2 categorization prompt (experimental, not wired into any live
-// path) ──────────────────────────────────────────────────────────────────
+// ── Stage 2 categorization prompt ────────────────────────────────────────
 //
 // Same reasoning as `stage1DetectionSpanish` above for the naming: no
 // `_es`/`_pt` prefix, so `correction_prompt_symmetry_test.dart`'s scrape
@@ -295,8 +298,12 @@ Return only a JSON array of the quoted phrases, exactly as they appear in the te
 // call) and classifies each phrase: corrected form, category, and verdict
 // (error / dialectal / not_an_error).
 //
-// Referenced only by `test/stage2_categorization_harness.dart`. Nothing in
-// `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+// Live as of this writing (issue #73 correction — this comment previously,
+// and incorrectly, said the opposite): used in production by
+// `stage2_categorization_client.dart`, reached via
+// `runStagedCorrectionPipeline` / `OpenAiCorrectionService.correctText`
+// for Spanish. Also exercised in isolation by
+// `test/stage2_categorization_harness.dart`.
 const String stage2CategorizationSpanish = '''
 You are a Spanish tutor. A proofreader has read a learner's work and flagged some phrases as possibly wrong. Your job is to look at each flagged phrase in its full context and decide three things: what the correct version would be, what kind of issue it is, and whether it's actually wrong at all.
 
@@ -346,8 +353,7 @@ Calque test: a phrase is error on calque grounds only if no established variety 
 Restraint: don't use dialectal for ordinary regional vocabulary (coche/carro/auto, ordenador/computadora). Reserve it for splits with real risk of confusion or offense — not just a different, equally correct word. Do not use `dialectal` for ordinary regional preferences that carry no risk of confusion or offense (for example: tense preferences, preposition choice, pronoun systems like voseo or ustedes/vosotros, and motion verb + para + destination such as "voy para casa" or "volví para casa"). These are `not_an_error`. Reserve `dialectal` only for cases where both are true: the form is standard in at least one established variety, AND using it elsewhere risks real confusion or offense.
 ''';
 
-// ── Stage 3 feedback prompt (experimental, not wired into any live path)
-// ──────────────────────────────────────────────────────────────────────
+// ── Stage 3 feedback prompt ──────────────────────────────────────────────
 //
 // Same reasoning as `stage1DetectionSpanish`/`stage2CategorizationSpanish`
 // above for the naming: no `_es`/`_pt` prefix, so
@@ -361,8 +367,11 @@ Restraint: don't use dialectal for ordinary regional vocabulary (coche/carro/aut
 // by start_index. Deliberately does not receive the full submission text —
 // see the harness file for why that's an open question, not an oversight.
 //
-// Referenced only by `test/stage3_feedback_harness.dart`. Nothing in
-// `PromptBuilder` or `OpenAiCorrectionService` reads this constant.
+// Live as of this writing (issue #73 correction — this comment previously,
+// and incorrectly, said the opposite): used in production by
+// `stage3_feedback_client.dart`, reached via `runStagedCorrectionPipeline`
+// / `OpenAiCorrectionService.correctText` for Spanish. Also exercised in
+// isolation by `test/stage3_feedback_harness.dart`.
 const String stage3FeedbackSpanish = '''
 You are a Spanish tutor writing feedback for a learner. You will be given a list of corrections that have already been identified and categorized, each with start_index (assigned by the app), original_phrase, corrected_phrase, category, and verdict.
 
@@ -376,3 +385,152 @@ For each correction:
 - For verdict dialectal: never say "wrong," "error," or "incorrect." Explain the split plainly — where the original is standard, and where it would sound off or land differently.
 - Assume the learner is intermediate-to-advanced. No basic grammar terms defined, no preamble, no hedging.
 ''';
+
+// ── Naturalness review pass (production client — issue #31) ─────────────
+//
+// Identifies wording that is grammatical and understandable but unlikely
+// to be used naturally by a native Spanish speaker (calques, idioms,
+// collocations), while leaving grammar, spelling, and punctuation to the
+// first pass entirely. Output contract confirmed in
+// `docs/naturalness_review_output_contract.md` (issue #29) and parsed via
+// `NaturalnessReview`/`NaturalnessIssue`
+// (`domain/naturalness_review.dart`, issue #30).
+//
+// Wording is copied unchanged from `naturalnessSystemPrompt` (v4,
+// `spanish-naturalness-only-variety-restraint`) in
+// `test/naturalness_model_comparison_harness.dart`, including its known
+// "regional variety.This includes" missing-space typo — see that
+// harness's own header comment and
+// `docs/spanish_two_pass_prompt_handoff.md`. Not fixed here: issue #31's
+// original scope was to use the existing prompt unchanged; issue #108
+// later added the one new paragraph requiring exactly one replacement
+// (see that paragraph's own placement below) — the harness's own
+// `previousNaturalnessSystemPromptV3` keeps the pre-#108 wording available
+// for reference.
+//
+// Called by `callNaturalnessReview`
+// (`features/corrections/data/naturalness_review_client.dart`), which is
+// itself called by `runTwoPassCorrectionPipeline`
+// (`features/corrections/data/two_pass_correction_pipeline.dart`, issues
+// #32/#67) — live as of this writing, correcting this comment's earlier
+// claim that it wasn't wired anywhere yet (issue #73). The two-pass
+// pipeline itself is a separate matter from the *staged* pipeline this
+// comment used to name: `runTwoPassCorrectionPipeline` is not currently
+// called by `OpenAiCorrectionService.correctText()` at all — see
+// `docs/two_pass_orchestration_entry_points.md` (issue #27) for the
+// original mapping, and issue #44 for the fuller current-wiring writeup.
+const String naturalnessReviewSpanish = '''
+You are a Spanish tutor reviewing a text that has been checked for grammar, spelling, and punctuation.
+
+Your task is to identify wording that a native Spanish speaker would be unlikely to use naturally in this context. This includes calques, idioms, and collocations.
+
+Do not report spelling, punctuation, or grammatical errors.
+If the only problem is grammar, spelling, or punctuation, return no issue.
+
+Do not normalise wording that is natural in an established variety of Spanish. A form is not a naturalness issue merely because another form is more widespread, more neutral, or preferred by the reviewer's own regional variety.This includes established regional uses of para with verbs of movement to express direction or destination, such as ir para + place, where another variety may prefer ir a + place.
+
+Ignore spelling, punctuation, or grammar errors even if they appear in the same sentence as a naturalness issue.
+
+Give exactly one natural replacement for each issue — never more than one option, and never join alternatives with a slash, "or", or a list. If more than one wording would work, choose the single best one yourself.
+
+Return JSON only.''';
+
+// ── Narrow first-pass correction prompt (POC — issue #64) ────────────────
+//
+// The intended two-pass first pass: objective Spanish grammar, spelling,
+// accents, and punctuation only — leaving word choice, naturalness, style,
+// register, and valid regional Spanish entirely to the naturalness pass.
+// Recommended models: `gpt-4.1` / `gpt-4.1-mini`
+// (`docs/spanish_two_pass_prompt_handoff.md`).
+//
+// Wording is copied unchanged from `systemPrompt` in
+// `test/model_comparison_harness.dart` (prompt label
+// `simple-spanish-grammar-spelling-punctuation-only`, `promptVersion`
+// `v2`), the harness that benchmarked this exact contract across models.
+// Not reworded here: issue #64's scope is explicitly to move this
+// contract into production-accessible constants, byte-for-byte, not to
+// improve it.
+//
+// Status update (issue #73 correction): the two paragraphs above describe
+// issue #64's own original scope accurately (constants only, wording
+// unchanged) — but the sentence that followed them, saying no production
+// client called this constant and that `runTwoPassCorrectionPipeline`
+// still used `runStagedCorrectionPipeline` as its first pass, is now
+// stale. `callFirstPassCorrection`
+// (`features/corrections/data/first_pass_correction_client.dart`, issue
+// #65) calls this constant, and `runTwoPassCorrectionPipeline`
+// (`features/corrections/data/two_pass_correction_pipeline.dart`) has
+// used that client as its pass 1 since issue #67 — `runStagedCorrectionPipeline`
+// is no longer part of that orchestrator's own call chain at all (though
+// it remains the separate, still-live production path for Spanish via
+// `OpenAiCorrectionService.correctText()` directly — see
+// `docs/two_pass_orchestration_entry_points.md`, issue #27, and issue #44
+// for the fuller current-wiring writeup).
+//
+// Status update (issue #109): bumped v1 -> v2, adding one new
+// worked-examples paragraph covering valid regional Spanish, phrase-level
+// calques that look like a one-word fix, false-friend word choice, and
+// correcting every missing article in a sentence — the live benchmark
+// (docs/two_pass_prompt_contract_audit.md §7c) found the v1 restraint
+// statements alone weren't enough to keep the model inside its intended
+// boundary on these specific patterns. The harness's own
+// `previousSystemPromptV1` keeps the pre-#109 wording available for
+// reference.
+const String firstPassCorrectionSpanish = '''
+You are a Spanish correction engine.
+
+Correct only objective Spanish grammar, spelling, and punctuation errors.
+
+Do not correct word choice.
+Do not improve naturalness.
+Do not rewrite for style, fluency, tone, or elegance.
+Do not change valid regional Spanish.
+Do not treat awkward but grammatically valid Spanish as an error.
+
+Examples of text to leave unchanged, even though a different wording exists:
+- "Voy para casa ahora mismo." is valid regional Spanish. Do not change it to "Voy para la casa ahora mismo." or "Voy a casa ahora mismo."
+- "Estoy corriendo tarde para la reunión." looks like a one-word fix, but "corriendo tarde" is a calque, not a grammar, spelling, or punctuation error. Leave "corriendo tarde" as written, even though "llegando tarde" would sound more natural.
+- "Atendió la universidad en Madrid." uses "atendió" as a false friend for "attend", but choosing the right word is word choice, not grammar, spelling, or punctuation. Leave "atendió" as written.
+
+When a sentence is missing more than one required word (for example, more than one article), correct every instance you find, not only the first one: "Tengo cita con médico mañana." is missing both "una" before "cita" and "el" before "médico" — correct it to "Tengo una cita con el médico mañana."
+
+Return JSON only. Do not include Markdown or commentary.''';
+
+/// Builds the first-pass user message for [text], in the same shape
+/// `buildUserPrompt` in `test/model_comparison_harness.dart` already
+/// validated.
+String buildFirstPassCorrectionUserContent(String text) {
+  return 'Correct the following Spanish text for grammar, spelling, and '
+      'punctuation only.\n'
+      '\n'
+      'Text:\n'
+      '$text';
+}
+
+/// The exact JSON shape the first-pass prompt's contract requires —
+/// `{"corrected_text": "string"}`, nothing else — sent as `response_format`
+/// so the API constrains the model's own output to it rather than relying
+/// solely on the prompt's own "Return JSON only" wording. Copied by value
+/// from `correctedTextResponseFormat` in
+/// `test/model_comparison_harness.dart`, which already validated this
+/// exact schema across models. See `naturalnessReviewResponseFormat`
+/// (`features/corrections/data/naturalness_review_client.dart`, issue
+/// #42/#63 follow-up) for why a production client built on this prompt
+/// should use this rather than prompt-only JSON: without
+/// `response_format` enforcement, a live model is not guaranteed to
+/// return the exact contract the prompt asks for.
+const Map<String, Object?> firstPassCorrectionResponseFormat = {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'spanish_correction_response',
+    'strict': true,
+    'schema': {
+      'type': 'object',
+      'additionalProperties': false,
+      'required': ['corrected_text'],
+      'properties': {
+        'corrected_text': {'type': 'string'},
+      },
+    },
+  },
+};
