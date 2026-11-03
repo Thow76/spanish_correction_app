@@ -104,9 +104,16 @@ class ChatCompletionsUsage {
 /// reply into its own structured result is each stage's own concern, not
 /// this class's.
 ///
-/// Deliberately not part of the `CorrectionService` interface and not
-/// wired into `correctText()` or any live route — the staged pipeline this
-/// supports is assembled and tested independently before any such wiring.
+/// Not part of the `CorrectionService` interface directly, but it is
+/// wired into the live route: `OpenAiCorrectionService` instantiates this
+/// class itself (see its constructor) and passes it to
+/// `runStagedCorrectionPipeline`, the live path for Spanish. (Status
+/// update, issue #73: this comment previously said this class was
+/// deliberately not wired into `correctText()` or any live route, which
+/// was accurate when the staged pipeline was still being assembled and
+/// tested independently, but is stale now — see
+/// `docs/two_pass_orchestration_entry_points.md`, issue #27, and issue
+/// #44 for the fuller current-wiring writeup.)
 class OpenAiChatCompletionsClient {
   OpenAiChatCompletionsClient({
     required String apiKey,
@@ -133,11 +140,21 @@ class OpenAiChatCompletionsClient {
   /// successfully.
   final void Function(ChatCompletionsUsage usage)? _onUsage;
 
+  /// [responseFormat], when supplied, is sent verbatim as the request's
+  /// `response_format` — e.g. a `json_schema` object with `strict: true` —
+  /// to constrain the model's own output to an exact shape at the API
+  /// level, rather than relying solely on [systemPrompt] asking for JSON
+  /// in its own text. Omitted (`null`) by default, which keeps every
+  /// existing caller's request body byte-for-byte unchanged; Stage
+  /// 1/1B/1C/2/3 all still rely on prompt-only JSON, since those prompts
+  /// already spell out their exact expected shape in their own text. See
+  /// `callNaturalnessReview` for a caller that does supply one, and why.
   Future<String> complete({
     required String model,
     required String systemPrompt,
     required String userText,
     String stageLabel = 'unspecified',
+    Map<String, Object?>? responseFormat,
   }) async {
     final stopwatch = Stopwatch()..start();
     try {
@@ -157,6 +174,7 @@ class OpenAiChatCompletionsClient {
               {'role': 'system', 'content': systemPrompt},
               {'role': 'user', 'content': userText},
             ],
+            'response_format': ?responseFormat,
             if (model.startsWith('gpt-5.6')) 'reasoning_effort': 'high',
           }),
         ),

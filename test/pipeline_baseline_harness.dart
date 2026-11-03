@@ -69,6 +69,17 @@
 // --dart-define=BASELINE_OUTPUT=... (default
 // 'docs/pipeline_baseline_harness.md').
 
+// USD cost estimation uses the shared `test/shared/model_pricing.dart`
+// helpers (see spanish_correction_app#6): a model only gets a dollar
+// figure once a maintainer has verified its pricing against an explicit
+// source and added an entry to `verifiedPricingPerModel` there, with that
+// source, pricing version/effective date, and date-checked recorded
+// alongside the number. `verifiedPricingPerModel` starts empty, so every
+// cost estimate in this harness's reports currently shows as `unknown` —
+// intentionally, not as an omission — while token usage and latency are
+// still recorded either way. Do not reintroduce a local placeholder
+// pricing table here.
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -78,6 +89,8 @@ import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/features/corrections/data/open_ai_correction_service.dart';
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
+
+import 'shared/model_pricing.dart' as pricing;
 
 /// Model used for the live baseline run. Override with
 /// `--dart-define=BASELINE_MODEL=...` without editing this file — same
@@ -97,55 +110,22 @@ const String outputPath = String.fromEnvironment(
 /// rate-limit mitigation every other live harness in this repo uses.
 const int callDelayMs = int.fromEnvironment('CALL_DELAY_MS', defaultValue: 750);
 
-/// USD-per-million-token pricing used for [estimateCostUsd]. Copied by
-/// value from `model_comparison_harness.dart`'s `_pricingPerModel` — same
-/// precedent as every other small helper duplicated across this repo's
-/// standalone harness files (e.g. `staged_correction_pipeline.dart`'s
-/// `_reconstructCorrectedText`), and the same caveat: illustrative
-/// placeholders, not verified published pricing. A model missing from this
-/// table yields a `null` estimate rather than a silently wrong number.
-class _ModelPricing {
-  const _ModelPricing({
-    required this.inputPerMillionUsd,
-    required this.outputPerMillionUsd,
-  });
-
-  final double inputPerMillionUsd;
-  final double outputPerMillionUsd;
-}
-
-const Map<String, _ModelPricing> _pricingPerModel = {
-  'gpt-5.5': _ModelPricing(
-    inputPerMillionUsd: 3.00,
-    outputPerMillionUsd: 12.00,
-  ),
-  'gpt-5.6-sol': _ModelPricing(
-    inputPerMillionUsd: 4.00,
-    outputPerMillionUsd: 16.00,
-  ),
-  'gpt-5.6-terra': _ModelPricing(
-    inputPerMillionUsd: 1.20,
-    outputPerMillionUsd: 6.00,
-  ),
-  'gpt-5.6-luna': _ModelPricing(
-    inputPerMillionUsd: 0.30,
-    outputPerMillionUsd: 1.50,
-  ),
-};
-
 /// Estimated cost in USD for [inputTokens]/[outputTokens] under [model], or
-/// `null` if [model] has no entry in [_pricingPerModel].
+/// `null` unless `model` has a verified entry in
+/// `pricing.verifiedPricingPerModel` — see the file header and
+/// `test/shared/model_pricing.dart`.
 double? estimateCostUsd({
   required String model,
   required int inputTokens,
   required int outputTokens,
 }) {
-  final pricing = _pricingPerModel[model];
-  if (pricing == null) {
-    return null;
-  }
-  return (inputTokens / 1000000) * pricing.inputPerMillionUsd +
-      (outputTokens / 1000000) * pricing.outputPerMillionUsd;
+  return pricing
+      .estimateCostUsd(
+        model: model,
+        inputTokens: inputTokens,
+        outputTokens: outputTokens,
+      )
+      .usd;
 }
 
 /// One fixed Spanish input in the baseline battery.
@@ -481,6 +461,8 @@ String _buildReport({
     ..writeln('Model: `$model`  ')
     ..writeln('Commit: `$commit`  ')
     ..writeln('Generated: ${generatedAt.toIso8601String()}')
+    ..writeln()
+    ..write(pricing.pricingSection([model]))
     ..writeln();
 
   final caseById = {for (final testCase in cases) testCase.id: testCase};
@@ -739,13 +721,16 @@ void main() {
   });
 
   group('estimateCostUsd', () {
-    test('computes cost for a known model', () {
-      final cost = estimateCostUsd(
-        model: 'gpt-5.5',
-        inputTokens: 1000000,
-        outputTokens: 1000000,
-      );
-      expect(cost, closeTo(15.0, 1e-9));
+    test('returns null for gpt-5.5/gpt-5.6-terra until they have verified '
+        'pricing in test/shared/model_pricing.dart (currently none)', () {
+      for (final model in ['gpt-5.5', 'gpt-5.6-terra']) {
+        final cost = estimateCostUsd(
+          model: model,
+          inputTokens: 1000000,
+          outputTokens: 1000000,
+        );
+        expect(cost, isNull, reason: model);
+      }
     });
 
     test('returns null for an unknown model', () {
@@ -757,20 +742,6 @@ void main() {
         ),
         isNull,
       );
-    });
-
-    test('scales linearly with token counts', () {
-      final half = estimateCostUsd(
-        model: 'gpt-5.6-terra',
-        inputTokens: 500000,
-        outputTokens: 0,
-      );
-      final full = estimateCostUsd(
-        model: 'gpt-5.6-terra',
-        inputTokens: 1000000,
-        outputTokens: 0,
-      );
-      expect(full, closeTo(half! * 2, 1e-9));
     });
   });
 
@@ -826,7 +797,11 @@ void main() {
       expect(result.totalOutputTokens, 90);
       expect(result.totalTokens, 420);
       expect(result.hasPartialTokenUsage, isFalse);
-      expect(result.estimatedCostUsd, isNotNull);
+      expect(
+        result.estimatedCostUsd,
+        isNull,
+        reason: 'gpt-5.5 has no verified pricing entry',
+      );
       expect(result.isError, isFalse);
     });
 

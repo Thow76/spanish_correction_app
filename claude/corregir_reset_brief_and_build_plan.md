@@ -391,7 +391,7 @@ Once Andrew has done the merge (0.1): task 1.2, the profile model and file store
 
 Kept by the scheduled build run. One step per run, in the order of this section. A step is done only when it is recorded here.
 
-- [ ] **0.1 Merge `correction_pipeline_refactor` into `main` (Andrew, on his Mac).** Waiting for Andrew (set 3 Nov 2026). Checked that day: `main` does not yet contain the summer branch's work, and the branch is not on GitHub, so it exists only on Andrew's Mac.
+- [ ] **0.1 Merge `correction_pipeline_refactor` into `main`.** Merge prepared in a pull request on 3 Nov 2026, with the three test-file clashes resolved and the existing tests passing (606 of 607; the one failure is the live test that needs an OpenAI key and was not run). Waiting for Andrew to accept the pull request; then mark done.
 - [ ] E.1 Prices
 - [ ] E.2 Baseline run (Andrew, on his Mac)
 - [ ] E.3 Rework the two-step prompts in the harness
