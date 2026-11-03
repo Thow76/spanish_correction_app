@@ -391,8 +391,9 @@ Once Andrew has done the merge (0.1): task 1.2, the profile model and file store
 
 Kept by the scheduled build run. One step per run, in the order of this section. A step is done only when it is recorded here.
 
-- [ ] **0.1 Merge `correction_pipeline_refactor` into `main`.** Merge prepared in a pull request on 3 Nov 2026, with the three test-file clashes resolved and the existing tests passing (606 of 607; the one failure is the live test that needs an OpenAI key and was not run). Waiting for Andrew to accept the pull request; then mark done.
-- [ ] E.1 Prices
+- [x] **0.1 Merge `correction_pipeline_refactor` into `main`.** Merge prepared in a pull request on 3 Nov 2026, with the three test-file clashes resolved and the existing tests passing (606 of 607; the one failure is the live test that needs an OpenAI key and was not run). Accepted by Andrew: merged into main as pull request #169 (3 Nov 2026).
+- [x] E.1 Prices
+  - 3 Nov 2026: added GPT-6 Luna ($0.10 in / $0.50 out per million tokens) and GPT-6 Sol ($2 / $10) to `test/shared/model_pricing.dart`, under the model names `gpt-6-luna` and `gpt-6-sol`, with three new tests. GPT-4.1, GPT-5.1 and GPT-5.5 already held the verified prices, so they are unchanged. Pull request: see the link in the run report (number recorded when merged). Andrew asked to: review and accept the pull request, and confirm the two model names are the ones OpenAI's API uses (the repo's older tests had used the names `gpt-5.6-luna` and `gpt-5.6-sol`). Tests not run in the cloud session: Flutter is not installed there.
 - [ ] E.2 Baseline run (Andrew, on his Mac)
 - [ ] E.3 Rework the two-step prompts in the harness
 - [ ] E.4 Partner prompt harness

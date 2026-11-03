@@ -73,6 +73,30 @@ class VerifiedModelPricing {
 
 /// Verified pricing, keyed by exact API model id.
 const Map<String, VerifiedModelPricing> verifiedPricingPerModel = {
+  'gpt-6-sol': VerifiedModelPricing(
+    modelId: 'gpt-6-sol',
+    inputPerMillionUsd: 2.00,
+    outputPerMillionUsd: 10.00,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-6-sol',
+    pricingVersionOrEffectiveDate:
+        'OpenAI price check recorded in the Corregir decision log (P3), '
+        '19 Oct 2026 (GPT-6 Sol); no separate pricing effective date shown',
+    dateChecked: '2026-10-19',
+  ),
+  'gpt-6-luna': VerifiedModelPricing(
+    modelId: 'gpt-6-luna',
+    inputPerMillionUsd: 0.10,
+    outputPerMillionUsd: 0.50,
+    currency: 'USD',
+    pricingUnit: 'per 1M text tokens',
+    source: 'https://developers.openai.com/api/docs/models/gpt-6-luna',
+    pricingVersionOrEffectiveDate:
+        'OpenAI price check recorded in the Corregir decision log (P3), '
+        '19 Oct 2026 (GPT-6 Luna); no separate pricing effective date shown',
+    dateChecked: '2026-10-19',
+  ),
   'gpt-5.5': VerifiedModelPricing(
     modelId: 'gpt-5.5',
     inputPerMillionUsd: 5.00,

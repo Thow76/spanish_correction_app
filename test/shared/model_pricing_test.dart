@@ -257,4 +257,39 @@ void main() {
       );
     });
   });
+
+  group('GPT-6 prices verified on 19 Oct 2026 (build step E.1)', () {
+    test('GPT-6 Luna and GPT-6 Sol have the verified prices', () {
+      final luna = verifiedPricingPerModel['gpt-6-luna']!;
+      final sol = verifiedPricingPerModel['gpt-6-sol']!;
+      expect(luna.inputPerMillionUsd, 0.10);
+      expect(luna.outputPerMillionUsd, 0.50);
+      expect(sol.inputPerMillionUsd, 2.00);
+      expect(sol.outputPerMillionUsd, 10.00);
+    });
+
+    test('the summer models keep their verified prices', () {
+      expect(verifiedPricingPerModel['gpt-4.1']!.inputPerMillionUsd, 2.00);
+      expect(verifiedPricingPerModel['gpt-4.1']!.outputPerMillionUsd, 8.00);
+      expect(verifiedPricingPerModel['gpt-5.1']!.inputPerMillionUsd, 1.25);
+      expect(verifiedPricingPerModel['gpt-5.1']!.outputPerMillionUsd, 10.00);
+      expect(verifiedPricingPerModel['gpt-5.5']!.inputPerMillionUsd, 5.00);
+      expect(verifiedPricingPerModel['gpt-5.5']!.outputPerMillionUsd, 30.00);
+    });
+
+    test('a million tokens each way costs the listed total', () {
+      final sol = estimateCostUsd(
+        model: 'gpt-6-sol',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      final luna = estimateCostUsd(
+        model: 'gpt-6-luna',
+        inputTokens: 1000000,
+        outputTokens: 1000000,
+      );
+      expect(sol.usd, closeTo(12.0, 1e-9));
+      expect(luna.usd, closeTo(0.6, 1e-9));
+    });
+  });
 }
