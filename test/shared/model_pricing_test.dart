@@ -83,6 +83,15 @@ void main() {
       }
     });
 
+    test('contains the GPT-6 Luna and Sol prices from decision P3', () {
+      final luna = verifiedPricingPerModel['gpt-6-luna']!;
+      expect(luna.inputPerMillionUsd, 0.10);
+      expect(luna.outputPerMillionUsd, 0.50);
+      final sol = verifiedPricingPerModel['gpt-6-sol']!;
+      expect(sol.inputPerMillionUsd, 2.00);
+      expect(sol.outputPerMillionUsd, 10.00);
+    });
+
     test('does not invent a plain gpt-5.3 price', () {
       expect(verifiedPricingPerModel, isNot(contains('gpt-5.3')));
     });

@@ -391,8 +391,8 @@ Once Andrew has done the merge (0.1): task 1.2, the profile model and file store
 
 Kept by the scheduled build run. One step per run, in the order of this section. A step is done only when it is recorded here.
 
-- [ ] **0.1 Merge `correction_pipeline_refactor` into `main`.** Merge prepared in a pull request on 3 Nov 2026, with the three test-file clashes resolved and the existing tests passing (606 of 607; the one failure is the live test that needs an OpenAI key and was not run). Waiting for Andrew to accept the pull request; then mark done.
-- [ ] E.1 Prices
+- [x] **0.1 Merge `correction_pipeline_refactor` into `main`.** Done 3 Nov 2026 (pull request 169 accepted by Andrew; three test-file clashes resolved; tests passing except the live test that needs an OpenAI key).
+- [ ] E.1 Prices. Prepared 3 Nov 2026 in a pull request; waiting for Andrew to accept. GPT-6 Luna ($0.10 / $0.50) and GPT-6 Sol ($2 / $10) added under the model ids `gpt-6-luna` and `gpt-6-sol`; GPT-4.1, GPT-5.1 and GPT-5.5 already matched the 19 Oct prices.
 - [ ] E.2 Baseline run (Andrew, on his Mac)
 - [ ] E.3 Rework the two-step prompts in the harness
 - [ ] E.4 Partner prompt harness
