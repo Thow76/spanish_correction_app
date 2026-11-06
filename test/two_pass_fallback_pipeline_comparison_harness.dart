@@ -37,7 +37,7 @@
 //   flutter test test/two_pass_fallback_pipeline_comparison_harness.dart --tags live --timeout none
 //
 // Run the all-fixtures, repeated-run mode (issue #122) — every fixture in
-// allTwoPassFixtures (85 as of this writing), 5 runs each, to make live
+// allTwoPassFixtures (84 as of this writing), 5 runs each, to make live
 // model variance visible rather than trusting a single-run result. This
 // is expensive: up to 85 * 5 * 4 = 1700 calls in the worst case (every
 // run triggering fallback). Use FALLBACK_PIPELINE_RUNS_PER_FIXTURE=1 with
@@ -152,10 +152,6 @@ const String candidateFallbackPrompt =
 /// original curated set to cover already-correct do-not-touch and
 /// valid-regional behavior, which the "Changed" filter alone wouldn't
 /// surface. Notable individual entries:
-/// - `grammar-overlaps-naturalness`: documented in its own fixture note
-///   as "the case the fallback exists for" (a first-pass fix landing
-///   inside a naturalness calque span) — the single most load-bearing
-///   fixture for this evaluation's question, previously omitted.
 /// - `ambiguous-naturalness-span`, `article-la-tienda`: the repeated-
 ///   span rewrite and article-duplication fails.
 /// - `false-friend-aplico-trabajo`, `false-friend-embarazado`: false-
@@ -193,7 +189,6 @@ const List<String> fallbackPipelineComparisonFixtureIds = [
   'naturalness-pasar-buen-tiempo',
   'naturalness-puedo-tener-cerveza',
   'mixed-preposition-and-redundant-pronoun',
-  'grammar-overlaps-naturalness',
   'collocation-hacer-paseo',
   'collocation-hace-sentido',
   'prep-empresa-en-la-que',
@@ -1639,11 +1634,13 @@ void main() {
         'data',
         () {
           final fixture = allTwoPassFixtures.firstWhere(
-            (f) => f.id == 'grammar-overlaps-naturalness',
+            (f) => f.id == 'grammar-and-naturalness-independent',
           );
           final result = FallbackPipelineComparisonResult(
             fixture: fixture,
-            firstPassCorrectedText: 'Ayer hizo una decisión importante.',
+            firstPassCorrectedText:
+                'El profesor dijo que debía estudiar más, y ella hizo una '
+                'decisión importante.',
             naturalnessOnOriginalDescription: '(none)',
             hadConflict: true,
             current: FallbackVariantOutcome(

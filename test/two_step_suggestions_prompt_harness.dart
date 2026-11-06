@@ -18,14 +18,14 @@
 // (C3, C4).
 //
 // The harness MEASURES; it does not gate (P5). The report lists the pass
-// rate against the same 85 test sentences as the baseline
+// rate against the same 84 test sentences as the baseline
 // (`test/two_pass_linear_prompt_comparison_harness.dart`), speed and cost
 // per call, and how often a reason line broke the wording rule.
 //
 // Run offline (no API calls):
 //   flutter test test/two_step_suggestions_prompt_harness.dart --exclude-tags live
 //
-// Run live deliberately (costs real API calls: 2 per run; all 85 sentences
+// Run live deliberately (costs real API calls: 2 per run; all 84 sentences
 // five times each is up to 850 calls):
 //   OPENAI_API_KEY=sk-... \
 //   TWO_STEP_LIVE=true \

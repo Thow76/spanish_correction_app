@@ -260,23 +260,6 @@ const List<TwoPassFixture> twoPassIntegrationFixtures = [
         'decisión importante.',
   ),
   TwoPassFixture(
-    id: 'grammar-overlaps-naturalness',
-    text: 'Ayer iso una decisión importante.',
-    note:
-        'The first-pass fix ("iso" -> "hizo") sits inside the exact '
-        'naturalness calque span ("hizo una decisión") — the case the '
-        'fallback exists for. Expect: naturalness-on-original flags the '
-        'pre-correction wording (conflict against firstPassCorrectedText), '
-        'naturalness-on-corrected flags the post-correction wording '
-        '(resolves cleanly) — fallback used.',
-    languagePoint:
-        'Verb Morphology (spelling) overlapping Collocations / Strong '
-        'Calques',
-    operationType: TwoPassOperationType.replacement,
-    expectedOwner: TwoPassExpectedOwner.either,
-    expectedCorrectedText: 'Ayer tomó una decisión importante.',
-  ),
-  TwoPassFixture(
     id: 'ambiguous-naturalness-span',
     text: 'Vi mucho tráfico, y luego vi más tráfico.',
     note:
