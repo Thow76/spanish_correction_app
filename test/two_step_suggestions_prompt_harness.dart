@@ -126,7 +126,7 @@ const String issuesStepPrompt =
     '"se", ser/estar/haber, and missing words that Spanish grammar needs.\n'
     '- Word meaning: a real Spanish word used with the wrong meaning, such '
     'as a false friend, or a word or verb that does not combine with its '
-    'noun the way Spanish does (for example "hacer una decisión").\n'
+    'noun the way Spanish does.\n'
     '\n'
     'Do not report anything else. In particular do not suggest more '
     'natural, more idiomatic or more fluent wording, and do not remove '
@@ -134,9 +134,8 @@ const String issuesStepPrompt =
     'handles those.\n'
     '\n'
     'Do not flag regional forms. Forms used in some Spanish-speaking '
-    'regions but not others (for example "vos tenés", "cojo el autobús", '
-    '"dale", "voy para casa", or the preterite for recent events) are '
-    'valid and must be left alone.\n'
+    'regions but not others, including regional pronouns, verb forms, '
+    'vocabulary and tense preferences, are valid and must be left alone.\n'
     '\n'
     'Most text needs few changes, and some needs none. If there is '
     'nothing to report, return an empty list. If a sentence has several '
@@ -164,21 +163,16 @@ const String suggestionsStepPrompt =
     'Things to look for:\n'
     '- Unnecessary subject pronouns. Spanish usually drops the subject '
     'pronoun when the verb already shows who is acting. When the same '
-    'pronoun is repeated for no reason, for example "Yo trabajo mucho y '
-    'yo estudio por las noches" or "Nosotros salimos temprano y nosotros '
-    'llegamos a tiempo", suggest removing the second one. Keep a pronoun '
-    'that adds contrast, emphasis or clarity.\n'
-    '- Repeated words or phrases that add nothing, such as "a mí me gusta '
-    'el café a mí".\n'
+    'pronoun is repeated for no reason in a second clause, suggest '
+    'removing the repeated one and keep the first. Keep any pronoun that '
+    'adds contrast, emphasis or clarity.\n'
+    '- Repeated words or phrases that add nothing.\n'
     '- Literal translations from English that are understandable but that '
-    'a Spanish speaker would not say (for example "Estoy corriendo tarde", '
-    '"Te llamo para atrás", "Tuvimos un buen tiempo" meaning a good '
-    'time).\n'
+    'a Spanish speaker would not say.\n'
     '\n'
     'Leave alone anything that Spanish speakers commonly say, even if '
     'another wording is also possible. Do not flag regional forms: forms '
-    'used in some Spanish-speaking regions but not others (for example '
-    '"vos tenés", "cojo el autobús", "dale", "voy para casa") are valid. '
+    'used in some Spanish-speaking regions but not others are valid. '
     'Do not change the meaning, add information, or rewrite the whole '
     'sentence. Make the smallest change that fixes the phrasing.\n'
     '\n'
@@ -220,16 +214,15 @@ const String oneStepPrompt =
     '"se", ser/estar/haber, and missing words that Spanish grammar needs.\n'
     '- Word meaning: a real Spanish word used with the wrong meaning, such '
     'as a false friend, or a word or verb that does not combine with its '
-    'noun the way Spanish does (for example "hacer una decisión").\n'
+    'noun the way Spanish does.\n'
     '- Natural phrasing: wording a native writer would clearly say '
     'differently. This includes unnecessary subject pronouns (Spanish '
     'usually drops the pronoun when the verb already shows who is acting; '
-    'when the same pronoun is repeated for no reason, as in "Yo trabajo '
-    'mucho y yo estudio por las noches", suggest removing the second '
-    'one, but keep a pronoun that adds contrast or emphasis), repeated '
-    'words that add nothing (as in "a mí me gusta el café a mí"), and '
-    'literal translations from English that a Spanish speaker would not '
-    'say (for example "Estoy corriendo tarde", "Te llamo para atrás").\n'
+    'when the same pronoun is repeated for no reason in a second clause, '
+    'suggest removing the repeated one and keep the first; keep a pronoun '
+    'that adds contrast or emphasis), repeated words that add nothing, '
+    'and literal translations from English that a Spanish speaker would '
+    'not say.\n'
     '\n'
     'Check every accent mark and every article in the text, not only the '
     'first one you notice. Do not add or remove a comma before "y" unless '
@@ -241,9 +234,8 @@ const String oneStepPrompt =
     'that fixes each point.\n'
     '\n'
     'Do not flag regional forms. Forms used in some Spanish-speaking '
-    'regions but not others (for example "vos tenés", "cojo el autobús", '
-    '"dale", "voy para casa", or the preterite for recent events) are '
-    'valid and must be left alone.\n'
+    'regions but not others, including regional pronouns, verb forms, '
+    'vocabulary and tense preferences, are valid and must be left alone.\n'
     '\n'
     'Most text needs few changes, and some needs none. If there is '
     'nothing to report, return an empty list.\n'
@@ -273,7 +265,8 @@ const String oneStepLeanPrompt =
     '- Word meaning: a word used with the wrong meaning, or a verb that '
     'does not go with its noun in Spanish.\n'
     '- Natural phrasing: wording a native writer would clearly say '
-    'differently, including a subject pronoun repeated for no reason.\n'
+    'differently, including a subject pronoun repeated for no reason in a '
+    'second clause (suggest removing the repeated one, keep the first).\n'
     '\n'
     'Never add or remove commas. Do not flag regional forms. Leave alone '
     'anything Spanish speakers commonly say. Make the smallest change that '
@@ -949,7 +942,7 @@ void main() {
 
     test('the unnecessary-pronoun line is in step 2 and not in step 1', () {
       expect(suggestionsStepPrompt, contains('Unnecessary subject pronouns'));
-      expect(suggestionsStepPrompt, contains('yo estudio por las noches'));
+      expect(suggestionsStepPrompt, contains('keep the first'));
       expect(issuesStepPrompt, isNot(contains('Unnecessary subject pronouns')));
     });
 
@@ -972,6 +965,54 @@ void main() {
           expect(prompt, contains('"$field"'));
         }
       }
+    });
+  });
+
+  group('prompts do not quote the test sentences', () {
+    // Any run of four consecutive words from a test sentence appearing in
+    // a prompt means the prompt is telling the model the answer, and the
+    // score for that sentence measures nothing. Keep examples out of the
+    // prompts, or invent ones that are not in the test set.
+    String normalise(String text) => text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\p{L}\p{N}\s]', unicode: true), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final prompts = {
+      'issuesStepPrompt': normalise(issuesStepPrompt),
+      'suggestionsStepPrompt': normalise(suggestionsStepPrompt),
+      'oneStepPrompt': normalise(oneStepPrompt),
+      'oneStepLeanPrompt': normalise(oneStepLeanPrompt),
+    };
+
+    test('no four-word run from any test sentence appears in any prompt', () {
+      final offences = <String>[];
+      for (final fixture in allTwoPassFixtures) {
+        final words = normalise(fixture.text).split(' ');
+        for (var i = 0; i + 4 <= words.length; i++) {
+          final run = words.sublist(i, i + 4).join(' ');
+          for (final entry in prompts.entries) {
+            if (entry.value.contains(run)) {
+              offences.add('${entry.key} quotes "${run}" (${fixture.id})');
+            }
+          }
+        }
+      }
+      expect(offences, isEmpty, reason: offences.join('\n'));
+    });
+
+    test('no short test sentence appears whole in any prompt', () {
+      final offences = <String>[];
+      for (final fixture in allTwoPassFixtures) {
+        final whole = normalise(fixture.text);
+        for (final entry in prompts.entries) {
+          if (entry.value.contains(whole)) {
+            offences.add('${entry.key} quotes "${fixture.text}"');
+          }
+        }
+      }
+      expect(offences, isEmpty, reason: offences.join('\n'));
     });
   });
 
@@ -1235,7 +1276,7 @@ void main() {
       expect(oneStepPrompt, contains('report every point you find'));
       expect(oneStepPrompt, contains('Check every accent mark and every article'));
       expect(oneStepPrompt, contains('comma before "y"'));
-      expect(oneStepPrompt, contains('yo estudio por las noches'));
+      expect(oneStepPrompt, contains('keep the first'));
       expect(oneStepPrompt, contains('Do not flag regional forms'));
       expect(oneStepPrompt, contains('Never use the words "wrong", "error"'));
     });
@@ -1247,7 +1288,7 @@ void main() {
       expect(oneStepLeanPrompt, contains('Never add or remove commas'));
       expect(oneStepLeanPrompt, contains('Do not flag regional forms'));
       expect(oneStepLeanPrompt, contains('Never use the words "wrong", "error"'));
-      expect(oneStepLeanPrompt, isNot(contains('yo estudio por las noches')));
+      expect(oneStepLeanPrompt, contains('keep the first'));
       expect(oneStepLeanPrompt.length, lessThan(oneStepPrompt.length ~/ 2));
     });
 
