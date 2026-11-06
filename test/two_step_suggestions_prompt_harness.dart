@@ -43,6 +43,14 @@
 // - TWO_STEP_RUNS_PER_FIXTURE: defaults to 1.
 // - TWO_STEP_CALL_DELAY_MS: pause between runs, defaults to 750.
 // - TWO_STEP_OUTPUT: report path, defaults to docs/two_step_suggestions.md.
+// - TWO_STEP_MODE: "two" (default) or "one". In "one" mode the merged
+//   prompt (oneStepPrompt) runs once per sentence on TWO_STEP_ONE_MODEL
+//   (defaults to gpt-6-luna) and returns all four categories; the report
+//   then has one cost row. Run it once per model to compare them:
+//     TWO_STEP_LIVE=true TWO_STEP_MODE=one TWO_STEP_ONE_MODEL=gpt-6-luna \
+//     TWO_STEP_FIXTURE_SET=all TWO_STEP_RUNS_PER_FIXTURE=5 \
+//     TWO_STEP_OUTPUT=docs/one_step_luna_5x.md \
+//     flutter test test/two_step_suggestions_prompt_harness.dart --tags live --timeout none
 
 import 'dart:convert';
 import 'dart:io';
@@ -175,6 +183,70 @@ const String suggestionsStepPrompt =
     'return an empty list.\n'
     '\n'
     'The only allowed category is: Natural phrasing.\n'
+    '\n'
+    '$_itemShape'
+    '\n'
+    '$_reasonRules'
+    '\n'
+    'Return JSON only, with no Markdown and no commentary.';
+
+/// All four categories, for the one-call mode.
+const List<String> allCategories = [
+  ...issueCategories,
+  ...suggestionCategories,
+];
+
+/// One-call mode: the two step prompts merged into a single prompt that may
+/// return all four categories. Run once with each model to compare it with
+/// the two-step check. Same item shape, same wording rules, same "do not
+/// flag regional forms" line; adds "go word by word and report every
+/// instance", since one call has no second look.
+const String oneStepPrompt =
+    'You are a Spanish tutor checking a learner\'s writing. The text may '
+    'be typed or transcribed. Read it word by word, from the first word '
+    'to the last, and report every point you find; a sentence often has '
+    'more than one, so do not stop after the first.\n'
+    '\n'
+    'Report these categories:\n'
+    '- Spelling: misspelled words, missing or wrong accent marks, missing '
+    'ñ, missing opening question or exclamation marks, capitalisation and '
+    'punctuation that Spanish writing requires.\n'
+    '- Grammar: agreement of gender, number and person, verb forms and '
+    'tenses, mood (including the subjunctive), articles, required '
+    'prepositions, the personal "a", required pronouns such as "le" or '
+    '"se", ser/estar/haber, and missing words that Spanish grammar needs.\n'
+    '- Word meaning: a real Spanish word used with the wrong meaning, such '
+    'as a false friend, or a word or verb that does not combine with its '
+    'noun the way Spanish does (for example "hacer una decisión").\n'
+    '- Natural phrasing: wording a native writer would clearly say '
+    'differently. This includes unnecessary subject pronouns (Spanish '
+    'usually drops the pronoun when the verb already shows who is acting; '
+    'when the same pronoun is repeated for no reason, as in "Yo trabajo '
+    'mucho y yo estudio por las noches", suggest removing the second '
+    'one, but keep a pronoun that adds contrast or emphasis), repeated '
+    'words that add nothing (as in "a mí me gusta el café a mí"), and '
+    'literal translations from English that a Spanish speaker would not '
+    'say (for example "Estoy corriendo tarde", "Te llamo para atrás").\n'
+    '\n'
+    'Check every accent mark and every article in the text, not only the '
+    'first one you notice. Do not add or remove a comma before "y" unless '
+    'Spanish punctuation requires it.\n'
+    '\n'
+    'Leave alone anything that Spanish speakers commonly say, even if '
+    'another wording is also possible. Do not change the meaning, add '
+    'information, or rewrite the whole sentence. Make the smallest change '
+    'that fixes each point.\n'
+    '\n'
+    'Do not flag regional forms. Forms used in some Spanish-speaking '
+    'regions but not others (for example "vos tenés", "cojo el autobús", '
+    '"dale", "voy para casa", or the preterite for recent events) are '
+    'valid and must be left alone.\n'
+    '\n'
+    'Most text needs few changes, and some needs none. If there is '
+    'nothing to report, return an empty list.\n'
+    '\n'
+    'The allowed categories are: Spelling, Grammar, Word meaning, Natural '
+    'phrasing.\n'
     '\n'
     '$_itemShape'
     '\n'
@@ -515,6 +587,51 @@ Future<TwoStepResult> runTwoStep({
   );
 }
 
+/// One-call mode: runs [oneStepPrompt] once on [model]. The reply's Issue
+/// items are recorded as step 1 items and its Natural phrasing items as
+/// step 2 items, so the same report and scorer apply; the one call's time
+/// and cost are recorded under step 1 and step 2 is zero.
+Future<TwoStepResult> runOneStep({
+  required String apiKey,
+  required HttpClient httpClient,
+  required String model,
+  required TwoPassFixture fixture,
+  int runIndex = 1,
+}) async {
+  final step = await _callStep(
+    apiKey: apiKey,
+    httpClient: httpClient,
+    model: model,
+    systemPrompt: oneStepPrompt,
+    categories: allCategories,
+    stageLabel: 'one_step_check',
+    text: fixture.text,
+  );
+  final checked = checkItems(
+    text: fixture.text,
+    items: step.items,
+    allowedCategories: allCategories,
+  );
+  final applied = applyItems(fixture.text, checked.kept);
+  bool isIssue(SuggestionItem i) => issueCategories.contains(i.category);
+
+  return TwoStepResult(
+    fixture: fixture,
+    runIndex: runIndex,
+    issueItems: applied.applied.where(isIssue).toList(),
+    issuesDropped: checked.dropped,
+    issuesNotApplied: applied.notApplied,
+    textAfterIssues: applied.text,
+    suggestionItems: applied.applied.where((i) => !isIssue(i)).toList(),
+    suggestionsDropped: const [],
+    suggestionsNotApplied: const [],
+    finalText: applied.text,
+    issuesStats: step.stats,
+    suggestionsStats: CallStats.zero,
+    score: scoreFinalText(fixture, applied.text),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
@@ -544,15 +661,21 @@ String buildTwoStepReport({
   required String suggestionsModel,
   required List<TwoStepResult> results,
   required DateTime generatedAt,
+  bool oneStep = false,
 }) {
   final b = StringBuffer()
     ..writeln('# Two-step suggestions harness (build step E.3)')
     ..writeln()
     ..writeln(
-      'Step 1 (Issues: Spelling, Grammar, Word meaning) on `$issuesModel`; '
-      'step 2 (Suggestions: Natural phrasing) on `$suggestionsModel`, '
-      'reading the text after step 1\'s suggestions were applied. This '
-      'report measures; it does not gate.',
+      oneStep
+          ? 'One-call mode: a single prompt returning all four categories '
+                '(Spelling, Grammar, Word meaning, Natural phrasing) on '
+                '`$issuesModel`. This report measures; it does not gate.'
+          : 'Step 1 (Issues: Spelling, Grammar, Word meaning) on '
+                '`$issuesModel`; step 2 (Suggestions: Natural phrasing) on '
+                '`$suggestionsModel`, reading the text after step 1\'s '
+                'suggestions were applied. This report measures; it does '
+                'not gate.',
     )
     ..writeln()
     ..writeln(baselineSummary)
@@ -612,24 +735,33 @@ String buildTwoStepReport({
     ..writeln('## Speed and cost per call')
     ..writeln()
     ..writeln('| Step | Model | Average time (ms) | Average cost | Total cost |')
-    ..writeln('| --- | --- | --- | --- | --- |')
-    ..writeln(
-      '| 1 Issues | `$issuesModel` | ${(s1.wallClockMs / n).round()} | '
+    ..writeln('| --- | --- | --- | --- | --- |');
+  if (oneStep) {
+    b.writeln(
+      '| One call | `$issuesModel` | ${(s1.wallClockMs / n).round()} | '
       '${_cost(s1.costUsd == null ? null : s1.costUsd! / n)} | '
       '${_cost(s1.costUsd)} |',
-    )
-    ..writeln(
-      '| 2 Suggestions | `$suggestionsModel` | '
-      '${(s2.wallClockMs / n).round()} | '
-      '${_cost(s2.costUsd == null ? null : s2.costUsd! / n)} | '
-      '${_cost(s2.costUsd)} |',
-    )
-    ..writeln(
-      '| Both | | ${((s1.wallClockMs + s2.wallClockMs) / n).round()} | '
-      '${_cost(s1.costUsd == null || s2.costUsd == null ? null : (s1.costUsd! + s2.costUsd!) / n)} | '
-      '${_cost(s1.costUsd == null || s2.costUsd == null ? null : s1.costUsd! + s2.costUsd!)} |',
-    )
-    ..writeln();
+    );
+  } else {
+    b
+      ..writeln(
+        '| 1 Issues | `$issuesModel` | ${(s1.wallClockMs / n).round()} | '
+        '${_cost(s1.costUsd == null ? null : s1.costUsd! / n)} | '
+        '${_cost(s1.costUsd)} |',
+      )
+      ..writeln(
+        '| 2 Suggestions | `$suggestionsModel` | '
+        '${(s2.wallClockMs / n).round()} | '
+        '${_cost(s2.costUsd == null ? null : s2.costUsd! / n)} | '
+        '${_cost(s2.costUsd)} |',
+      )
+      ..writeln(
+        '| Both | | ${((s1.wallClockMs + s2.wallClockMs) / n).round()} | '
+        '${_cost(s1.costUsd == null || s2.costUsd == null ? null : (s1.costUsd! + s2.costUsd!) / n)} | '
+        '${_cost(s1.costUsd == null || s2.costUsd == null ? null : s1.costUsd! + s2.costUsd!)} |',
+      );
+  }
+  b.writeln();
 
   // Wording and housekeeping counts.
   final shown = results.fold<int>(0, (a, r) => a + r.allShownItems.length);
@@ -694,6 +826,15 @@ String _setting(Map<String, String> env, String key, String fallback) {
 
 bool twoStepLiveOptIn(Map<String, String> env) =>
     env['TWO_STEP_LIVE']?.trim().toLowerCase() == 'true';
+
+/// `TWO_STEP_MODE`: "two" (default) runs the two steps; "one" runs
+/// [oneStepPrompt] once on `TWO_STEP_ONE_MODEL`.
+bool twoStepOneCallMode(Map<String, String> env) {
+  final mode = env['TWO_STEP_MODE']?.trim().toLowerCase() ?? '';
+  if (mode.isEmpty || mode == 'two') return false;
+  if (mode == 'one') return true;
+  throw ArgumentError('TWO_STEP_MODE must be "two" or "one" (was "$mode").');
+}
 
 int twoStepRunsPerFixtureFrom(Map<String, String> env) {
   final runs = int.tryParse(env['TWO_STEP_RUNS_PER_FIXTURE']?.trim() ?? '');
@@ -957,6 +1098,75 @@ void main() {
       expect(defaultIssuesModel, 'gpt-6-luna');
       expect(defaultSuggestionsModel, 'gpt-6-sol');
     });
+
+    test('the mode defaults to two steps and accepts "one"', () {
+      expect(twoStepOneCallMode({}), isFalse);
+      expect(twoStepOneCallMode({'TWO_STEP_MODE': 'two'}), isFalse);
+      expect(twoStepOneCallMode({'TWO_STEP_MODE': 'one'}), isTrue);
+      expect(
+        () => twoStepOneCallMode({'TWO_STEP_MODE': 'three'}),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('one-call mode', () {
+    test('the merged prompt names all four categories and the key rules', () {
+      for (final category in allCategories) {
+        expect(oneStepPrompt, contains(category));
+      }
+      expect(allCategories, hasLength(4));
+      expect(oneStepPrompt, contains('report every point you find'));
+      expect(oneStepPrompt, contains('Check every accent mark and every article'));
+      expect(oneStepPrompt, contains('comma before "y"'));
+      expect(oneStepPrompt, contains('yo estudio por las noches'));
+      expect(oneStepPrompt, contains('Do not flag regional forms'));
+      expect(oneStepPrompt, contains('Never use the words "wrong", "error"'));
+    });
+
+    test('the schema for one-call mode allows all four categories', () {
+      final schema = suggestionResponseFormat(allCategories).toString();
+      for (final category in allCategories) {
+        expect(schema, contains(category));
+      }
+    });
+
+    test('the one-call report names the mode and shows one cost row', () {
+      final fixture = allTwoPassFixtures.firstWhere(
+        (f) => f.id == 'clean-grammar-only',
+      );
+      final report = buildTwoStepReport(
+        issuesModel: 'gpt-6-sol',
+        suggestionsModel: 'gpt-6-sol',
+        oneStep: true,
+        generatedAt: DateTime.utc(2026, 11, 7),
+        results: [
+          TwoStepResult(
+            fixture: fixture,
+            runIndex: 1,
+            issueItems: const [],
+            issuesDropped: const [],
+            issuesNotApplied: const [],
+            textAfterIssues: fixture.expectedCorrectedText,
+            suggestionItems: const [],
+            suggestionsDropped: const [],
+            suggestionsNotApplied: const [],
+            finalText: fixture.expectedCorrectedText,
+            issuesStats: const CallStats(
+              wallClockMs: 1500,
+              totalTokens: 100,
+              costUsd: 0.002,
+            ),
+            suggestionsStats: CallStats.zero,
+            score: scoreFinalText(fixture, fixture.expectedCorrectedText),
+          ),
+        ],
+      );
+      expect(report, contains('One-call mode'));
+      expect(report, contains('| One call | `gpt-6-sol` | 1500 |'));
+      expect(report, isNot(contains('| 2 Suggestions |')));
+      expect(report, contains('**Pass rate: 1 of 1 (100.0 per cent).**'));
+    });
   });
 
   group('report', () {
@@ -1076,19 +1286,33 @@ void main() {
           750;
       final fixtures = twoStepFixturesFrom(environment);
       final runsPerFixture = twoStepRunsPerFixtureFrom(environment);
+      final oneCall = twoStepOneCallMode(environment);
+      final oneModel = _setting(
+        environment,
+        'TWO_STEP_ONE_MODEL',
+        defaultIssuesModel,
+      );
       final httpClient = HttpClient();
 
       final results = <TwoStepResult>[];
       for (final fixture in fixtures) {
         for (var run = 1; run <= runsPerFixture; run++) {
-          final result = await runTwoStep(
-            apiKey: apiKey,
-            httpClient: httpClient,
-            issuesModel: issuesModel,
-            suggestionsModel: suggestionsModel,
-            fixture: fixture,
-            runIndex: run,
-          );
+          final result = oneCall
+              ? await runOneStep(
+                  apiKey: apiKey,
+                  httpClient: httpClient,
+                  model: oneModel,
+                  fixture: fixture,
+                  runIndex: run,
+                )
+              : await runTwoStep(
+                  apiKey: apiKey,
+                  httpClient: httpClient,
+                  issuesModel: issuesModel,
+                  suggestionsModel: suggestionsModel,
+                  fixture: fixture,
+                  runIndex: run,
+                );
           results.add(result);
           // ignore: avoid_print
           print(
@@ -1100,10 +1324,11 @@ void main() {
       }
 
       final report = buildTwoStepReport(
-        issuesModel: issuesModel,
+        issuesModel: oneCall ? oneModel : issuesModel,
         suggestionsModel: suggestionsModel,
         results: results,
         generatedAt: DateTime.now(),
+        oneStep: oneCall,
       );
       final file = File(outputPath);
       await file.parent.create(recursive: true);
