@@ -43,6 +43,9 @@
 // - TWO_STEP_RUNS_PER_FIXTURE: defaults to 1.
 // - TWO_STEP_CALL_DELAY_MS: pause between runs, defaults to 750.
 // - TWO_STEP_OUTPUT: report path, defaults to docs/two_step_suggestions.md.
+// - TWO_STEP_ONE_PROMPT: "full" (default) or "lean": the lean one-call
+//   prompt has only the categories, item shape, wording rules and the
+//   regional line, and never touches commas. For isolating the model.
 // - TWO_STEP_MODE: "two" (default) or "one". In "one" mode the merged
 //   prompt (oneStepPrompt) runs once per sentence on TWO_STEP_ONE_MODEL
 //   (defaults to gpt-6-luna) and returns all four categories; the report
@@ -244,6 +247,38 @@ const String oneStepPrompt =
     '\n'
     'Most text needs few changes, and some needs none. If there is '
     'nothing to report, return an empty list.\n'
+    '\n'
+    'The allowed categories are: Spelling, Grammar, Word meaning, Natural '
+    'phrasing.\n'
+    '\n'
+    '$_itemShape'
+    '\n'
+    '$_reasonRules'
+    '\n'
+    'Return JSON only, with no Markdown and no commentary.';
+
+/// Lean one-call prompt, for isolating the model from the prompt: the same
+/// four categories and item shape, the wording rules and the regional line,
+/// and nothing else. No accent or article reminders, no example sentences,
+/// and commas are simply never touched. Pick it with TWO_STEP_ONE_PROMPT=lean.
+const String oneStepLeanPrompt =
+    'You are a Spanish tutor checking a learner\'s writing. Report every '
+    'point you find, each as its own item.\n'
+    '\n'
+    'Categories:\n'
+    '- Spelling: misspellings, missing accent marks or ñ, missing opening '
+    '¿ or ¡.\n'
+    '- Grammar: agreement, verb forms and moods, articles, required '
+    'prepositions and pronouns, ser/estar/haber, missing words.\n'
+    '- Word meaning: a word used with the wrong meaning, or a verb that '
+    'does not go with its noun in Spanish.\n'
+    '- Natural phrasing: wording a native writer would clearly say '
+    'differently, including a subject pronoun repeated for no reason.\n'
+    '\n'
+    'Never add or remove commas. Do not flag regional forms. Leave alone '
+    'anything Spanish speakers commonly say. Make the smallest change that '
+    'fixes each point. If there is nothing to report, return an empty '
+    'list.\n'
     '\n'
     'The allowed categories are: Spelling, Grammar, Word meaning, Natural '
     'phrasing.\n'
@@ -597,12 +632,13 @@ Future<TwoStepResult> runOneStep({
   required String model,
   required TwoPassFixture fixture,
   int runIndex = 1,
+  String prompt = oneStepPrompt,
 }) async {
   final step = await _callStep(
     apiKey: apiKey,
     httpClient: httpClient,
     model: model,
-    systemPrompt: oneStepPrompt,
+    systemPrompt: prompt,
     categories: allCategories,
     stageLabel: 'one_step_check',
     text: fixture.text,
@@ -826,6 +862,17 @@ String _setting(Map<String, String> env, String key, String fallback) {
 
 bool twoStepLiveOptIn(Map<String, String> env) =>
     env['TWO_STEP_LIVE']?.trim().toLowerCase() == 'true';
+
+/// `TWO_STEP_ONE_PROMPT`: "full" (default, [oneStepPrompt]) or "lean"
+/// ([oneStepLeanPrompt]).
+String oneStepPromptFrom(Map<String, String> env) {
+  final variant = env['TWO_STEP_ONE_PROMPT']?.trim().toLowerCase() ?? '';
+  if (variant.isEmpty || variant == 'full') return oneStepPrompt;
+  if (variant == 'lean') return oneStepLeanPrompt;
+  throw ArgumentError(
+    'TWO_STEP_ONE_PROMPT must be "full" or "lean" (was "$variant").',
+  );
+}
 
 /// `TWO_STEP_MODE`: "two" (default) runs the two steps; "one" runs
 /// [oneStepPrompt] once on `TWO_STEP_ONE_MODEL`.
@@ -1124,6 +1171,30 @@ void main() {
       expect(oneStepPrompt, contains('Never use the words "wrong", "error"'));
     });
 
+    test('the lean prompt has the categories and never touches commas', () {
+      for (final category in allCategories) {
+        expect(oneStepLeanPrompt, contains(category));
+      }
+      expect(oneStepLeanPrompt, contains('Never add or remove commas'));
+      expect(oneStepLeanPrompt, contains('Do not flag regional forms'));
+      expect(oneStepLeanPrompt, contains('Never use the words "wrong", "error"'));
+      expect(oneStepLeanPrompt, isNot(contains('yo estudio por las noches')));
+      expect(oneStepLeanPrompt.length, lessThan(oneStepPrompt.length ~/ 2));
+    });
+
+    test('the prompt variant defaults to full and accepts lean', () {
+      expect(oneStepPromptFrom({}), oneStepPrompt);
+      expect(oneStepPromptFrom({'TWO_STEP_ONE_PROMPT': 'full'}), oneStepPrompt);
+      expect(
+        oneStepPromptFrom({'TWO_STEP_ONE_PROMPT': 'lean'}),
+        oneStepLeanPrompt,
+      );
+      expect(
+        () => oneStepPromptFrom({'TWO_STEP_ONE_PROMPT': 'short'}),
+        throwsArgumentError,
+      );
+    });
+
     test('the schema for one-call mode allows all four categories', () {
       final schema = suggestionResponseFormat(allCategories).toString();
       for (final category in allCategories) {
@@ -1287,6 +1358,7 @@ void main() {
       final fixtures = twoStepFixturesFrom(environment);
       final runsPerFixture = twoStepRunsPerFixtureFrom(environment);
       final oneCall = twoStepOneCallMode(environment);
+      final onePrompt = oneStepPromptFrom(environment);
       final oneModel = _setting(
         environment,
         'TWO_STEP_ONE_MODEL',
@@ -1304,6 +1376,7 @@ void main() {
                   model: oneModel,
                   fixture: fixture,
                   runIndex: run,
+                  prompt: onePrompt,
                 )
               : await runTwoStep(
                   apiKey: apiKey,
@@ -1324,7 +1397,9 @@ void main() {
       }
 
       final report = buildTwoStepReport(
-        issuesModel: oneCall ? oneModel : issuesModel,
+        issuesModel: oneCall
+            ? (onePrompt == oneStepLeanPrompt ? '$oneModel, lean prompt' : oneModel)
+            : issuesModel,
         suggestionsModel: suggestionsModel,
         results: results,
         generatedAt: DateTime.now(),
