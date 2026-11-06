@@ -37,8 +37,9 @@
 // Optional runtime controls:
 // - TWO_STEP_ISSUES_MODEL: defaults to gpt-6-luna.
 // - TWO_STEP_SUGGESTIONS_MODEL: defaults to gpt-6-sol.
-// - TWO_STEP_FIXTURE_SET: "all" (default), "comparison", "fixture_id"
-//   (with TWO_STEP_FIXTURE_ID) or "language_point" (with
+// - TWO_STEP_FIXTURE_SET: "all" (default), "errors" (only the sentences
+//   with something to find), "comparison", "fixture_id" (with
+//   TWO_STEP_FIXTURE_ID) or "language_point" (with
 //   TWO_STEP_LANGUAGE_POINT).
 // - TWO_STEP_RUNS_PER_FIXTURE: defaults to 1.
 // - TWO_STEP_CALL_DELAY_MS: pause between runs, defaults to 750.
@@ -68,6 +69,7 @@ import 'two_pass_integration_harness.dart'
         CallStats,
         FixtureResult,
         TwoPassFixture,
+        TwoPassOperationType,
         TwoPassScoreLabel,
         TwoPassScoreLabelReportName,
         allTwoPassFixtures,
@@ -552,6 +554,21 @@ class TwoStepResult {
 
   bool get passed => isPassingScore(score);
 
+  /// True when the model said something was wrong with the sentence: it
+  /// returned at least one item (shown or dropped) or changed the text.
+  /// This is detection only; it says nothing about whether the fix was
+  /// the one we expected.
+  bool get flagged =>
+      issueItems.isNotEmpty ||
+      issuesDropped.isNotEmpty ||
+      suggestionItems.isNotEmpty ||
+      suggestionsDropped.isNotEmpty ||
+      finalText != fixture.text;
+
+  /// True for a sentence that has something to find.
+  bool get hasProblem =>
+      fixture.operationType != TwoPassOperationType.noChange;
+
   List<SuggestionItem> get allShownItems => [...issueItems, ...suggestionItems];
 
   int get reasonsBreakingWordingRule =>
@@ -854,6 +871,46 @@ String buildTwoStepReport({
     ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
     ..writeln();
 
+  // Detection: did the model say something was wrong, yes or no.
+  final problemRuns = results.where((r) => r.hasProblem).toList();
+  final cleanRuns = results.where((r) => !r.hasProblem).toList();
+  final caught = problemRuns.where((r) => r.flagged).length;
+  final falseAlarms = cleanRuns.where((r) => r.flagged).length;
+  b
+    ..writeln('## Did it flag a problem?')
+    ..writeln()
+    ..writeln(
+      '**Sentences with a problem: flagged $caught of ${problemRuns.length} '
+      'runs (${_percent(caught, problemRuns.length)}).**',
+    )
+    ..writeln()
+    ..writeln(
+      '- Clean sentences wrongly flagged: `$falseAlarms` of '
+      '`${cleanRuns.length}` runs',
+    )
+    ..writeln()
+    ..writeln(
+      '"Flagged" means the model returned at least one item or changed the '
+      'text. Whether the fix matched is scored separately below.',
+    )
+    ..writeln()
+    ..writeln('| Sentence | Language point | Flagged | Runs | Every run? |')
+    ..writeln('| --- | --- | --- | --- | --- |');
+  final seen = <String>{};
+  for (final r in results) {
+    if (!seen.add(r.fixture.id)) continue;
+    final rows = results.where((x) => x.fixture.id == r.fixture.id);
+    final n = rows.where((x) => x.flagged).length;
+    final label = r.hasProblem
+        ? (n == rows.length ? 'true' : 'false')
+        : (n == 0 ? 'clean, left alone' : 'clean, FLAGGED');
+    b.writeln(
+      '| `${r.fixture.text}` | ${r.fixture.languagePoint} | $n | '
+      '${rows.length} | $label |',
+    );
+  }
+  b.writeln();
+
   final passed = results.where((r) => r.passed).length;
   b
     ..writeln('## Overall')
@@ -1036,12 +1093,21 @@ int twoStepRunsPerFixtureFrom(Map<String, String> env) {
   return runs;
 }
 
-List<TwoPassFixture> twoStepFixturesFrom(Map<String, String> env) =>
-    linearFixturesFor(
-      _setting(env, 'TWO_STEP_FIXTURE_SET', 'all'),
-      fixtureId: env['TWO_STEP_FIXTURE_ID']?.trim(),
-      languagePoint: env['TWO_STEP_LANGUAGE_POINT']?.trim(),
-    );
+/// The sentences that have something to find: every fixture except the
+/// clean ones. `TWO_STEP_FIXTURE_SET=errors` runs just these.
+List<TwoPassFixture> get errorFixtures => allTwoPassFixtures
+    .where((f) => f.operationType != TwoPassOperationType.noChange)
+    .toList();
+
+List<TwoPassFixture> twoStepFixturesFrom(Map<String, String> env) {
+  final set = _setting(env, 'TWO_STEP_FIXTURE_SET', 'all');
+  if (set == 'errors') return errorFixtures;
+  return linearFixturesFor(
+    set,
+    fixtureId: env['TWO_STEP_FIXTURE_ID']?.trim(),
+    languagePoint: env['TWO_STEP_LANGUAGE_POINT']?.trim(),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -1390,6 +1456,17 @@ void main() {
       expect(twoStepLiveOptIn({'TWO_STEP_LIVE': 'true'}), isTrue);
     });
 
+    test('"errors" picks only the sentences with something to find', () {
+      final picked = twoStepFixturesFrom({'TWO_STEP_FIXTURE_SET': 'errors'});
+      expect(picked, isNotEmpty);
+      expect(picked.length, lessThan(allTwoPassFixtures.length));
+      expect(
+        picked.every((f) => f.operationType != TwoPassOperationType.noChange),
+        isTrue,
+      );
+      expect(twoStepFixturesFrom({}), allTwoPassFixtures);
+    });
+
     test('runs per sentence defaults to 1 and rejects less than 1', () {
       expect(twoStepRunsPerFixtureFrom({}), 1);
       expect(twoStepRunsPerFixtureFrom({'TWO_STEP_RUNS_PER_FIXTURE': '5'}), 5);
@@ -1575,6 +1652,57 @@ void main() {
         score: scoreFinalText(fixture, finalText),
       );
     }
+
+    test('leads with whether the model flagged a problem, yes or no', () {
+      final clean = result(
+        id: 'clean-grammar-only',
+        finalText: allTwoPassFixtures
+            .firstWhere((f) => f.id == 'clean-grammar-only')
+            .text,
+        issues: const [],
+      );
+      final problem = allTwoPassFixtures.firstWhere(
+        (f) => f.operationType != TwoPassOperationType.noChange,
+      );
+      final missed = result(
+        id: problem.id,
+        finalText: problem.text,
+        issues: const [],
+      );
+      final spotted = result(
+        id: problem.id,
+        finalText: problem.text,
+        issues: const [
+          SuggestionItem(
+            written: 'x',
+            suggestion: 'y',
+            category: 'Grammar',
+            reason: 'r',
+          ),
+        ],
+      );
+      expect(clean.flagged, isFalse);
+      expect(clean.hasProblem, isFalse);
+      expect(missed.flagged, isFalse);
+      expect(spotted.flagged, isTrue);
+      expect(spotted.hasProblem, isTrue);
+
+      final report = buildTwoStepReport(
+        issuesModel: 'gpt-6-luna',
+        suggestionsModel: 'gpt-6-sol',
+        generatedAt: DateTime.utc(2026, 11, 7),
+        results: [clean, missed, spotted],
+      );
+      expect(report, contains('## Did it flag a problem?'));
+      expect(report, contains('flagged 1 of 2 runs (50.0 per cent)'));
+      expect(report, contains('Clean sentences wrongly flagged: `0` of `1`'));
+      expect(report, contains('| 1 | 2 | false |'));
+      expect(report, contains('clean, left alone'));
+      expect(
+        report.indexOf('## Did it flag'),
+        lessThan(report.indexOf('## Overall')),
+      );
+    });
 
     test('states the baseline, pass rate, speed, cost and wording count', () {
       final good = allTwoPassFixtures.firstWhere(
