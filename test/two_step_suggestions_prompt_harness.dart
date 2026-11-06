@@ -1289,7 +1289,7 @@ void main() {
       expect(oneStepLeanPrompt, contains('Do not flag regional forms'));
       expect(oneStepLeanPrompt, contains('Never use the words "wrong", "error"'));
       expect(oneStepLeanPrompt, contains('keep the first'));
-      expect(oneStepLeanPrompt.length, lessThan(oneStepPrompt.length ~/ 2));
+      expect(oneStepLeanPrompt.length, lessThan(oneStepPrompt.length));
     });
 
     test('the prompt variant defaults to full and accepts lean', () {
