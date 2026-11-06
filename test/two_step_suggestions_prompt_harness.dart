@@ -88,8 +88,10 @@ const List<String> issueCategories = ['Spelling', 'Grammar', 'Word meaning'];
 const List<String> suggestionCategories = ['Natural phrasing'];
 
 const String _itemShape =
-    'Return a JSON object with one field, "items": a list. Each item has '
-    'exactly four fields:\n'
+    'Return a JSON object with two fields. "corrected_text": the whole '
+    'text with every one of your suggestions applied, and nothing else '
+    'changed; if you have nothing to report, the text exactly as it was. '
+    '"items": a list. Each item has exactly four fields:\n'
     '- "written": the words exactly as the learner wrote them, copied '
     'character for character from the text. Keep it as short as it can be '
     'while still being unique in the text. Where you remove words, include '
@@ -292,8 +294,9 @@ Map<String, Object?> suggestionResponseFormat(List<String> categories) => {
     'schema': {
       'type': 'object',
       'additionalProperties': false,
-      'required': ['items'],
+      'required': ['corrected_text', 'items'],
       'properties': {
+        'corrected_text': {'type': 'string'},
         'items': {
           'type': 'array',
           'items': {
@@ -332,11 +335,23 @@ class SuggestionItem {
   final String reason;
 }
 
+/// A step's parsed reply: the whole corrected text (null if the reply did
+/// not carry one) and the four-part items.
+class StepReply {
+  const StepReply({required this.correctedText, required this.items});
+  final String? correctedText;
+  final List<SuggestionItem> items;
+}
+
 /// Parses a step's reply. Tolerates Markdown fences or commentary around
 /// the JSON object. Throws [FormatException] when there is no object or no
 /// "items" list; skips (rather than throws on) an item with a missing or
-/// non-string field.
-List<SuggestionItem> parseSuggestionItems(String replyText) {
+/// non-string field. A missing "corrected_text" is tolerated as null so
+/// that older replies and offline tests still parse.
+List<SuggestionItem> parseSuggestionItems(String replyText) =>
+    parseStepReply(replyText).items;
+
+StepReply parseStepReply(String replyText) {
   final trimmed = replyText.trim();
   final start = trimmed.indexOf('{');
   final end = trimmed.lastIndexOf('}');
@@ -351,6 +366,7 @@ List<SuggestionItem> parseSuggestionItems(String replyText) {
   if (items is! List) {
     throw const FormatException('Reply has no "items" list.');
   }
+  final corrected = decoded['corrected_text'];
   final result = <SuggestionItem>[];
   for (final raw in items) {
     if (raw is! Map<String, Object?>) continue;
@@ -373,7 +389,10 @@ List<SuggestionItem> parseSuggestionItems(String replyText) {
       ),
     );
   }
-  return result;
+  return StepReply(
+    correctedText: corrected is String ? corrected : null,
+    items: result,
+  );
 }
 
 /// Splits [items] into the ones this step may use and the ones it may not:
@@ -506,6 +525,7 @@ class TwoStepResult {
     required this.suggestionsStats,
     required this.score,
     this.error,
+    this.itemsMatchCorrectedText = true,
   });
 
   final TwoPassFixture fixture;
@@ -525,6 +545,10 @@ class TwoStepResult {
   /// The service's failure message when every retry failed and this run is
   /// scored [TwoPassScoreLabel.error]; null otherwise.
   final String? error;
+
+  /// False when applying the items did not reproduce the model's own
+  /// corrected text; the score is from the corrected text either way.
+  final bool itemsMatchCorrectedText;
 
   bool get passed => isPassingScore(score);
 
@@ -558,7 +582,8 @@ TwoPassScoreLabel scoreFinalText(TwoPassFixture fixture, String finalText) {
   );
 }
 
-Future<({List<SuggestionItem> items, CallStats stats})> _callStep({
+Future<({String? correctedText, List<SuggestionItem> items, CallStats stats})>
+_callStep({
   required String apiKey,
   required HttpClient httpClient,
   required String model,
@@ -584,10 +609,29 @@ Future<({List<SuggestionItem> items, CallStats stats})> _callStep({
     ),
   );
   stopwatch.stop();
+  final parsed = parseStepReply(reply);
   return (
-    items: parseSuggestionItems(reply),
+    correctedText: parsed.correctedText,
+    items: parsed.items,
     stats: statsFor(usage, wallClockMs: stopwatch.elapsedMilliseconds),
   );
+}
+
+/// The text a step hands on: the model's own corrected text when it gave
+/// one (scored like the baseline, which asked for the whole sentence),
+/// otherwise the text with the kept items applied.
+String _textAfter(String? correctedText, AppliedItems applied) {
+  final c = correctedText?.trim();
+  return (c == null || c.isEmpty) ? applied.text : c;
+}
+
+/// Whether applying the items reproduces the model's corrected text, after
+/// trimming. False means the items and the sentence disagree, which the
+/// app would show the learner as a mismatch.
+bool _itemsMatch(String? correctedText, AppliedItems applied) {
+  final c = correctedText?.trim();
+  if (c == null || c.isEmpty) return true;
+  return c == applied.text.trim();
 }
 
 /// How many times one call is attempted before the run is given up: the
@@ -672,6 +716,7 @@ Future<TwoStepResult> runTwoStep({
     allowedCategories: issueCategories,
   );
   final applied1 = applyItems(fixture.text, checked1.kept);
+  final textAfter1 = _textAfter(step1.correctedText, applied1);
 
   final step2 = await _callStep(
     apiKey: apiKey,
@@ -680,14 +725,15 @@ Future<TwoStepResult> runTwoStep({
     systemPrompt: suggestionsStepPrompt,
     categories: suggestionCategories,
     stageLabel: 'two_step_suggestions',
-    text: applied1.text,
+    text: textAfter1,
   );
   final checked2 = checkItems(
-    text: applied1.text,
+    text: textAfter1,
     items: step2.items,
     allowedCategories: suggestionCategories,
   );
-  final applied2 = applyItems(applied1.text, checked2.kept);
+  final applied2 = applyItems(textAfter1, checked2.kept);
+  final finalText = _textAfter(step2.correctedText, applied2);
 
   return TwoStepResult(
     fixture: fixture,
@@ -695,14 +741,16 @@ Future<TwoStepResult> runTwoStep({
     issueItems: applied1.applied,
     issuesDropped: checked1.dropped,
     issuesNotApplied: applied1.notApplied,
-    textAfterIssues: applied1.text,
+    textAfterIssues: textAfter1,
     suggestionItems: applied2.applied,
     suggestionsDropped: checked2.dropped,
     suggestionsNotApplied: applied2.notApplied,
-    finalText: applied2.text,
+    finalText: finalText,
     issuesStats: step1.stats,
     suggestionsStats: step2.stats,
-    score: scoreFinalText(fixture, applied2.text),
+    score: scoreFinalText(fixture, finalText),
+    itemsMatchCorrectedText: _itemsMatch(step1.correctedText, applied1) &&
+        _itemsMatch(step2.correctedText, applied2),
   );
 });
 
@@ -733,6 +781,7 @@ Future<TwoStepResult> runOneStep({
     allowedCategories: allCategories,
   );
   final applied = applyItems(fixture.text, checked.kept);
+  final finalText = _textAfter(step.correctedText, applied);
   bool isIssue(SuggestionItem i) => issueCategories.contains(i.category);
 
   return TwoStepResult(
@@ -741,14 +790,15 @@ Future<TwoStepResult> runOneStep({
     issueItems: applied.applied.where(isIssue).toList(),
     issuesDropped: checked.dropped,
     issuesNotApplied: applied.notApplied,
-    textAfterIssues: applied.text,
+    textAfterIssues: finalText,
     suggestionItems: applied.applied.where((i) => !isIssue(i)).toList(),
     suggestionsDropped: const [],
     suggestionsNotApplied: const [],
-    finalText: applied.text,
+    finalText: finalText,
     issuesStats: step.stats,
     suggestionsStats: CallStats.zero,
-    score: scoreFinalText(fixture, applied.text),
+    score: scoreFinalText(fixture, finalText),
+    itemsMatchCorrectedText: _itemsMatch(step.correctedText, applied),
   );
 });
 
@@ -912,6 +962,16 @@ String buildTwoStepReport({
     ..writeln(
       '- Items that could not be applied (the written words were not '
       'found exactly once): `$notApplied`',
+    )
+    ..writeln(
+      '- Runs where the items did not add up to the corrected text the '
+      'model gave: `${results.where((r) => !r.itemsMatchCorrectedText).length}`',
+    )
+    ..writeln()
+    ..writeln(
+      'Scoring: each step returns the whole corrected text as well as the '
+      'items; the score is taken from the corrected text, as the baseline '
+      'harness scored its models. The items are what the app would show.',
     )
     ..writeln();
 
@@ -1110,6 +1170,33 @@ void main() {
       expect(items.single.written, 'trafico');
       expect(items.single.category, 'Spelling');
       expect(parseSuggestionItems('{"items":[]}'), isEmpty);
+    });
+
+    test('reads the corrected text alongside the items', () {
+      final reply = parseStepReply(
+        '{"corrected_text":"Vi mucho tráfico ayer.","items":[{"written":'
+        '"trafico","suggestion":"tráfico","category":"Spelling","reason":'
+        '"r"}]}',
+      );
+      expect(reply.correctedText, 'Vi mucho tráfico ayer.');
+      expect(reply.items, hasLength(1));
+      expect(parseStepReply('{"items":[]}').correctedText, isNull);
+    });
+
+    test('the score comes from the corrected text, not the applied items',
+        () {
+      const item = SuggestionItem(
+        written: 'nowhere',
+        suggestion: 'x',
+        category: 'Spelling',
+        reason: 'r',
+      );
+      final applied = applyItems('Vi mucho trafico ayer.', [item]);
+      expect(applied.notApplied, [item]);
+      expect(_textAfter('Vi mucho tráfico ayer.', applied), 'Vi mucho tráfico ayer.');
+      expect(_textAfter(null, applied), 'Vi mucho trafico ayer.');
+      expect(_itemsMatch('Vi mucho tráfico ayer.', applied), isFalse);
+      expect(_itemsMatch(null, applied), isTrue);
     });
 
     test('tolerates Markdown fences around the JSON', () {
