@@ -505,6 +505,7 @@ class TwoStepResult {
     required this.issuesStats,
     required this.suggestionsStats,
     required this.score,
+    this.error,
   });
 
   final TwoPassFixture fixture;
@@ -520,6 +521,10 @@ class TwoStepResult {
   final CallStats issuesStats;
   final CallStats suggestionsStats;
   final TwoPassScoreLabel score;
+
+  /// The service's failure message when every retry failed and this run is
+  /// scored [TwoPassScoreLabel.error]; null otherwise.
+  final String? error;
 
   bool get passed => isPassingScore(score);
 
@@ -569,18 +574,78 @@ Future<({List<SuggestionItem> items, CallStats stats})> _callStep({
     onUsage: usage.add,
   );
   final stopwatch = Stopwatch()..start();
-  final reply = await client.complete(
-    model: model,
-    systemPrompt: systemPrompt,
-    userText: _userContent(text),
-    stageLabel: stageLabel,
-    responseFormat: suggestionResponseFormat(categories),
+  final reply = await _withRetries(
+    () => client.complete(
+      model: model,
+      systemPrompt: systemPrompt,
+      userText: _userContent(text),
+      stageLabel: stageLabel,
+      responseFormat: suggestionResponseFormat(categories),
+    ),
   );
   stopwatch.stop();
   return (
     items: parseSuggestionItems(reply),
     stats: statsFor(usage, wallClockMs: stopwatch.elapsedMilliseconds),
   );
+}
+
+/// How many times one call is attempted before the run is given up: the
+/// first try plus [callRetries] more, with a pause of 2, 4 and 8 seconds
+/// between tries. A dropped connection or a 5xx from the service is a
+/// passing fault, not a result, and one of those must not throw away a
+/// fifteen-minute sweep.
+const int callRetries = 3;
+
+Duration _retryPause(int attempt) => Duration(seconds: 1 << attempt);
+
+Future<T> _withRetries<T>(
+  Future<T> Function() call, {
+  Duration Function(int attempt) pauseFor = _retryPause,
+}) async {
+  var attempt = 0;
+  while (true) {
+    try {
+      return await call();
+    } on ChatCompletionsException catch (e) {
+      attempt++;
+      if (attempt > callRetries) rethrow;
+      final pause = pauseFor(attempt);
+      // ignore: avoid_print
+      print('    call failed (${e.message.split('\n').first}); retrying '
+          'in ${pause.inSeconds}s (try ${attempt + 1} of ${callRetries + 1})');
+      await Future<void>.delayed(pause);
+    }
+  }
+}
+
+/// Runs [body] and, if every retry has failed, returns a result scored as
+/// [TwoPassScoreLabel.error] for [fixture] instead of aborting the sweep.
+Future<TwoStepResult> _orErrorResult(
+  TwoPassFixture fixture,
+  int runIndex,
+  Future<TwoStepResult> Function() body,
+) async {
+  try {
+    return await body();
+  } on ChatCompletionsException catch (e) {
+    return TwoStepResult(
+      fixture: fixture,
+      runIndex: runIndex,
+      issueItems: const [],
+      issuesDropped: const [],
+      issuesNotApplied: const [],
+      textAfterIssues: fixture.text,
+      suggestionItems: const [],
+      suggestionsDropped: const [],
+      suggestionsNotApplied: const [],
+      finalText: fixture.text,
+      issuesStats: CallStats.zero,
+      suggestionsStats: CallStats.zero,
+      score: TwoPassScoreLabel.error,
+      error: e.message.split('\n').first,
+    );
+  }
 }
 
 /// Runs both steps, one after the other, on [fixture]'s sentence.
@@ -591,7 +656,7 @@ Future<TwoStepResult> runTwoStep({
   required String suggestionsModel,
   required TwoPassFixture fixture,
   int runIndex = 1,
-}) async {
+}) => _orErrorResult(fixture, runIndex, () async {
   final step1 = await _callStep(
     apiKey: apiKey,
     httpClient: httpClient,
@@ -639,7 +704,7 @@ Future<TwoStepResult> runTwoStep({
     suggestionsStats: step2.stats,
     score: scoreFinalText(fixture, applied2.text),
   );
-}
+});
 
 /// One-call mode: runs [oneStepPrompt] once on [model]. The reply's Issue
 /// items are recorded as step 1 items and its Natural phrasing items as
@@ -652,7 +717,7 @@ Future<TwoStepResult> runOneStep({
   required TwoPassFixture fixture,
   int runIndex = 1,
   String prompt = oneStepPrompt,
-}) async {
+}) => _orErrorResult(fixture, runIndex, () async {
   final step = await _callStep(
     apiKey: apiKey,
     httpClient: httpClient,
@@ -685,7 +750,7 @@ Future<TwoStepResult> runOneStep({
     suggestionsStats: CallStats.zero,
     score: scoreFinalText(fixture, applied.text),
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Report
@@ -864,7 +929,7 @@ String buildTwoStepReport({
       '| ${r.fixture.id} | ${r.runIndex} | `${r.fixture.text}` | '
       '${_items(r.issueItems)} | ${_items(r.suggestionItems)} | '
       '`${r.finalText}` | ${r.passed ? 'Pass' : 'Fail'} '
-      '(${r.score.reportLabel}) |',
+      '(${r.score.reportLabel}${r.error == null ? '' : ': ${r.error}'}) |',
     );
   }
   return b.toString();
@@ -1350,6 +1415,47 @@ void main() {
     });
   });
 
+  group('retries', () {
+    test('a call that fails then succeeds is retried and returns', () async {
+      var calls = 0;
+      final result = await _withRetries(() async {
+        calls++;
+        if (calls < 3) {
+          throw const ChatCompletionsException('HTTP 503: upstream reset');
+        }
+        return 'ok';
+      }, pauseFor: (_) => Duration.zero);
+      expect(result, 'ok');
+      expect(calls, 3);
+    });
+
+    test('a call that keeps failing is given up after the retries', () async {
+      var calls = 0;
+      await expectLater(
+        _withRetries(() async {
+          calls++;
+          throw const ChatCompletionsException('HTTP 503');
+        }, pauseFor: (_) => Duration.zero),
+        throwsA(isA<ChatCompletionsException>()),
+      );
+      expect(calls, callRetries + 1);
+    });
+
+    test('a run whose calls all fail is scored as an error, not thrown', () async {
+      final fixture = allTwoPassFixtures.first;
+      final result = await _orErrorResult(
+        fixture,
+        2,
+        () async => throw const ChatCompletionsException('HTTP 503: reset'),
+      );
+      expect(result.score, TwoPassScoreLabel.error);
+      expect(result.passed, isFalse);
+      expect(result.runIndex, 2);
+      expect(result.finalText, fixture.text);
+      expect(result.error, 'HTTP 503: reset');
+    });
+  });
+
   group('report', () {
     TwoStepResult result({
       required String id,
@@ -1500,7 +1606,8 @@ void main() {
           // ignore: avoid_print
           print(
             '=== ${fixture.id} (run $run/$runsPerFixture) === '
-            'final="${result.finalText}" (${result.score.reportLabel})',
+            'final="${result.finalText}" (${result.score.reportLabel}'
+            '${result.error == null ? '' : ': ${result.error}'})',
           );
           await Future<void>.delayed(Duration(milliseconds: delayMs));
         }
