@@ -424,23 +424,49 @@ class AppliedItems {
   final List<SuggestionItem> notApplied;
 }
 
-/// Applies [items] to [text] one after another. An item is applied only
-/// when its "written" occurs exactly once in the text as it stands; an item
-/// that matches nowhere, or in more than one place, is left out.
+final RegExp _wordChar = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+/// Where [written] occurs in [text] as a whole word (or whole phrase): not
+/// inside a longer word, so "cafe" does not match inside "cafeteria" and
+/// "estudia" does not match inside "estudiar". The boundary check applies
+/// only at an end of [written] that is itself a letter or digit, so a
+/// written span that starts or ends with a space or punctuation (", y")
+/// still matches.
+List<int> wholeWordMatches(String text, String written) {
+  if (written.isEmpty) return const [];
+  final matches = <int>[];
+  var from = 0;
+  while (true) {
+    final i = text.indexOf(written, from);
+    if (i == -1) break;
+    final end = i + written.length;
+    final startOk = !_wordChar.hasMatch(written[0]) ||
+        i == 0 ||
+        !_wordChar.hasMatch(text[i - 1]);
+    final endOk = !_wordChar.hasMatch(written[written.length - 1]) ||
+        end == text.length ||
+        !_wordChar.hasMatch(text[end]);
+    if (startOk && endOk) matches.add(i);
+    from = i + 1;
+  }
+  return matches;
+}
+
+/// Applies [items] to [text] one after another. An item is applied when its
+/// "written" occurs exactly once in the text as a whole word or phrase; an
+/// item that matches nowhere, or as a whole word in more than one place, is
+/// left out rather than guessed at.
 AppliedItems applyItems(String text, List<SuggestionItem> items) {
   var current = text;
   final applied = <SuggestionItem>[];
   final notApplied = <SuggestionItem>[];
   for (final item in items) {
-    final first = current.indexOf(item.written);
-    final unique =
-        item.written.isNotEmpty &&
-        first != -1 &&
-        current.indexOf(item.written, first + 1) == -1;
-    if (!unique) {
+    final matches = wholeWordMatches(current, item.written);
+    if (matches.length != 1) {
       notApplied.add(item);
       continue;
     }
+    final first = matches.single;
     current = current.replaceRange(
       first,
       first + item.written.length,
@@ -1051,6 +1077,49 @@ void main() {
         'Ellos viajaron a México y visitaron varias ciudades.',
       );
       expect(applied.applied, [del]);
+    });
+
+    test('applyItems matches whole words, so "cafe" is not "cafeteria"', () {
+      const cafe = SuggestionItem(
+        written: 'cafe',
+        suggestion: 'café',
+        category: 'Spelling',
+        reason: 'r',
+      );
+      final applied = applyItems(
+        'Compre cafe en una cafeteria pequena.',
+        [cafe],
+      );
+      expect(applied.text, 'Compre café en una cafeteria pequena.');
+      expect(applied.notApplied, isEmpty);
+    });
+
+    test('applyItems matches "estudia" without touching "estudiar"', () {
+      const verb = SuggestionItem(
+        written: 'estudia',
+        suggestion: 'estudian',
+        category: 'Grammar',
+        reason: 'r',
+      );
+      final applied = applyItems(
+        'Ellos estudia todas las noches, y creo que está bien estudiar hoy.',
+        [verb],
+      );
+      expect(
+        applied.text,
+        'Ellos estudian todas las noches, y creo que está bien estudiar hoy.',
+      );
+    });
+
+    test('a written span ending in punctuation or a space still matches', () {
+      const comma = SuggestionItem(
+        written: 'tráfico, y',
+        suggestion: 'tráfico y',
+        category: 'Spelling',
+        reason: 'r',
+      );
+      final applied = applyItems('Vi mucho tráfico, y luego vi más.', [comma]);
+      expect(applied.text, 'Vi mucho tráfico y luego vi más.');
     });
 
     test('applyItems leaves out an item that matches more than once', () {
