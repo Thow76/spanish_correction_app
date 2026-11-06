@@ -1655,9 +1655,9 @@ void main() {
 
     test('leads with whether the model flagged a problem, yes or no', () {
       final clean = result(
-        id: 'clean-grammar-only',
+        id: 'estar-contento',
         finalText: allTwoPassFixtures
-            .firstWhere((f) => f.id == 'clean-grammar-only')
+            .firstWhere((f) => f.id == 'estar-contento')
             .text,
         issues: const [],
       );
