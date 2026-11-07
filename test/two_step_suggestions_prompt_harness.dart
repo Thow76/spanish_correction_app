@@ -135,7 +135,7 @@ const String issuesStepPrompt =
     'Do not report anything else. In particular do not suggest more '
     'natural, more idiomatic or more fluent wording, and do not remove '
     'words only because they are repeated or unnecessary; another step '
-    'handles those.\n'
+    'handles those. Never add or remove commas.\n'
     '\n'
     'Do not flag regional forms. Forms used in some Spanish-speaking '
     'regions but not others, including regional pronouns, verb forms, '
@@ -165,11 +165,11 @@ const String suggestionsStepPrompt =
     'grammar or word meaning; leave those alone even if you notice them.\n'
     '\n'
     'Things to look for:\n'
-    '- Unnecessary subject pronouns. Spanish usually drops the subject '
-    'pronoun when the verb already shows who is acting. When the same '
-    'pronoun is repeated for no reason in a second clause, suggest '
-    'removing the repeated one and keep the first. Keep any pronoun that '
-    'adds contrast, emphasis or clarity.\n'
+    '- Unnecessary subject pronouns, but only when the same pronoun is '
+    'repeated for no reason in a second clause: suggest removing the '
+    'repeated one and keep the first. A sentence with a single subject '
+    'pronoun is fine; leave it. Keep any pronoun that adds contrast, '
+    'emphasis or clarity.\n'
     '- Repeated words or phrases that add nothing.\n'
     '- Literal translations from English that are understandable but that '
     'a Spanish speaker would not say.\n'
@@ -1129,6 +1129,14 @@ void main() {
         suggestionsStepPrompt,
         contains('The only allowed category is: Natural phrasing.'),
       );
+    });
+
+    test('step 1 never touches commas', () {
+      expect(issuesStepPrompt, contains('Never add or remove commas.'));
+    });
+
+    test('step 2 only flags a pronoun repeated in a second clause', () {
+      expect(suggestionsStepPrompt, contains('single subject pronoun is fine'));
     });
 
     test('the unnecessary-pronoun line is in step 2 and not in step 1', () {
