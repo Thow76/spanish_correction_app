@@ -491,6 +491,64 @@ AppliedItems applyItems(String text, List<SuggestionItem> items) {
   return AppliedItems(text: current, applied: applied, notApplied: notApplied);
 }
 
+/// Character ranges in [after] that differ from [before], found by a
+/// word-level longest-common-subsequence: a word of [after] is "changed"
+/// when it is not matched to a word of [before]. Punctuation is part of
+/// its word.
+List<(int, int)> changedRanges(String before, String after) {
+  final wordRe = RegExp(r'\S+');
+  final a = wordRe.allMatches(before).toList();
+  final b = wordRe.allMatches(after).toList();
+  final n = a.length, m = b.length;
+  final lcs = List.generate(n + 1, (_) => List.filled(m + 1, 0));
+  for (var i = n - 1; i >= 0; i--) {
+    for (var j = m - 1; j >= 0; j--) {
+      lcs[i][j] = a[i].group(0) == b[j].group(0)
+          ? lcs[i + 1][j + 1] + 1
+          : (lcs[i + 1][j] > lcs[i][j + 1] ? lcs[i + 1][j] : lcs[i][j + 1]);
+    }
+  }
+  final matchedInAfter = <int>{};
+  var i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i].group(0) == b[j].group(0)) {
+      matchedInAfter.add(j);
+      i++;
+      j++;
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return [
+    for (var k = 0; k < m; k++)
+      if (!matchedInAfter.contains(k)) (b[k].start, b[k].end),
+  ];
+}
+
+/// Whether any of step 2's [items] covers words that step 1 had already
+/// changed: the words of [afterStepOne] that differ from [original]. This
+/// is the second model reworking the first model's fix rather than adding
+/// to it.
+bool stepTwoRetouchedStepOne(
+  String original,
+  String afterStepOne,
+  List<SuggestionItem> items,
+) {
+  if (items.isEmpty || original == afterStepOne) return false;
+  final changed = changedRanges(original, afterStepOne);
+  for (final item in items) {
+    for (final start in wholeWordMatches(afterStepOne, item.written)) {
+      final end = start + item.written.length;
+      for (final (cs, ce) in changed) {
+        if (start < ce && cs < end) return true;
+      }
+    }
+  }
+  return false;
+}
+
 final RegExp _bannedReasonWords = RegExp(
   r'\b(wrong|wrongly|errors?|incorrect|incorrectly|mistakes?)\b',
   caseSensitive: false,
@@ -564,6 +622,13 @@ class TwoStepResult {
       suggestionItems.isNotEmpty ||
       suggestionsDropped.isNotEmpty ||
       finalText != fixture.text;
+
+  /// True when step 2 changed words that step 1 had already changed.
+  bool get retouchedStepOne => stepTwoRetouchedStepOne(
+        fixture.text,
+        textAfterIssues,
+        suggestionItems,
+      );
 
   /// True for a sentence that has something to find.
   bool get hasProblem =>
@@ -1024,6 +1089,10 @@ String buildTwoStepReport({
       '- Runs where the items did not add up to the corrected text the '
       'model gave: `${results.where((r) => !r.itemsMatchCorrectedText).length}`',
     )
+    ..writeln(
+      '- Runs where step 2 changed words step 1 had already changed: '
+      '`${results.where((r) => r.retouchedStepOne).length}`',
+    )
     ..writeln()
     ..writeln(
       'Scoring: each step returns the whole corrected text as well as the '
@@ -1291,6 +1360,56 @@ void main() {
     test('throws when there is no JSON object or no items list', () {
       expect(() => parseSuggestionItems('nothing'), throwsFormatException);
       expect(() => parseSuggestionItems('{"x":1}'), throwsFormatException);
+    });
+  });
+
+  group('step 2 reworking step 1', () {
+    const cut = SuggestionItem(
+      written: 'Nosotros vivimos',
+      suggestion: 'Vivimos',
+      category: 'Natural phrasing',
+      reason: 'r',
+    );
+    const yo = SuggestionItem(
+      written: 'Yo fui',
+      suggestion: 'Fui',
+      category: 'Natural phrasing',
+      reason: 'r',
+    );
+
+    test('finds the words step 1 changed', () {
+      expect(
+        changedRanges('Nosotros vive cerca.', 'Nosotros vivimos cerca.'),
+        [(9, 16)],
+      );
+      expect(changedRanges('Igual.', 'Igual.'), isEmpty);
+    });
+
+    test('counts step 2 touching a word step 1 changed', () {
+      expect(
+        stepTwoRetouchedStepOne(
+          'Nosotros vive cerca del centro.',
+          'Nosotros vivimos cerca del centro.',
+          const [cut],
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not count step 2 working elsewhere in the sentence', () {
+      expect(
+        stepTwoRetouchedStepOne(
+          'Yo fui al mercado y compra pan.',
+          'Yo fui al mercado y compré pan.',
+          const [yo],
+        ),
+        isFalse,
+      );
+    });
+
+    test('is false when step 1 or step 2 did nothing', () {
+      expect(stepTwoRetouchedStepOne('a b', 'a b', const [cut]), isFalse);
+      expect(stepTwoRetouchedStepOne('a b', 'a c', const []), isFalse);
     });
   });
 
@@ -1702,6 +1821,12 @@ void main() {
         results: [clean, missed, spotted],
       );
       expect(report, contains('## Did it flag a problem?'));
+      expect(
+        report,
+        contains(
+          'Runs where step 2 changed words step 1 had already changed: `0`',
+        ),
+      );
       expect(report, contains('flagged 1 of 2 runs (50.0 per cent)'));
       expect(report, contains('Clean sentences wrongly flagged: `0` of `1`'));
       expect(report, contains('| 1 | 2 | false |'));
