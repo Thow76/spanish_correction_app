@@ -26,8 +26,8 @@
 //   flutter test test/two_step_suggestions_prompt_harness.dart --exclude-tags live
 //
 // Run live deliberately (costs real API calls: 2 per run; all 84 sentences
-// five times each is up to 850 calls):
-//   OPENAI_API_KEY=sk-... \
+// five times each is up to 850 calls). The key comes from OPENAI_API_KEY
+// in your terminal or, failing that, the .env file in the project folder:
 //   TWO_STEP_LIVE=true \
 //   TWO_STEP_FIXTURE_SET=all \
 //   TWO_STEP_RUNS_PER_FIXTURE=5 \
@@ -60,10 +60,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:spanish_correction_app/app/app_config.dart';
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
 
+import 'shared/openai_key.dart';
 import 'two_pass_integration_harness.dart'
     show
         CallStats,
@@ -1890,15 +1890,9 @@ void main() {
         return;
       }
 
-      final envKey = environment['OPENAI_API_KEY']?.trim() ?? '';
-      final apiKey = envKey.isNotEmpty
-          ? envKey
-          : AppConfig.fromEnvironment().openAiApiKey.trim();
+      final apiKey = openAiApiKeyFor(environment);
       if (apiKey.isEmpty) {
-        fail(
-          'No API key found. Set OPENAI_API_KEY, or put one in '
-          'lib/app/app_config.dart.',
-        );
+        fail(noApiKeyMessage);
       }
 
       final issuesModel = _setting(

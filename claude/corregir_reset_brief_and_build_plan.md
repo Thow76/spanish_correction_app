@@ -410,3 +410,4 @@ Kept by the scheduled build run. One step per run, in the order of this section.
 - 7 Nov 2026: three borderline calques replaced with ones accepted nowhere ("preguntar una pregunta", "librería pública", "tomó lugar"). `test/two_pass_integration_harness.dart`; ids renamed in the two comparison harnesses.
 - 7 Nov 2026: the test program survives passing API errors (retries, then the run is scored as an error and the sweep carries on). `test/two_step_suggestions_prompt_harness.dart`.
 - 7 Nov 2026: a test fails if any prompt quotes four consecutive words of a test sentence. Same file.
+- 7 Nov 2026: the OpenAI key is out of `lib/app/app_config.dart` (GitHub refuses any push that contains one). Test programs read OPENAI_API_KEY from the terminal, then from a `.env` file in the project folder (copy `.env.example`; `.env` is ignored by git). The app is run with `flutter run --dart-define-from-file=.env`. Helper in `test/shared/openai_key.dart`.

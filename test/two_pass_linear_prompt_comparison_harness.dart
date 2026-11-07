@@ -78,14 +78,14 @@
 // review + parallel's naturalness-on-original), plus a conditional 3rd
 // naturalness call only when the parallel merge genuinely conflicts —
 // expect on the order of 70-90 total calls for the default set):
-//   (OPENAI_API_KEY is optional: if unset, the key in lib/app/app_config.dart is used.) \
+//   (OPENAI_API_KEY is optional: if unset, the key in the .env file is used.) \
 //   TWO_PASS_LINEAR_COMPARISON_LIVE=true \
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --tags live --timeout none
 //
 // Run the standalone serial execution flow live (issue #128 — no
 // parallel/fallback calls at all, so just 2 calls per run: 1 first pass
 // + 1 lexical review):
-//   (OPENAI_API_KEY is optional: if unset, the key in lib/app/app_config.dart is used.) \
+//   (OPENAI_API_KEY is optional: if unset, the key in the .env file is used.) \
 //   TWO_PASS_LINEAR_EXECUTION_LIVE=true \
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --tags live --timeout none
 //
@@ -99,7 +99,7 @@
 // pass/fail, and per-pass latency/cost — laid out the same way
 // two_pass_fallback_pipeline_comparison_harness.dart's own 5x sweep is,
 // so the two stay directly comparable:
-//   (OPENAI_API_KEY is optional: if unset, the key in lib/app/app_config.dart is used.) \
+//   (OPENAI_API_KEY is optional: if unset, the key in the .env file is used.) \
 //   TWO_PASS_LINEAR_EXECUTION_LIVE=true \
 //   TWO_PASS_LINEAR_FIXTURE_SET=all \
 //   TWO_PASS_LINEAR_RUNS_PER_FIXTURE=5 \
@@ -144,7 +144,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:spanish_correction_app/app/app_config.dart';
 import 'package:spanish_correction_app/core/services/prompts/correction_prompt.dart';
 import 'package:spanish_correction_app/features/corrections/data/first_pass_correction_client.dart';
 import 'package:spanish_correction_app/features/corrections/data/naturalness_review_client.dart';
@@ -156,6 +155,7 @@ import 'package:spanish_correction_app/features/corrections/domain/naturalness_c
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_merge.dart';
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
 
+import 'shared/openai_key.dart';
 import 'two_pass_integration_harness.dart'
     show
         CallStats,
@@ -3127,15 +3127,9 @@ void main() {
         return;
       }
 
-      final envKey = environment['OPENAI_API_KEY']?.trim() ?? '';
-      final apiKey = envKey.isNotEmpty
-          ? envKey
-          : AppConfig.fromEnvironment().openAiApiKey.trim();
+      final apiKey = openAiApiKeyFor(environment);
       if (apiKey.isEmpty) {
-        fail(
-          'No API key found. Set OPENAI_API_KEY, or put one in '
-          'lib/app/app_config.dart.',
-        );
+        fail(noApiKeyMessage);
       }
 
       final firstPassModel = _runtimeString(
@@ -3210,15 +3204,9 @@ void main() {
         return;
       }
 
-      final envKey = environment['OPENAI_API_KEY']?.trim() ?? '';
-      final apiKey = envKey.isNotEmpty
-          ? envKey
-          : AppConfig.fromEnvironment().openAiApiKey.trim();
+      final apiKey = openAiApiKeyFor(environment);
       if (apiKey.isEmpty) {
-        fail(
-          'No API key found. Set OPENAI_API_KEY, or put one in '
-          'lib/app/app_config.dart.',
-        );
+        fail(noApiKeyMessage);
       }
 
       final firstPassModel = _runtimeString(
