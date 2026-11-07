@@ -22,8 +22,7 @@ class AppConfig {
     return AppConfig(
       openAiApiKey: const String.fromEnvironment(
         'OPENAI_API_KEY',
-        defaultValue:
-            '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',
+        defaultValue: '',
       ),
       openAiCorrectionModel: openAiCorrectionModel,
       // Falls back to the correction model when unset, mirroring the prompt
