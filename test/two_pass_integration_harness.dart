@@ -846,17 +846,27 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     ],
   ),
   TwoPassFixture(
-    id: 'collocation-hace-sentido',
-    text: 'Esto hace sentido.',
-    note: 'English-influenced "hace sentido" calque.',
+    id: 'collocation-preguntar-pregunta',
+    text: 'Quiero preguntar una pregunta.',
+    note: 'English-influenced "preguntar una pregunta" ("ask a question"); '
+        'Spanish uses "hacer una pregunta". Replaced "Esto hace sentido" '
+        '(7 Nov 2026), which is accepted in parts of Latin America and so '
+        'was not a clean test.',
     languagePoint: 'Collocations / Strong Calques',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
-    expectedCorrectedText: 'Esto tiene sentido.',
+    expectedCorrectedText: 'Quiero hacer una pregunta.',
     acceptableAlternatives: [
-      'Tiene sentido.',
-      'Esto tiene lógica.',
-      'Esto es lógico.',
+      'Quiero hacerte una pregunta.',
+      'Quiero hacerle una pregunta.',
+      'Quiero hacer una consulta.',
+      'Quiero preguntar algo.',
+      'Quiero preguntarte algo.',
+      'Quiero preguntarle algo.',
+      'Tengo una pregunta.',
+      'Me gustaría hacer una pregunta.',
+      'Quisiera hacer una pregunta.',
+      'Quiero plantear una pregunta.',
     ],
   ),
 
@@ -878,27 +888,26 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     ],
   ),
   TwoPassFixture(
-    id: 'false-friend-aplico-trabajo',
-    text: 'Aplicó para un trabajo.',
-    note: '"aplicar para" is a false friend for "apply for"; needs '
-        '"solicitar". Issue #112: "postularse a" is also genuinely '
-        'natural, especially in Latin American varieties (Mexico, the '
-        'Southern Cone) — accepted as an alternative rather than '
-        'replacing "solicitó un trabajo" as the primary expectation, '
-        'since the latter reads naturally across all varieties and the '
-        'former is somewhat variety-marked.',
+    id: 'false-friend-libreria',
+    text: 'Saqué un libro de la librería pública.',
+    note: '"librería" is a false friend for "library"; it means a bookshop '
+        'everywhere, so a public one lends nothing. Needs "biblioteca". '
+        'Replaced "Aplicó para un trabajo" (7 Nov 2026), which is accepted '
+        'in parts of Latin America and so was not a clean test.',
     languagePoint: 'False Friends / Word Choice',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
-    expectedCorrectedText: 'Solicitó un trabajo.',
+    expectedCorrectedText: 'Saqué un libro de la biblioteca pública.',
     acceptableAlternatives: [
-      'Se postuló a un trabajo.',
-      'Se postuló para un trabajo.',
-      'Solicitó un empleo.',
-      'Se postuló a un empleo.',
-      'Se presentó a un trabajo.',
-      'Solicitó un puesto de trabajo.',
-      'Presentó una solicitud para un trabajo.',
+      'Saqué un libro de la biblioteca.',
+      'Saqué un libro en la biblioteca pública.',
+      'Tomé prestado un libro de la biblioteca pública.',
+      'Pedí prestado un libro de la biblioteca pública.',
+      'Tomé un libro prestado de la biblioteca pública.',
+      'Saqué un libro prestado de la biblioteca pública.',
+      'Retiré un libro de la biblioteca pública.',
+      'Me llevé un libro de la biblioteca pública.',
+      'Saqué un libro de la biblioteca municipal.',
     ],
   ),
   TwoPassFixture(
@@ -1061,29 +1070,28 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     ],
   ),
   TwoPassFixture(
-    id: 'naturalness-llamar-para-atras',
-    text: 'Te llamo para atrás.',
-    note: 'English-influenced "llamar para atrás" ("call back"). Issue '
-        '#152: "te llamo más tarde"/"te llamo después" both preserve '
-        'the "I will call you [at some later point]" meaning and are '
-        'accepted as alternatives. "Te llamo de nuevo." is deliberately '
-        'not added — it means "I\'ll call you again", not "I\'ll call '
-        'you back", so it does not preserve the original meaning.',
+    id: 'naturalness-tomo-lugar',
+    text: 'La reunión tomó lugar ayer.',
+    note: 'English-influenced "tomar lugar" ("take place"); Spanish says '
+        '"tener lugar" or "celebrarse". Replaced "Te llamo para atrás" '
+        '(7 Nov 2026), which is everyday Puerto Rican and US Spanish and '
+        'so was not a clean test.',
     languagePoint: 'Phrase-Level Naturalness',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
-    expectedCorrectedText: 'Te devuelvo la llamada.',
+    expectedCorrectedText: 'La reunión tuvo lugar ayer.',
     acceptableAlternatives: [
-      'Te llamo más tarde.',
-      'Te llamo después.',
-      'Te vuelvo a llamar.',
-      'Te llamo luego.',
-      'Luego te llamo.',
-      'Te llamo de vuelta.',
-      'Te llamo en un rato.',
-      'Ahora te llamo.',
-      'Te devuelvo la llamada luego.',
-      'Te regreso la llamada.',
+      'La reunión se celebró ayer.',
+      'La reunión fue ayer.',
+      'La reunión se realizó ayer.',
+      'La reunión se llevó a cabo ayer.',
+      'La reunión se hizo ayer.',
+      'La reunión ocurrió ayer.',
+      'La reunión se efectuó ayer.',
+      'La reunión se dio ayer.',
+      'Ayer tuvo lugar la reunión.',
+      'Ayer se celebró la reunión.',
+      'Ayer fue la reunión.',
     ],
   ),
 

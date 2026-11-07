@@ -154,7 +154,7 @@ const String candidateFallbackPrompt =
 /// surface. Notable individual entries:
 /// - `ambiguous-naturalness-span`, `article-la-tienda`: the repeated-
 ///   span rewrite and article-duplication fails.
-/// - `false-friend-aplico-trabajo`, `false-friend-embarazado`: false-
+/// - `false-friend-libreria`, `false-friend-embarazado`: false-
 ///   friend fails beyond `atendio-universidad`.
 /// - `naturalness-pasar-buen-tiempo`, `naturalness-puedo-tener-cerveza`:
 ///   the slash-alternative naturalness fails.
@@ -164,8 +164,8 @@ const String candidateFallbackPrompt =
 /// - `delete-repeated-yo-estudio`, `delete-repeated-ellos-visitaron`,
 ///   `delete-repeated-yo-compre`, `delete-repeated-nosotros`: the
 ///   redundant-repeated-pronoun deletion cases (both Pass and Fail).
-/// - `collocation-hacer-paseo`, `collocation-hace-sentido`,
-///   `prep-empresa-en-la-que`, `naturalness-llamar-para-atras`: the
+/// - `collocation-hacer-paseo`, `collocation-preguntar-pregunta`,
+///   `prep-empresa-en-la-que`, `naturalness-tomo-lugar`: the
 ///   remaining changed-but-correct naturalness/preposition cases.
 ///
 /// Reusing real fixtures (not hand-typed inputs) means expected outputs
@@ -184,19 +184,19 @@ const List<String> fallbackPipelineComparisonFixtureIds = [
   'subj-enviara',
   'ambiguous-naturalness-span',
   'article-la-tienda',
-  'false-friend-aplico-trabajo',
+  'false-friend-libreria',
   'false-friend-embarazado',
   'naturalness-pasar-buen-tiempo',
   'naturalness-puedo-tener-cerveza',
   'mixed-preposition-and-redundant-pronoun',
   'collocation-hacer-paseo',
-  'collocation-hace-sentido',
+  'collocation-preguntar-pregunta',
   'prep-empresa-en-la-que',
   'delete-repeated-yo-estudio',
   'delete-repeated-ellos-visitaron',
   'delete-repeated-yo-compre',
   'delete-repeated-nosotros',
-  'naturalness-llamar-para-atras',
+  'naturalness-tomo-lugar',
   'mixed-gender-agreement-and-redundant-pronoun',
 ];
 
