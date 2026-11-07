@@ -401,3 +401,12 @@ Kept by the scheduled build run. One step per run, in the order of this section.
 - [ ] 3.1 to 3.5 Slice 3: Home and chats
 - [ ] 4.1 to 4.4 Slice 4: feedback from chats, and History
 - [ ] 5.1 to 5.3 Slice 5: the partner's greetings
+
+**Done outside the plan.** Work Andrew asked for that no step in this list covers. One dated line each, saying what changed and where it lives, so the next run reads it before starting. Design choices and rule changes still go in the decision log, not here.
+
+- 7 Nov 2026: the test program now reports "Did it flag a problem?" first (yes or no per run, plus false alarms on clean sentences), with fix matching as a separate number below. `test/two_step_suggestions_prompt_harness.dart`.
+- 7 Nov 2026: `TWO_STEP_FIXTURE_SET=errors` runs only the 70 sentences with something to find. Same file.
+- 7 Nov 2026: the report counts runs where step 2 changed words step 1 had already changed. Same file.
+- 7 Nov 2026: three borderline calques replaced with ones accepted nowhere ("preguntar una pregunta", "librería pública", "tomó lugar"). `test/two_pass_integration_harness.dart`; ids renamed in the two comparison harnesses.
+- 7 Nov 2026: the test program survives passing API errors (retries, then the run is scored as an error and the sweep carries on). `test/two_step_suggestions_prompt_harness.dart`.
+- 7 Nov 2026: a test fails if any prompt quotes four consecutive words of a test sentence. Same file.
