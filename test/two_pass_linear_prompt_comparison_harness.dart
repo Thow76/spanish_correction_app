@@ -72,7 +72,7 @@
 // Run offline (fixture/logic sanity only, no API calls):
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --exclude-tags live
 //
-// Run live deliberately (costs real API calls — default 17-fixture
+// Run live deliberately (costs real API calls — default 16-fixture
 // curated set: 2 first-pass calls (one per architecture, since they use
 // different prompts) + 2 second-pass calls always (linear's lexical
 // review + parallel's naturalness-on-original), plus a conditional 3rd
@@ -90,7 +90,7 @@
 //   flutter test test/two_pass_linear_prompt_comparison_harness.dart --tags live --timeout none
 //
 // Run the standalone execution flow's all-fixtures, 5x-repeated-run
-// sweep (issue #131) — every fixture in allTwoPassFixtures (85 as of
+// sweep (issue #131) — every fixture in allTwoPassFixtures (84 as of
 // this writing), 5 runs each, so live model variance is visible rather
 // than trusting a single-run result; up to 85 * 5 * 2 = 850 calls.
 // buildLinearExecutionReport (issues #128-130) already carries every
@@ -123,7 +123,7 @@
 // - TWO_PASS_LINEAR_CALL_DELAY_MS: delay between fixtures, defaults to
 //   750.
 // - TWO_PASS_LINEAR_FIXTURE_SET (issue #162 adds the last two values):
-//   "comparison" (default — the curated 17-fixture set below), "all"
+//   "comparison" (default — the curated 16-fixture set below), "all"
 //   (every fixture in allTwoPassFixtures), "fixture_id" (exactly the
 //   fixture named by TWO_PASS_LINEAR_FIXTURE_ID), or "language_point"
 //   (every fixture whose languagePoint matches
@@ -608,13 +608,12 @@ const List<String> linearComparisonFixtureIds = [
   'mixed-personal-a-and-subjunctive',
   'mixed-verb-agreement-and-missing-que',
   'false-friend-atendio-universidad',
-  'false-friend-aplico-trabajo',
+  'false-friend-libreria',
   'subj-enviara',
   'ambiguous-naturalness-span',
   'article-la-tienda',
-  'grammar-overlaps-naturalness',
   'collocation-hacer-paseo',
-  'collocation-hace-sentido',
+  'collocation-preguntar-pregunta',
   'prep-empresa-en-la-que',
   'delete-repeated-yo-estudio',
 ];
@@ -629,7 +628,7 @@ List<TwoPassFixture> get linearComparisonFixtures => linearComparisonFixtureIds
     )
     .toList();
 
-/// Default `TWO_PASS_LINEAR_FIXTURE_SET` value — the curated 17-fixture
+/// Default `TWO_PASS_LINEAR_FIXTURE_SET` value — the curated 16-fixture
 /// set above, unchanged from before this option existed.
 const String defaultLinearFixtureSet = 'comparison';
 
@@ -2186,7 +2185,7 @@ void main() {
     });
 
     group('fixture-set selection', () {
-      test('"comparison" returns the curated 17-fixture comparison set', () {
+      test('"comparison" returns the curated 16-fixture comparison set', () {
         expect(linearFixturesFor('comparison'), linearComparisonFixtures);
       });
 

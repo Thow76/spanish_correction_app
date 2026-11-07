@@ -260,23 +260,6 @@ const List<TwoPassFixture> twoPassIntegrationFixtures = [
         'decisión importante.',
   ),
   TwoPassFixture(
-    id: 'grammar-overlaps-naturalness',
-    text: 'Ayer iso una decisión importante.',
-    note:
-        'The first-pass fix ("iso" -> "hizo") sits inside the exact '
-        'naturalness calque span ("hizo una decisión") — the case the '
-        'fallback exists for. Expect: naturalness-on-original flags the '
-        'pre-correction wording (conflict against firstPassCorrectedText), '
-        'naturalness-on-corrected flags the post-correction wording '
-        '(resolves cleanly) — fallback used.',
-    languagePoint:
-        'Verb Morphology (spelling) overlapping Collocations / Strong '
-        'Calques',
-    operationType: TwoPassOperationType.replacement,
-    expectedOwner: TwoPassExpectedOwner.either,
-    expectedCorrectedText: 'Ayer tomó una decisión importante.',
-  ),
-  TwoPassFixture(
     id: 'ambiguous-naturalness-span',
     text: 'Vi mucho tráfico, y luego vi más tráfico.',
     note:
@@ -827,6 +810,9 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
     expectedCorrectedText: 'Tenemos que prestar atención.',
+    acceptableAlternatives: [
+      'Tenemos que poner atención.',
+    ],
   ),
   TwoPassFixture(
     id: 'collocation-tomar-reunion',
@@ -836,6 +822,14 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
     expectedCorrectedText: 'El equipo tuvo una reunión.',
+    acceptableAlternatives: [
+      'El equipo celebró una reunión.',
+      'El equipo se reunió.',
+      'El equipo mantuvo una reunión.',
+      'El equipo realizó una reunión.',
+      'El equipo hizo una reunión.',
+      'El equipo sostuvo una reunión.',
+    ],
   ),
   TwoPassFixture(
     id: 'collocation-hacer-paseo',
@@ -845,15 +839,35 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
     expectedCorrectedText: 'Ella dio un paseo.',
+    acceptableAlternatives: [
+      'Ella salió a pasear.',
+      'Ella paseó.',
+      'Ella fue a pasear.',
+    ],
   ),
   TwoPassFixture(
-    id: 'collocation-hace-sentido',
-    text: 'Esto hace sentido.',
-    note: 'English-influenced "hace sentido" calque.',
+    id: 'collocation-preguntar-pregunta',
+    text: 'Quiero preguntar una pregunta.',
+    note: 'English-influenced "preguntar una pregunta" ("ask a question"); '
+        'Spanish uses "hacer una pregunta". Replaced "Esto hace sentido" '
+        '(7 Nov 2026), which is accepted in parts of Latin America and so '
+        'was not a clean test.',
     languagePoint: 'Collocations / Strong Calques',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
-    expectedCorrectedText: 'Esto tiene sentido.',
+    expectedCorrectedText: 'Quiero hacer una pregunta.',
+    acceptableAlternatives: [
+      'Quiero hacerte una pregunta.',
+      'Quiero hacerle una pregunta.',
+      'Quiero hacer una consulta.',
+      'Quiero preguntar algo.',
+      'Quiero preguntarte algo.',
+      'Quiero preguntarle algo.',
+      'Tengo una pregunta.',
+      'Me gustaría hacer una pregunta.',
+      'Quisiera hacer una pregunta.',
+      'Quiero plantear una pregunta.',
+    ],
   ),
 
   // --- 12. False Friends / Word Choice — expected owner: either ---
@@ -865,22 +879,36 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
     expectedCorrectedText: 'Asistió a la universidad en Madrid.',
+    acceptableAlternatives: [
+      'Estudió en la universidad en Madrid.',
+      'Fue a la universidad en Madrid.',
+      'Asistió a la universidad de Madrid.',
+      'Estudió en la universidad de Madrid.',
+      'Fue a la universidad de Madrid.',
+    ],
   ),
   TwoPassFixture(
-    id: 'false-friend-aplico-trabajo',
-    text: 'Aplicó para un trabajo.',
-    note: '"aplicar para" is a false friend for "apply for"; needs '
-        '"solicitar". Issue #112: "postularse a" is also genuinely '
-        'natural, especially in Latin American varieties (Mexico, the '
-        'Southern Cone) — accepted as an alternative rather than '
-        'replacing "solicitó un trabajo" as the primary expectation, '
-        'since the latter reads naturally across all varieties and the '
-        'former is somewhat variety-marked.',
+    id: 'false-friend-libreria',
+    text: 'Saqué un libro de la librería pública.',
+    note: '"librería" is a false friend for "library"; it means a bookshop '
+        'everywhere, so a public one lends nothing. Needs "biblioteca". '
+        'Replaced "Aplicó para un trabajo" (7 Nov 2026), which is accepted '
+        'in parts of Latin America and so was not a clean test.',
     languagePoint: 'False Friends / Word Choice',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
-    expectedCorrectedText: 'Solicitó un trabajo.',
-    acceptableAlternatives: ['Se postuló a un trabajo.'],
+    expectedCorrectedText: 'Saqué un libro de la biblioteca pública.',
+    acceptableAlternatives: [
+      'Saqué un libro de la biblioteca.',
+      'Saqué un libro en la biblioteca pública.',
+      'Tomé prestado un libro de la biblioteca pública.',
+      'Pedí prestado un libro de la biblioteca pública.',
+      'Tomé un libro prestado de la biblioteca pública.',
+      'Saqué un libro prestado de la biblioteca pública.',
+      'Retiré un libro de la biblioteca pública.',
+      'Me llevé un libro de la biblioteca pública.',
+      'Saqué un libro de la biblioteca municipal.',
+    ],
   ),
   TwoPassFixture(
     id: 'false-friend-realice',
@@ -891,6 +919,14 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
     expectedCorrectedText: 'Me di cuenta de que estaba equivocado.',
+    acceptableAlternatives: [
+      'Me di cuenta de que estaba equivocada.',
+      'Me di cuenta de que me había equivocado.',
+      'Me di cuenta de que me equivocaba.',
+      'Me percaté de que estaba equivocado.',
+      'Caí en la cuenta de que estaba equivocado.',
+      'Me di cuenta de mi error.',
+    ],
   ),
   TwoPassFixture(
     id: 'false-friend-embarazado',
@@ -907,7 +943,19 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.either,
     expectedCorrectedText: 'Me da vergüenza llegar tarde.',
-    acceptableAlternatives: ['Estoy avergonzado por llegar tarde.'],
+    acceptableAlternatives: [
+      'Estoy avergonzado por llegar tarde.',
+      'Estoy avergonzada por llegar tarde.',
+      'Me avergüenza llegar tarde.',
+      'Me da vergüenza haber llegado tarde.',
+      'Estoy avergonzado de llegar tarde.',
+      'Estoy avergonzada de llegar tarde.',
+      'Me siento avergonzado por llegar tarde.',
+      'Me siento avergonzada por llegar tarde.',
+      'Estoy apenado por llegar tarde.',
+      'Estoy apenada por llegar tarde.',
+      'Me da pena llegar tarde.',
+    ],
   ),
   TwoPassFixture(
     id: 'false-friend-actualmente-control',
@@ -933,7 +981,18 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
     expectedCorrectedText: 'Lo pasamos bien.',
-    acceptableAlternatives: ['Tuvimos un buen rato.'],
+    acceptableAlternatives: [
+      'Tuvimos un buen rato.',
+      'Pasamos un buen rato.',
+      'Nos lo pasamos bien.',
+      'La pasamos bien.',
+      'Lo pasamos muy bien.',
+      'Nos lo pasamos muy bien.',
+      'La pasamos muy bien.',
+      'Nos divertimos.',
+      'Nos divertimos mucho.',
+      'Pasamos un rato muy agradable.',
+    ],
   ),
   TwoPassFixture(
     id: 'naturalness-corriendo-tarde',
@@ -950,6 +1009,14 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     acceptableAlternatives: [
       'Voy a llegar tarde a la reunión.',
       'Estoy llegando tarde a la reunión.',
+      'Voy tarde para la reunión.',
+      'Voy a llegar tarde para la reunión.',
+      'Llego tarde a la reunión.',
+      'Voy con retraso a la reunión.',
+      'Se me hace tarde para la reunión.',
+      'Voy retrasado a la reunión.',
+      'Voy retrasada a la reunión.',
+      'Llevo retraso para la reunión.',
     ],
   ),
   TwoPassFixture(
@@ -964,7 +1031,15 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
     expectedCorrectedText: 'Quiero pasarlo bien.',
-    acceptableAlternatives: ['Quiero pasar un buen rato.'],
+    acceptableAlternatives: [
+      'Quiero pasar un buen rato.',
+      'Quiero pasármelo bien.',
+      'Quiero pasarla bien.',
+      'Quiero pasarlo muy bien.',
+      'Quiero divertirme.',
+      'Quiero pasar un rato agradable.',
+      'Quiero disfrutar.',
+    ],
   ),
   TwoPassFixture(
     id: 'naturalness-puedo-tener-cerveza',
@@ -978,22 +1053,46 @@ const List<TwoPassFixture> languagePointBenchmarkFixtures = [
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
     expectedCorrectedText: '¿Me pones una cerveza?',
-    acceptableAlternatives: ['¿Puedo tomar una cerveza?'],
+    acceptableAlternatives: [
+      '¿Puedo tomar una cerveza?',
+      '¿Me puede dar una cerveza?',
+      '¿Me puedes dar una cerveza?',
+      '¿Me da una cerveza?',
+      '¿Me das una cerveza?',
+      '¿Me pone una cerveza?',
+      '¿Me trae una cerveza?',
+      '¿Me traes una cerveza?',
+      '¿Me puede traer una cerveza?',
+      '¿Me puedes traer una cerveza?',
+      '¿Me sirve una cerveza?',
+      '¿Puedo pedir una cerveza?',
+      'Una cerveza, por favor.',
+    ],
   ),
   TwoPassFixture(
-    id: 'naturalness-llamar-para-atras',
-    text: 'Te llamo para atrás.',
-    note: 'English-influenced "llamar para atrás" ("call back"). Issue '
-        '#152: "te llamo más tarde"/"te llamo después" both preserve '
-        'the "I will call you [at some later point]" meaning and are '
-        'accepted as alternatives. "Te llamo de nuevo." is deliberately '
-        'not added — it means "I\'ll call you again", not "I\'ll call '
-        'you back", so it does not preserve the original meaning.',
+    id: 'naturalness-tomo-lugar',
+    text: 'La reunión tomó lugar ayer.',
+    note: 'English-influenced "tomar lugar" ("take place"); Spanish says '
+        '"tener lugar" or "celebrarse". Replaced "Te llamo para atrás" '
+        '(7 Nov 2026), which is everyday Puerto Rican and US Spanish and '
+        'so was not a clean test.',
     languagePoint: 'Phrase-Level Naturalness',
     operationType: TwoPassOperationType.replacement,
     expectedOwner: TwoPassExpectedOwner.naturalness,
-    expectedCorrectedText: 'Te devuelvo la llamada.',
-    acceptableAlternatives: ['Te llamo más tarde.', 'Te llamo después.'],
+    expectedCorrectedText: 'La reunión tuvo lugar ayer.',
+    acceptableAlternatives: [
+      'La reunión se celebró ayer.',
+      'La reunión fue ayer.',
+      'La reunión se realizó ayer.',
+      'La reunión se llevó a cabo ayer.',
+      'La reunión se hizo ayer.',
+      'La reunión ocurrió ayer.',
+      'La reunión se efectuó ayer.',
+      'La reunión se dio ayer.',
+      'Ayer tuvo lugar la reunión.',
+      'Ayer se celebró la reunión.',
+      'Ayer fue la reunión.',
+    ],
   ),
 
   // --- 14. Valid Regional / Should Not Flag — expected owner: no pass ---
