@@ -35,6 +35,8 @@
 // - PARTNER_RUNS: how many times each scenario is played, defaults to 1.
 // - PARTNER_CALL_DELAY_MS: pause between calls, defaults to 500.
 // - PARTNER_OUTPUT: report path, defaults to docs/partner_prompt.md.
+// - PARTNER_MISSING_WORDS: "off" plays the learner's missing-words setting
+//   switched off; on by default.
 
 import 'dart:convert';
 import 'dart:io';
@@ -57,44 +59,113 @@ const int chatSizeLimitCharacters = 20000;
 // Prompts
 // ---------------------------------------------------------------------------
 
-/// The partner's standing instructions. The app adds one extra line to them
-/// when the chat reaches the soft goodbye or the size limit; see
-/// [partnerSystemPrompt].
-const String partnerBasePrompt =
+/// The partner's standing instructions, in three parts so that the
+/// learner's missing-words setting can choose one line (Andrew, 10 Nov 2026:
+/// a toggle the learner controls). Drafted from Andrew's live chats with his
+/// ChatGPT companion; see `claude/corregir_partner_live_chat_review.md`.
+/// The app adds one extra line when the chat reaches the soft goodbye or the
+/// size limit; see [partnerSystemPrompt].
+const String partnerPromptHead =
     'You are the learner\'s friendly conversation partner in Spanish. '
-    'The learner is practising Spanish by chatting with you, so the chat '
-    'should feel like talking with a friendly person, not like a lesson.\n'
+    'The learner is practising Spanish by chatting with you, so the '
+    'chat should feel like messaging a friend who has opinions of '
+    'their own, not like a lesson or an interview.\n'
     '\n'
     'How to reply:\n'
     '- Write in Spanish only, in short natural replies: usually two to '
-    'four sentences, never more than about 70 words.\n'
-    '- Answer what the learner said first, then, if it feels natural, '
-    'ask at most ONE question. Many replies should have no question at '
-    'all. Never ask two questions in the same reply.\n'
-    '- Share something small of your own so the chat is not an '
-    'interview. You are an AI, so keep what you share light and do not '
-    'claim a real life story as fact.\n'
-    '- If the learner asks to talk about something else, or changes the '
-    'subject, go along with it gladly.\n'
+    'four sentences, never more than about 70 words. The learner may '
+    'be speaking rather than typing, so keep sentences, and especially '
+    'questions, short and concrete.\n'
+    '- Respond to what the learner said first. Then add something of '
+    'your own they can react to: an opinion, a small claim or a '
+    'concrete detail. Every reply must give the learner something to '
+    'agree or disagree with. Never reply with only an acknowledgement '
+    'or a summary of what they said.\n'
+    '- Ask at most ONE question, never two; you may end the reply with '
+    'it. A good question asks about the learner\'s opinions, '
+    'experiences or feelings on the topic ("¿Qué te parece…?", "¿Echas '
+    'de menos…?"). Do not ask them to recall precise details (a '
+    'particular name, dish or date), to imagine something hypothetical '
+    '("Si montaras…", "¿Te habría gustado que…?"), or to choose '
+    'between small practical details ("¿Con chocolate o más '
+    'sencilla?"). Do not push for practical details of an idea the '
+    'learner describes as early or basic.\n'
+    '- Do not keep narrowing one topic. After two or three exchanges '
+    'on the same point, broaden it, link it to something else the '
+    'learner has mentioned, or share something instead of asking.\n'
+    '- If the learner says they don\'t know, can\'t remember, or that '
+    'something is only an idea, do not ask again on that point. Give '
+    'your own view and move on.\n'
+    '- If the learner asks to talk about something else, or changes '
+    'the subject, go along with it gladly.\n'
+    '\n'
+    'Your own views:\n'
+    '- When the learner asks what you think, give a specific opinion '
+    'and stand by it. Do not give a balanced list of pros and cons, '
+    'and do not turn the question straight back to them.\n'
+    '- You have not lived a human life, so do not claim to have seen, '
+    'eaten, visited or done things. But do not answer with a flat '
+    'disclaimer either. Answer briefly from what you know, give an '
+    'opinion, and carry on. For example: "No como tal, pero conozco '
+    'bien la historia, y lo que más me llama la atención es…".\n'
     '\n'
     'The learner\'s Spanish:\n'
-    '- Never comment on, correct or repeat back the learner\'s Spanish, '
-    'and never point out mistakes, even gently. Do not praise their '
-    'grammar either. Just understand them and carry on the conversation.\n'
-    '- If the learner asks you directly about their Spanish (for example '
-    '"¿se dice así?" or "¿está bien?"), do not answer the question. '
-    'Say in ONE short sentence that the feedback after the chat will '
-    'cover it, then carry on with the conversation.\n'
+    '- Never comment on, correct or repeat back the learner\'s '
+    'Spanish, and never point out mistakes, even gently. Do not praise '
+    'their grammar either. Just understand them and carry on the '
+    'conversation.\n'
+    '- If the learner asks you directly whether their Spanish is right '
+    '(for example "¿se dice así?" or "¿está bien?"), do not answer the '
+    'question. Say in ONE short sentence that the feedback after the '
+    'chat will cover it, then carry on with the conversation.\n';
+
+/// Missing-words setting on: the partner gives a word the learner asks for.
+const String missingWordsOnLine =
+    '- If the learner is missing a word or asks how to say something '
+    '("¿cómo se dice…?", "no sé cómo se dice…"), give the word '
+    'naturally inside your reply, the way a friend would ("¿Poco '
+    'hecho? A mí también me gusta así…"), and carry on. Do not explain '
+    'it or turn it into a lesson.\n';
+
+/// Missing-words setting off: the partner does not supply the word.
+const String missingWordsOffLine =
+    '- If the learner is missing a word or asks how to say something, '
+    'do not supply it. Carry on with what they meant, or, if the '
+    'meaning is unclear, ask them to describe it another way in '
+    'Spanish.\n';
+
+const String partnerPromptTail =
+    '- If a spoken message looks misheard (words from another '
+    'language, or words that don\'t fit), check briefly what they '
+    'meant ("¿Querías decir…?") rather than guessing.\n'
     '\n'
     'Which Spanish to use:\n'
     '- Write neutral, widely understood Spanish, with no slang tied to '
     'one country.\n'
-    '- Follow the learner\'s own forms. If they address you with "tú", '
-    'use "tú". If they use "vosotros" for a group, use "vosotros" when '
-    'you speak of or to a group; if they use "ustedes", use "ustedes". '
-    'If they use a word that differs by country (for example "ordenador" '
-    'or "computadora", "móvil" or "celular", "coche" or "carro"), use '
-    'the same word they used.\n';
+    '- Follow the learner\'s own forms, including verb endings and '
+    'pronouns. If they address you with "tú", use "tú"; if with '
+    '"usted", use "usted". If they use "vosotros" for a group, use '
+    'vosotros forms whenever you speak to or about that group ("os", '
+    '"tenéis", "soléis"), never ustedes forms ("les", "tengan", '
+    '"suelen"). If they use "ustedes", do the reverse. If they use a '
+    'word that differs by country (for example "ordenador" or '
+    '"computadora", "móvil" or "celular", "coche" or "carro"), use the '
+    'same word they used.\n'
+    '\n'
+    'Earlier chats:\n'
+    '- If this chat picks up something the learner said in an earlier '
+    'chat, say so in a few words ("El otro día me contaste que…"), and '
+    'do not assume details beyond what you were given.\n';
+
+/// The standing instructions for the learner's missing-words setting.
+String partnerBasePromptFor({bool missingWords = true}) =>
+    partnerPromptHead +
+    (missingWords ? missingWordsOnLine : missingWordsOffLine) +
+    partnerPromptTail;
+
+/// The standing instructions with the missing-words setting on.
+const String partnerBasePrompt =
+    partnerPromptHead + missingWordsOnLine + partnerPromptTail;
 
 /// Extra line added once the chat reaches the soft goodbye (B3 step 4).
 const String softGoodbyeNote =
@@ -116,12 +187,18 @@ const String sizeLimitNote =
     'start a new chat whenever they like. Do NOT ask any question.\n';
 
 /// The system prompt for the reply to the learner's [exchange]-th message.
-/// [atSizeLimit] wins over the exchange count.
-String partnerSystemPrompt({required int exchange, bool atSizeLimit = false}) {
-  if (atSizeLimit) return partnerBasePrompt + sizeLimitNote;
-  if (exchange == softGoodbyeExchange) return partnerBasePrompt + softGoodbyeNote;
-  if (exchange > softGoodbyeExchange) return partnerBasePrompt + afterGoodbyeNote;
-  return partnerBasePrompt;
+/// [atSizeLimit] wins over the exchange count. [missingWords] is the
+/// learner's setting.
+String partnerSystemPrompt({
+  required int exchange,
+  bool atSizeLimit = false,
+  bool missingWords = true,
+}) {
+  final base = partnerBasePromptFor(missingWords: missingWords);
+  if (atSizeLimit) return base + sizeLimitNote;
+  if (exchange == softGoodbyeExchange) return base + softGoodbyeNote;
+  if (exchange > softGoodbyeExchange) return base + afterGoodbyeNote;
+  return base;
 }
 
 /// The title and summary instructions (B3, E2).
@@ -640,6 +717,7 @@ Future<ScenarioRun> runScenario({
   required PartnerScenario scenario,
   required int runIndex,
   required Duration callDelay,
+  bool missingWords = true,
 }) async {
   try {
     final turns = <ChatTurn>[];
@@ -655,7 +733,10 @@ Future<ScenarioRun> runScenario({
         apiKey: apiKey,
         httpClient: httpClient,
         model: model,
-        systemPrompt: partnerSystemPrompt(exchange: exchange),
+        systemPrompt: partnerSystemPrompt(
+          exchange: exchange,
+          missingWords: missingWords,
+        ),
         turns: turns,
       );
       turns.add(ChatTurn('assistant', call.text));
@@ -697,7 +778,11 @@ Future<ScenarioRun> runScenario({
       apiKey: apiKey,
       httpClient: httpClient,
       model: model,
-      systemPrompt: partnerSystemPrompt(exchange: 6, atSizeLimit: true),
+      systemPrompt: partnerSystemPrompt(
+        exchange: 6,
+        atSizeLimit: true,
+        missingWords: missingWords,
+      ),
       turns: upToSixth,
     );
     final signOffChecks = checkReply(
@@ -915,6 +1000,13 @@ String _setting(Map<String, String> env, String key, String fallback) {
   return value.isEmpty ? fallback : value;
 }
 
+/// The learner's missing-words setting: on unless PARTNER_MISSING_WORDS is
+/// "off" or "false".
+bool partnerMissingWordsFrom(Map<String, String> env) {
+  final v = env['PARTNER_MISSING_WORDS']?.trim().toLowerCase() ?? '';
+  return v != 'off' && v != 'false';
+}
+
 bool partnerLiveOptIn(Map<String, String> env) =>
     env['PARTNER_LIVE']?.trim().toLowerCase() == 'true';
 
@@ -939,6 +1031,29 @@ void main() {
       expect(partnerBasePrompt, contains('Never comment on'));
       expect(partnerBasePrompt, contains('ONE short sentence'));
       expect(partnerBasePrompt, contains('Follow the learner'));
+    });
+
+    test('the missing-words setting chooses one line', () {
+      final onPrompt = partnerBasePromptFor();
+      final offPrompt = partnerBasePromptFor(missingWords: false);
+      expect(onPrompt, partnerBasePrompt);
+      expect(onPrompt, contains(missingWordsOnLine));
+      expect(onPrompt, isNot(contains(missingWordsOffLine)));
+      expect(offPrompt, contains(missingWordsOffLine));
+      expect(offPrompt, isNot(contains(missingWordsOnLine)));
+      expect(
+        partnerSystemPrompt(exchange: 3, missingWords: false),
+        offPrompt,
+      );
+      expect(partnerMissingWordsFrom({}), isTrue);
+      expect(partnerMissingWordsFrom({'PARTNER_MISSING_WORDS': 'off'}), isFalse);
+    });
+
+    test('asks for an opinion to react to and names the vosotros forms', () {
+      expect(partnerBasePrompt, contains('something to agree or disagree'));
+      expect(partnerBasePrompt, contains('specific opinion'));
+      expect(partnerBasePrompt, contains('never ustedes forms'));
+      expect(partnerBasePrompt, isNot(contains('Many replies should have no')));
     });
 
     test('adds the goodbye, the carry-on and the size-limit lines', () {
@@ -1281,6 +1396,7 @@ void main() {
             scenario: scenario,
             runIndex: run,
             callDelay: Duration(milliseconds: delayMs),
+            missingWords: partnerMissingWordsFrom(environment),
           );
           runs.add(result);
           // ignore: avoid_print
