@@ -7,8 +7,12 @@ import '../features/corrections/application/correction_repository_controller.dar
 import '../features/corrections/application/correction_service.dart';
 import '../features/corrections/data/file_correction_repository.dart';
 import '../features/corrections/data/open_ai_correction_service.dart';
+import '../features/introduction/application/introduction_controller.dart';
+import '../features/introduction/presentation/introduction_screen.dart';
 import '../features/language_selection/language_selection_screen.dart';
 import '../features/navigation/presentation/app_shell.dart';
+import '../features/profile/application/profile_repository.dart';
+import '../features/profile/data/file_profile_repository.dart';
 import '../features/write/application/transcription_service.dart';
 import '../features/write/data/open_ai_whisper_transcription_service.dart';
 import '../shared/design/app_colors.dart';
@@ -30,8 +34,20 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   late final CorrectionRepositoryController _repositoryController;
   late final TranscriptionService _transcriptionService;
   late final WalkthroughService _walkthroughService;
+  late final ProfileRepository _profileRepository;
   Language? _selectedLanguage;
   bool _isInitialising = true;
+
+  /// Whether the introduction (decision A1) is on screen. It runs once per
+  /// install, between the language choice and the app, and is skipped when
+  /// the profile file says it is complete, including after a language
+  /// switch (decision A2).
+  bool _showIntroduction = false;
+
+  /// Once the learner leaves the introduction in this launch, by "Stop for
+  /// now" or from its end screen, it stays away until the next launch; an
+  /// unfinished introduction resumes where it stopped then.
+  bool _introductionLeftThisLaunch = false;
 
   @override
   void initState() {
@@ -52,6 +68,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
     _repositoryController = CorrectionRepositoryController(
       FileCorrectionRepository(),
     );
+    _profileRepository = FileProfileRepository();
 
     _init();
   }
@@ -62,7 +79,9 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
     if (skip) {
       final langCode = prefs.getString(_keyLastSelectedLanguage);
       if (langCode != null) {
-        _selectedLanguage = Language.fromJson(langCode);
+        final lang = Language.fromJson(langCode);
+        _selectedLanguage = lang;
+        _showIntroduction = await _introductionNeeded(lang);
       }
     }
     if (mounted) {
@@ -73,9 +92,28 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   Future<void> _onLanguageSelected(Language lang) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyLastSelectedLanguage, lang.toJson());
+    final showIntroduction = await _introductionNeeded(lang);
     if (mounted) {
-      setState(() => _selectedLanguage = lang);
+      setState(() {
+        _selectedLanguage = lang;
+        _showIntroduction = showIntroduction;
+      });
     }
+  }
+
+  Future<bool> _introductionNeeded(Language lang) async {
+    if (_introductionLeftThisLaunch) {
+      return false;
+    }
+    final profile = await _profileRepository.getProfile();
+    return IntroductionController.isNeeded(profile, lang);
+  }
+
+  void _onIntroductionLeft() {
+    setState(() {
+      _showIntroduction = false;
+      _introductionLeftThisLaunch = true;
+    });
   }
 
   @override
@@ -96,6 +134,20 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
         title: 'Corrector de Espanol',
         theme: buildAppTheme(),
         home: LanguageSelectionScreen(onLanguageSelected: _onLanguageSelected),
+      );
+    }
+
+    if (_showIntroduction) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Corrector de Espanol',
+        theme: buildAppTheme(),
+        home: IntroductionScreen(
+          language: selectedLanguage,
+          profileRepository: _profileRepository,
+          transcriptionService: _transcriptionService,
+          onLeave: _onIntroductionLeft,
+        ),
       );
     }
 

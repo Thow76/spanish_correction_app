@@ -11,6 +11,7 @@ import 'warm_up_question.dart';
 ///   and Portuguese label (decision A2);
 /// * [warmUpQuestions]: the two warm-ups that teach the controls, one typed
 ///   and one spoken, each with a small hint in English (decision A1);
+/// * [interestsQuestion]: the line above the chips, with its English hint;
 /// * [fullerQuestions]: about three fuller questions per interest, each
 ///   written to pull a different structure (decision A1);
 /// * [endScreenLine]: the closing line above "See suggestions" and "Not now".
@@ -152,6 +153,25 @@ class IntroductionContent {
         Language.spanish => warmUpQuestions,
         Language.portuguese => const [],
       };
+
+  // ---------------------------------------------------------------------------
+  // The interests question
+  // ---------------------------------------------------------------------------
+
+  /// The line above the interest chips, in the target language.
+  static const String interestsQuestion =
+      '¿Qué cosas te interesan? Toca todas las que quieras.';
+
+  /// The small English hint under the interests question.
+  static const String interestsHint =
+      'Tap any that interest you, then continue. You can change them later '
+      'in your profile.';
+
+  /// The interests question for [language]. Spanish only in slice 1.
+  static String? interestsQuestionFor(Language language) => switch (language) {
+    Language.spanish => interestsQuestion,
+    Language.portuguese => null,
+  };
 
   // ---------------------------------------------------------------------------
   // Fuller questions
@@ -497,6 +517,17 @@ class IntroductionContent {
       fullerQuestions
           .where((question) => question.language == language)
           .toList(growable: false);
+
+  /// The fuller question with [id], or null if there is none (for example
+  /// an id saved by an earlier version of the content).
+  static FullerQuestion? fullerQuestionById(String id) {
+    for (final question in fullerQuestions) {
+      if (question.id == id) {
+        return question;
+      }
+    }
+    return null;
+  }
 
   /// The fuller questions for [interestId] in [language], in file order.
   static List<FullerQuestion> fullerQuestionsForInterest(
