@@ -1,80 +1,253 @@
 import '../../../core/enums/language.dart';
 
-/// Where the learner is in the introduction (decisions A1 and A2).
+/// Where the learner is in the introduction (decisions A2 and A3).
 ///
 /// "Stop for now" is on every step of the introduction, and the profile file
-/// keeps this record so the introduction can resume where it stopped. Once
-/// [isComplete] is true the introduction never shows again on this install,
-/// including after a language switch (decision A2, point 3).
+/// keeps this record so the introduction can resume where it stopped,
+/// including after "Open now" on the recommendation card takes the learner
+/// out of the app. Once [IntroductionProgress.isComplete] is true the
+/// introduction never shows again on this install, including after a
+/// language switch (decision A2, point 3).
 enum IntroductionStage {
-  /// The two warm-up questions, one typed and one spoken.
-  warmUps,
-
-  /// The interest chips in the target language.
+  /// The interest chips in the target language, one to five of them.
   interests,
 
-  /// The fuller questions drawn from the chosen chips.
-  fullerQuestions,
+  /// The choice between "Try it" and "Show me".
+  choice,
 
-  /// The end screen: "See suggestions" or "Not now".
+  /// Try it, step one: the friendly opener, answered by typing.
+  friendlyOpener,
+
+  /// Try it, step two: a question about one of the chosen chips, answered by
+  /// speaking.
+  interestQuestion,
+
+  /// Try it, step three: the recommendation card for one of the chosen
+  /// chips, with Open now or Skip and nothing to answer.
+  recommendation,
+
+  /// Show me: the fixed demo on one of the chosen chips.
+  showMeDemo,
+
+  /// The end screen: "See suggestions" or "Not now" after Try it; after Show
+  /// me there are no answers to show.
   endScreen,
 
   /// The introduction has been finished and will not show again.
   complete,
 }
 
-/// One fuller question the learner has answered.
-///
-/// [submissionId] is the id of the History entry the answer was sent to for
-/// feedback (task 1.4). It is null when the answer has not been sent, for
-/// example when the send failed or has not happened yet.
-class FullerAnswer {
-  const FullerAnswer({required this.questionId, this.submissionId});
+/// What the learner chose after the chips (decision A3): to try the three
+/// steps, or to watch the demo.
+enum IntroductionChoice {
+  tryIt,
+  showMe;
 
-  final String questionId;
+  String toJson() => switch (this) {
+    IntroductionChoice.tryIt => 'try_it',
+    IntroductionChoice.showMe => 'show_me',
+  };
+
+  static IntroductionChoice? fromJson(Object? value) => switch (value) {
+    'try_it' => IntroductionChoice.tryIt,
+    'show_me' => IntroductionChoice.showMe,
+    _ => null,
+  };
+}
+
+/// What the learner did with the recommendation card.
+enum RecommendationOutcome {
+  /// "Open now": the link was opened outside the app.
+  opened,
+
+  /// "Skip": the learner moved on without opening it.
+  skipped;
+
+  String toJson() => switch (this) {
+    RecommendationOutcome.opened => 'opened',
+    RecommendationOutcome.skipped => 'skipped',
+  };
+
+  static RecommendationOutcome? fromJson(Object? value) => switch (value) {
+    'opened' => RecommendationOutcome.opened,
+    'skipped' => RecommendationOutcome.skipped,
+    _ => null,
+  };
+}
+
+/// A step the learner answers: the friendly opener or the interest question.
+///
+/// [contentId] is the id of the opener or question that was shown, kept so
+/// that resuming shows the same one rather than a fresh one. [interestId] is
+/// the chip the question was about; it is null for the opener, which is not
+/// drawn from the chips. [submissionId] is the id of the History entry the
+/// answer was sent to for feedback (task 1.4). It is null while the answer
+/// has not been sent, for example when the send failed or has not happened
+/// yet, so [isAnswered] is recorded on its own.
+class StepAnswer {
+  const StepAnswer({
+    required this.contentId,
+    this.interestId,
+    this.isAnswered = false,
+    this.submissionId,
+  });
+
+  final String contentId;
+  final String? interestId;
+  final bool isAnswered;
   final String? submissionId;
 
-  factory FullerAnswer.fromJson(Map<String, Object?> json) {
-    final rawQuestionId = json['question_id'];
+  /// The same step marked answered. A [submissionId] that is null keeps the
+  /// one already recorded, so the id can be added once the send is done.
+  StepAnswer answered({String? submissionId}) => StepAnswer(
+    contentId: contentId,
+    interestId: interestId,
+    isAnswered: true,
+    submissionId: submissionId ?? this.submissionId,
+  );
+
+  factory StepAnswer.fromJson(Map<String, Object?> json) {
+    final rawContentId = json['content_id'];
+    final rawInterestId = json['interest_id'];
     final rawSubmissionId = json['submission_id'];
-    return FullerAnswer(
-      questionId: rawQuestionId is String ? rawQuestionId : '',
+    final rawIsAnswered = json['is_answered'];
+    return StepAnswer(
+      contentId: rawContentId is String ? rawContentId : '',
+      interestId: rawInterestId is String ? rawInterestId : null,
+      isAnswered: rawIsAnswered is bool && rawIsAnswered,
       submissionId: rawSubmissionId is String ? rawSubmissionId : null,
     );
   }
 
   Map<String, Object?> toJson() {
-    return {'question_id': questionId, 'submission_id': submissionId};
+    return {
+      'content_id': contentId,
+      'interest_id': interestId,
+      'is_answered': isAnswered,
+      'submission_id': submissionId,
+    };
   }
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is FullerAnswer &&
-          other.questionId == questionId &&
+      other is StepAnswer &&
+          other.contentId == contentId &&
+          other.interestId == interestId &&
+          other.isAnswered == isAnswered &&
           other.submissionId == submissionId;
 
   @override
-  int get hashCode => Object.hash(questionId, submissionId);
+  int get hashCode =>
+      Object.hash(contentId, interestId, isAnswered, submissionId);
 
   @override
-  String toString() => 'FullerAnswer($questionId, $submissionId)';
+  String toString() =>
+      'StepAnswer($contentId, interest: $interestId, '
+      'answered: $isAnswered, submission: $submissionId)';
 }
 
-/// The learner's progress through the introduction.
+/// The recommendation card step: which chip it was linked to and what the
+/// learner did with it. [outcome] is null while the card is showing and
+/// nothing has been chosen yet.
+class RecommendationStep {
+  const RecommendationStep({required this.interestId, this.outcome});
+
+  final String interestId;
+  final RecommendationOutcome? outcome;
+
+  bool get isDone => outcome != null;
+
+  RecommendationStep withOutcome(RecommendationOutcome outcome) =>
+      RecommendationStep(interestId: interestId, outcome: outcome);
+
+  factory RecommendationStep.fromJson(Map<String, Object?> json) {
+    final rawInterestId = json['interest_id'];
+    return RecommendationStep(
+      interestId: rawInterestId is String ? rawInterestId : '',
+      outcome: RecommendationOutcome.fromJson(json['outcome']),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {'interest_id': interestId, 'outcome': outcome?.toJson()};
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RecommendationStep &&
+          other.interestId == interestId &&
+          other.outcome == outcome;
+
+  @override
+  int get hashCode => Object.hash(interestId, outcome);
+
+  @override
+  String toString() => 'RecommendationStep($interestId, $outcome)';
+}
+
+/// The "Show me" demo: which chip it plays on and whether it has been
+/// watched to the end.
+class DemoStep {
+  const DemoStep({required this.interestId, this.isWatched = false});
+
+  final String interestId;
+  final bool isWatched;
+
+  DemoStep watched() => DemoStep(interestId: interestId, isWatched: true);
+
+  factory DemoStep.fromJson(Map<String, Object?> json) {
+    final rawInterestId = json['interest_id'];
+    final rawIsWatched = json['is_watched'];
+    return DemoStep(
+      interestId: rawInterestId is String ? rawInterestId : '',
+      isWatched: rawIsWatched is bool && rawIsWatched,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {'interest_id': interestId, 'is_watched': isWatched};
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DemoStep &&
+          other.interestId == interestId &&
+          other.isWatched == isWatched;
+
+  @override
+  int get hashCode => Object.hash(interestId, isWatched);
+
+  @override
+  String toString() => 'DemoStep($interestId, watched: $isWatched)';
+}
+
+/// The learner's progress through the introduction (decision A3).
 ///
 /// Everything here is what "Stop for now" needs to bring the learner back to
-/// the same place: which warm-ups are done, whether the chips have been
-/// passed, which fuller questions were drawn (so the same ones come back) and
-/// which of those have been answered. The chosen interests themselves live on
-/// the profile, not here, because they outlive the introduction.
+/// the same place: whether the chips have been passed, the choice made (Try
+/// it or Show me), which opener and which interest question were shown and
+/// whether each has been answered (with the History entry id once sent),
+/// which chip the recommendation card was for and whether it was opened or
+/// skipped, whether the demo has been watched, and whether the introduction
+/// is complete. The chosen interests themselves live on the profile, not
+/// here, because they outlive the introduction.
+///
+/// The chips each step uses are recorded as they are shown, so that a
+/// resumed introduction carries on with the same chips even if the interest
+/// list has been edited in between (the picks come from
+/// `IntroductionContent.pickForChips` when a step is first shown).
 class IntroductionProgress {
   const IntroductionProgress({
     this.language,
-    this.answeredWarmUpIds = const [],
     this.interestsChosen = false,
-    this.fullerQuestionIds = const [],
-    this.fullerAnswers = const [],
+    this.choice,
+    this.opener,
+    this.interestQuestion,
+    this.recommendation,
+    this.demo,
     this.isComplete = false,
     this.completedAt,
   });
@@ -82,10 +255,12 @@ class IntroductionProgress {
   /// Nothing started yet.
   const IntroductionProgress.notStarted()
     : language = null,
-      answeredWarmUpIds = const [],
       interestsChosen = false,
-      fullerQuestionIds = const [],
-      fullerAnswers = const [],
+      choice = null,
+      opener = null,
+      interestQuestion = null,
+      recommendation = null,
+      demo = null,
       isComplete = false,
       completedAt = null;
 
@@ -94,20 +269,28 @@ class IntroductionProgress {
   /// is recorded once.
   final Language? language;
 
-  /// Ids of the warm-up questions the learner has answered, in order.
-  final List<String> answeredWarmUpIds;
-
-  /// Whether the learner has passed the interest chips step. Tapping no chip
-  /// still counts as passing it (the fuller questions are then drawn from
-  /// every interest), so this is separate from the profile's interest list.
+  /// Whether the learner has passed the interest chips step. The chips
+  /// themselves are on the profile; this says the step is behind them.
   final bool interestsChosen;
 
-  /// The fuller questions drawn for this learner, in the order asked. Kept so
-  /// that resuming shows the same questions rather than drawing fresh ones.
-  final List<String> fullerQuestionIds;
+  /// Try it or Show me. Null until the learner has chosen.
+  final IntroductionChoice? choice;
 
-  /// The fuller questions answered so far.
-  final List<FullerAnswer> fullerAnswers;
+  /// The friendly opener shown, and whether it has been answered. Null until
+  /// the opener step is first shown.
+  final StepAnswer? opener;
+
+  /// The interest question shown (with its chip), and whether it has been
+  /// answered. Null until the question step is first shown.
+  final StepAnswer? interestQuestion;
+
+  /// The recommendation card shown (with its chip), and whether it was
+  /// opened or skipped. Null until the card is first shown.
+  final RecommendationStep? recommendation;
+
+  /// The Show me demo (with its chip), and whether it has been watched. Null
+  /// until the demo is first shown.
+  final DemoStep? demo;
 
   /// True once the introduction has been finished (or stopped at the end
   /// screen). It is then skipped on every launch and every language switch.
@@ -118,69 +301,97 @@ class IntroductionProgress {
   /// Whether the learner has started the introduction at all.
   bool get hasStarted =>
       language != null ||
-      answeredWarmUpIds.isNotEmpty ||
       interestsChosen ||
-      fullerQuestionIds.isNotEmpty ||
-      fullerAnswers.isNotEmpty ||
+      choice != null ||
+      opener != null ||
+      interestQuestion != null ||
+      recommendation != null ||
+      demo != null ||
       isComplete;
 
-  /// Whether at least one fuller answer exists. "Stop for now" goes to the
-  /// end screen when this is true and straight to the app when it is false
-  /// (build plan task 1.3).
-  bool get hasFullerAnswer => fullerAnswers.isNotEmpty;
+  bool get hasAnsweredOpener => opener?.isAnswered ?? false;
 
-  /// Whether every drawn fuller question has an answer.
-  bool get allFullerQuestionsAnswered =>
-      fullerQuestionIds.isNotEmpty &&
-      fullerQuestionIds.every(hasAnsweredFullerQuestion);
+  bool get hasAnsweredInterestQuestion => interestQuestion?.isAnswered ?? false;
 
-  bool hasAnsweredWarmUp(String warmUpId) =>
-      answeredWarmUpIds.contains(warmUpId);
+  /// Whether at least one answer exists (the opener's or the interest
+  /// question's). "Stop for now" goes to the end screen when this is true and
+  /// straight to the app when it is false (build plan task 1.3). After Show
+  /// me there are no answers, so this stays false.
+  bool get hasAnswer => hasAnsweredOpener || hasAnsweredInterestQuestion;
 
-  bool hasAnsweredFullerQuestion(String questionId) =>
-      fullerAnswers.any((answer) => answer.questionId == questionId);
+  /// The answers given so far, opener first, for the end screen's walk
+  /// through their suggestions (task 1.4).
+  List<StepAnswer> get answers => [
+    if (hasAnsweredOpener) opener!,
+    if (hasAnsweredInterestQuestion) interestQuestion!,
+  ];
 
-  /// The ids of the drawn fuller questions not yet answered, in order.
-  List<String> get unansweredFullerQuestionIds => fullerQuestionIds
-      .where((id) => !hasAnsweredFullerQuestion(id))
-      .toList(growable: false);
+  /// Whether the recommendation card has been opened or skipped.
+  bool get hasDecidedRecommendation => recommendation?.isDone ?? false;
+
+  /// Whether the Show me demo has been watched to the end.
+  bool get hasWatchedDemo => demo?.isWatched ?? false;
+
+  /// Whether every step of the chosen path is behind the learner, so the
+  /// end screen is next.
+  bool get hasFinishedChosenPath => switch (choice) {
+    IntroductionChoice.tryIt =>
+      hasAnsweredOpener &&
+          hasAnsweredInterestQuestion &&
+          hasDecidedRecommendation,
+    IntroductionChoice.showMe => hasWatchedDemo,
+    null => false,
+  };
 
   /// The step the introduction should show next when it resumes.
-  ///
-  /// [warmUpCount] is how many warm-up questions the content has (two in
-  /// decision A1); the warm-ups stage is over once that many have been
-  /// answered.
-  IntroductionStage stageFor({required int warmUpCount}) {
+  IntroductionStage get nextStage {
     if (isComplete) {
       return IntroductionStage.complete;
-    }
-    if (answeredWarmUpIds.length < warmUpCount) {
-      return IntroductionStage.warmUps;
     }
     if (!interestsChosen) {
       return IntroductionStage.interests;
     }
-    if (!allFullerQuestionsAnswered) {
-      return IntroductionStage.fullerQuestions;
+    switch (choice) {
+      case null:
+        return IntroductionStage.choice;
+      case IntroductionChoice.tryIt:
+        if (!hasAnsweredOpener) {
+          return IntroductionStage.friendlyOpener;
+        }
+        if (!hasAnsweredInterestQuestion) {
+          return IntroductionStage.interestQuestion;
+        }
+        if (!hasDecidedRecommendation) {
+          return IntroductionStage.recommendation;
+        }
+        return IntroductionStage.endScreen;
+      case IntroductionChoice.showMe:
+        if (!hasWatchedDemo) {
+          return IntroductionStage.showMeDemo;
+        }
+        return IntroductionStage.endScreen;
     }
-    return IntroductionStage.endScreen;
   }
 
   IntroductionProgress copyWith({
     Language? language,
-    List<String>? answeredWarmUpIds,
     bool? interestsChosen,
-    List<String>? fullerQuestionIds,
-    List<FullerAnswer>? fullerAnswers,
+    IntroductionChoice? choice,
+    StepAnswer? opener,
+    StepAnswer? interestQuestion,
+    RecommendationStep? recommendation,
+    DemoStep? demo,
     bool? isComplete,
     DateTime? completedAt,
   }) {
     return IntroductionProgress(
       language: language ?? this.language,
-      answeredWarmUpIds: answeredWarmUpIds ?? this.answeredWarmUpIds,
       interestsChosen: interestsChosen ?? this.interestsChosen,
-      fullerQuestionIds: fullerQuestionIds ?? this.fullerQuestionIds,
-      fullerAnswers: fullerAnswers ?? this.fullerAnswers,
+      choice: choice ?? this.choice,
+      opener: opener ?? this.opener,
+      interestQuestion: interestQuestion ?? this.interestQuestion,
+      recommendation: recommendation ?? this.recommendation,
+      demo: demo ?? this.demo,
       isComplete: isComplete ?? this.isComplete,
       completedAt: completedAt ?? this.completedAt,
     );
@@ -191,45 +402,107 @@ class IntroductionProgress {
   IntroductionProgress started(Language language) =>
       this.language == null ? copyWith(language: language) : this;
 
-  /// Records a warm-up as answered. Answering the same one twice records it
-  /// once.
-  IntroductionProgress withWarmUpAnswered(String warmUpId) =>
-      hasAnsweredWarmUp(warmUpId)
+  /// Records that the chips step has been passed.
+  IntroductionProgress withInterestsChosen() => copyWith(interestsChosen: true);
+
+  /// Records the choice of Try it or Show me. Choosing again replaces the
+  /// earlier choice; whether the learner is offered that is for the
+  /// introduction screens to decide.
+  IntroductionProgress withChoice(IntroductionChoice choice) =>
+      copyWith(choice: choice);
+
+  /// Records which friendly opener was shown, so that resuming shows the
+  /// same one. Showing it again when one is already recorded changes
+  /// nothing.
+  IntroductionProgress withOpenerShown(String openerId) =>
+      opener != null ? this : copyWith(opener: StepAnswer(contentId: openerId));
+
+  /// Records that the opener has been answered, with the History entry id
+  /// once the answer has been sent. Calling it again adds a [submissionId]
+  /// that was missing. Does nothing if no opener has been shown.
+  IntroductionProgress withOpenerAnswered({String? submissionId}) =>
+      opener == null
       ? this
-      : copyWith(answeredWarmUpIds: [...answeredWarmUpIds, warmUpId]);
+      : copyWith(opener: opener!.answered(submissionId: submissionId));
 
-  /// Records that the chips step has been passed and which fuller questions
-  /// were drawn from the chosen chips.
-  IntroductionProgress withInterestsChosen({
-    required List<String> fullerQuestionIds,
-  }) => copyWith(
-    interestsChosen: true,
-    fullerQuestionIds: List.unmodifiable(fullerQuestionIds),
-  );
+  /// Records which interest question was shown and which chip it is about.
+  /// Showing it again when one is already recorded changes nothing.
+  IntroductionProgress withInterestQuestionShown({
+    required String interestId,
+    required String questionId,
+  }) => interestQuestion != null
+      ? this
+      : copyWith(
+          interestQuestion: StepAnswer(
+            contentId: questionId,
+            interestId: interestId,
+          ),
+        );
 
-  /// Records an answer to a fuller question. Answering the same question
-  /// again replaces the earlier record (for example to add a submission id
-  /// once the answer has been sent).
-  IntroductionProgress withFullerAnswer(FullerAnswer answer) {
-    final others = fullerAnswers.where(
-      (existing) => existing.questionId != answer.questionId,
-    );
-    return copyWith(fullerAnswers: [...others, answer]);
-  }
+  /// Records that the interest question has been answered, with the History
+  /// entry id once the answer has been sent. Calling it again adds a
+  /// [submissionId] that was missing. Does nothing if no question has been
+  /// shown.
+  IntroductionProgress withInterestQuestionAnswered({String? submissionId}) =>
+      interestQuestion == null
+      ? this
+      : copyWith(
+          interestQuestion: interestQuestion!.answered(
+            submissionId: submissionId,
+          ),
+        );
+
+  /// Records which chip the recommendation card is for. Showing it again
+  /// when one is already recorded changes nothing.
+  IntroductionProgress withRecommendationShown(String interestId) =>
+      recommendation != null
+      ? this
+      : copyWith(recommendation: RecommendationStep(interestId: interestId));
+
+  /// Records that the learner tapped Open now on the recommendation card.
+  /// Does nothing if no card has been shown.
+  IntroductionProgress withRecommendationOpened() =>
+      _withRecommendationOutcome(RecommendationOutcome.opened);
+
+  /// Records that the learner tapped Skip on the recommendation card. Does
+  /// nothing if no card has been shown.
+  IntroductionProgress withRecommendationSkipped() =>
+      _withRecommendationOutcome(RecommendationOutcome.skipped);
+
+  IntroductionProgress _withRecommendationOutcome(
+    RecommendationOutcome outcome,
+  ) => recommendation == null
+      ? this
+      : copyWith(recommendation: recommendation!.withOutcome(outcome));
+
+  /// Records which chip the Show me demo plays on. Showing it again when one
+  /// is already recorded changes nothing.
+  IntroductionProgress withDemoShown(String interestId) =>
+      demo != null ? this : copyWith(demo: DemoStep(interestId: interestId));
+
+  /// Records that the demo has been watched to the end. Does nothing if no
+  /// demo has been shown.
+  IntroductionProgress withDemoWatched() =>
+      demo == null ? this : copyWith(demo: demo!.watched());
 
   /// Marks the introduction finished at [now]. It will not show again.
   IntroductionProgress completed(DateTime now) =>
       copyWith(isComplete: true, completedAt: now);
 
+  /// Reads a saved record. Fields the 1.2 version wrote for the old design
+  /// (`answered_warm_up_ids`, `fuller_question_ids`, `fuller_answers`) are
+  /// ignored, like any other unknown field, so an older file still reads.
   factory IntroductionProgress.fromJson(Map<String, Object?> json) {
     final rawLanguage = json['language'];
     final rawCompletedAt = json['completed_at'];
     return IntroductionProgress(
       language: rawLanguage is String ? Language.fromJson(rawLanguage) : null,
-      answeredWarmUpIds: _readStringList(json['answered_warm_up_ids']),
       interestsChosen: _readBool(json['interests_chosen']),
-      fullerQuestionIds: _readStringList(json['fuller_question_ids']),
-      fullerAnswers: _readAnswers(json['fuller_answers']),
+      choice: IntroductionChoice.fromJson(json['choice']),
+      opener: _readStep(json['opener']),
+      interestQuestion: _readStep(json['interest_question']),
+      recommendation: _readRecommendation(json['recommendation']),
+      demo: _readDemo(json['demo']),
       isComplete: _readBool(json['is_complete']),
       completedAt: rawCompletedAt is String
           ? DateTime.tryParse(rawCompletedAt)
@@ -240,10 +513,12 @@ class IntroductionProgress {
   Map<String, Object?> toJson() {
     return {
       'language': language?.toJson(),
-      'answered_warm_up_ids': answeredWarmUpIds,
       'interests_chosen': interestsChosen,
-      'fuller_question_ids': fullerQuestionIds,
-      'fuller_answers': fullerAnswers.map((answer) => answer.toJson()).toList(),
+      'choice': choice?.toJson(),
+      'opener': opener?.toJson(),
+      'interest_question': interestQuestion?.toJson(),
+      'recommendation': recommendation?.toJson(),
+      'demo': demo?.toJson(),
       'is_complete': isComplete,
       'completed_at': completedAt?.toIso8601String(),
     };
@@ -251,22 +526,27 @@ class IntroductionProgress {
 
   static bool _readBool(Object? value) => value is bool && value;
 
-  static List<String> _readStringList(Object? value) {
-    if (value is! List) {
-      return const [];
+  static StepAnswer? _readStep(Object? value) {
+    if (value is! Map<String, Object?>) {
+      return null;
     }
-    return List.unmodifiable(value.whereType<String>());
+    final step = StepAnswer.fromJson(value);
+    return step.contentId.isEmpty ? null : step;
   }
 
-  static List<FullerAnswer> _readAnswers(Object? value) {
-    if (value is! List) {
-      return const [];
+  static RecommendationStep? _readRecommendation(Object? value) {
+    if (value is! Map<String, Object?>) {
+      return null;
     }
-    return List.unmodifiable(
-      value
-          .whereType<Map<String, Object?>>()
-          .map(FullerAnswer.fromJson)
-          .where((answer) => answer.questionId.isNotEmpty),
-    );
+    final step = RecommendationStep.fromJson(value);
+    return step.interestId.isEmpty ? null : step;
+  }
+
+  static DemoStep? _readDemo(Object? value) {
+    if (value is! Map<String, Object?>) {
+      return null;
+    }
+    final step = DemoStep.fromJson(value);
+    return step.interestId.isEmpty ? null : step;
   }
 }

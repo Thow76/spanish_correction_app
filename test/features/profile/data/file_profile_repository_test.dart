@@ -44,13 +44,13 @@ void main() {
         .withIntroduction(
           const IntroductionProgress.notStarted()
               .started(Language.spanish)
-              .withWarmUpAnswered('warm-up-typed')
-              .withInterestsChosen(fullerQuestionIds: ['travel-1', 'music-2'])
-              .withFullerAnswer(
-                const FullerAnswer(
-                  questionId: 'travel-1',
-                  submissionId: 'sub-1',
-                ),
+              .withInterestsChosen()
+              .withChoice(IntroductionChoice.tryIt)
+              .withOpenerShown('opener-how-are-you')
+              .withOpenerAnswered(submissionId: 'sub-1')
+              .withInterestQuestionShown(
+                interestId: 'travel',
+                questionId: 'travel-question-1',
               ),
         );
 
@@ -60,13 +60,22 @@ void main() {
     expect(await file.exists(), isTrue);
     expect(restored.interestIds, ['travel', 'music']);
     expect(restored.introduction.language, Language.spanish);
-    expect(restored.introduction.answeredWarmUpIds, ['warm-up-typed']);
     expect(restored.introduction.interestsChosen, isTrue);
-    expect(restored.introduction.fullerQuestionIds, ['travel-1', 'music-2']);
-    expect(restored.introduction.fullerAnswers, const [
-      FullerAnswer(questionId: 'travel-1', submissionId: 'sub-1'),
-    ]);
+    expect(restored.introduction.choice, IntroductionChoice.tryIt);
+    expect(
+      restored.introduction.opener,
+      const StepAnswer(
+        contentId: 'opener-how-are-you',
+        isAnswered: true,
+        submissionId: 'sub-1',
+      ),
+    );
+    expect(
+      restored.introduction.interestQuestion,
+      const StepAnswer(contentId: 'travel-question-1', interestId: 'travel'),
+    );
     expect(restored.introduction.isComplete, isFalse);
+    expect(restored.introduction.nextStage, IntroductionStage.interestQuestion);
   });
 
   test('writes readable, indented JSON with the expected keys', () async {
@@ -106,10 +115,7 @@ void main() {
 
     expect(restored.introduction.isComplete, isTrue);
     expect(restored.introduction.completedAt, DateTime(2026, 11, 12, 10));
-    expect(
-      restored.introduction.stageFor(warmUpCount: 2),
-      IntroductionStage.complete,
-    );
+    expect(restored.introduction.nextStage, IntroductionStage.complete);
   });
 
   test('updateProfile reads, changes and saves in one go', () async {
@@ -149,6 +155,35 @@ void main() {
     final profile = await repository.getProfile();
 
     expect(profile.interestIds, isEmpty);
+  });
+
+  test('a file written by the 1.2 version still reads and resumes', () async {
+    // The 1.2 version recorded warm-ups and fuller questions (decision A1).
+    await file.writeAsString(
+      jsonEncode({
+        'interest_ids': ['travel', 'food'],
+        'introduction': {
+          'language': 'spanish',
+          'answered_warm_up_ids': ['warm-up-typed', 'warm-up-spoken'],
+          'interests_chosen': true,
+          'fuller_question_ids': ['travel-1', 'food-2', 'travel-3'],
+          'fuller_answers': [
+            {'question_id': 'travel-1', 'submission_id': 'sub-1'},
+          ],
+          'is_complete': false,
+          'completed_at': null,
+        },
+        'languages': <String, Object?>{},
+      }),
+    );
+
+    final profile = await repository.getProfile();
+
+    expect(profile.interestIds, ['travel', 'food']);
+    expect(profile.introduction.language, Language.spanish);
+    expect(profile.introduction.interestsChosen, isTrue);
+    expect(profile.introduction.hasAnswer, isFalse);
+    expect(profile.introduction.nextStage, IntroductionStage.choice);
   });
 
   test('a file with extra keys from a newer version still reads', () async {

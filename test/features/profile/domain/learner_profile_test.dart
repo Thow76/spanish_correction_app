@@ -56,18 +56,20 @@ void main() {
     test('survives a round trip through JSON', () {
       final profile = LearnerProfile(
         interestIds: const ['travel', 'food'],
-        introduction: IntroductionProgress(
-          language: Language.spanish,
-          answeredWarmUpIds: const ['warm-up-typed', 'warm-up-spoken'],
-          interestsChosen: true,
-          fullerQuestionIds: const ['travel-1', 'food-2', 'travel-3'],
-          fullerAnswers: const [
-            FullerAnswer(questionId: 'travel-1', submissionId: 'sub-1'),
-            FullerAnswer(questionId: 'food-2'),
-          ],
-          isComplete: true,
-          completedAt: DateTime(2026, 11, 12, 9, 30),
-        ),
+        introduction: const IntroductionProgress.notStarted()
+            .started(Language.spanish)
+            .withInterestsChosen()
+            .withChoice(IntroductionChoice.tryIt)
+            .withOpenerShown('opener-how-are-you')
+            .withOpenerAnswered(submissionId: 'sub-1')
+            .withInterestQuestionShown(
+              interestId: 'travel',
+              questionId: 'travel-question-1',
+            )
+            .withInterestQuestionAnswered()
+            .withRecommendationShown('food')
+            .withRecommendationOpened()
+            .completed(DateTime(2026, 11, 15, 9, 30)),
         languages: const {Language.spanish: LanguageProfile()},
       );
 
@@ -77,22 +79,34 @@ void main() {
 
       expect(restored.interestIds, ['travel', 'food']);
       expect(restored.introduction.language, Language.spanish);
-      expect(restored.introduction.answeredWarmUpIds, [
-        'warm-up-typed',
-        'warm-up-spoken',
-      ]);
       expect(restored.introduction.interestsChosen, isTrue);
-      expect(restored.introduction.fullerQuestionIds, [
-        'travel-1',
-        'food-2',
-        'travel-3',
-      ]);
-      expect(restored.introduction.fullerAnswers, const [
-        FullerAnswer(questionId: 'travel-1', submissionId: 'sub-1'),
-        FullerAnswer(questionId: 'food-2'),
-      ]);
+      expect(restored.introduction.choice, IntroductionChoice.tryIt);
+      expect(
+        restored.introduction.opener,
+        const StepAnswer(
+          contentId: 'opener-how-are-you',
+          isAnswered: true,
+          submissionId: 'sub-1',
+        ),
+      );
+      expect(
+        restored.introduction.interestQuestion,
+        const StepAnswer(
+          contentId: 'travel-question-1',
+          interestId: 'travel',
+          isAnswered: true,
+        ),
+      );
+      expect(
+        restored.introduction.recommendation,
+        const RecommendationStep(
+          interestId: 'food',
+          outcome: RecommendationOutcome.opened,
+        ),
+      );
+      expect(restored.introduction.demo, isNull);
       expect(restored.introduction.isComplete, isTrue);
-      expect(restored.introduction.completedAt, DateTime(2026, 11, 12, 9, 30));
+      expect(restored.introduction.completedAt, DateTime(2026, 11, 15, 9, 30));
       expect(restored.languages.keys, [Language.spanish]);
       expect(restored.languageProfile(Language.portuguese), isNotNull);
     });
@@ -110,10 +124,12 @@ void main() {
         (json['introduction'] as Map<String, Object?>).keys,
         containsAll([
           'language',
-          'answered_warm_up_ids',
           'interests_chosen',
-          'fuller_question_ids',
-          'fuller_answers',
+          'choice',
+          'opener',
+          'interest_question',
+          'recommendation',
+          'demo',
           'is_complete',
           'completed_at',
         ]),
@@ -148,157 +164,43 @@ void main() {
       final profile = LearnerProfile.fromJson(const {
         'introduction': {
           'language': 'spanish',
-          'answered_warm_up_ids': ['warm-up-typed', 3],
           'interests_chosen': 'yes',
-          'fuller_question_ids': 'travel-1',
-          'fuller_answers': [
-            {'question_id': 'travel-1', 'submission_id': 'sub-1'},
-            {'submission_id': 'orphan'},
-            'junk',
-          ],
+          'choice': 'try_it',
+          'opener': {
+            'content_id': 'opener-how-are-you',
+            'is_answered': true,
+            'submission_id': 'sub-1',
+          },
+          'interest_question': 'travel-question-1',
+          'recommendation': {'interest_id': 'music', 'outcome': 7},
+          'demo': ['sport'],
           'is_complete': null,
           'completed_at': 'not a date',
+          'answered_warm_up_ids': ['warm-up-typed'],
+          'fuller_question_ids': ['travel-1'],
         },
       });
 
       final progress = profile.introduction;
       expect(progress.language, Language.spanish);
-      expect(progress.answeredWarmUpIds, ['warm-up-typed']);
       expect(progress.interestsChosen, isFalse);
-      expect(progress.fullerQuestionIds, isEmpty);
-      expect(progress.fullerAnswers, const [
-        FullerAnswer(questionId: 'travel-1', submissionId: 'sub-1'),
-      ]);
+      expect(progress.choice, IntroductionChoice.tryIt);
+      expect(
+        progress.opener,
+        const StepAnswer(
+          contentId: 'opener-how-are-you',
+          isAnswered: true,
+          submissionId: 'sub-1',
+        ),
+      );
+      expect(progress.interestQuestion, isNull);
+      expect(
+        progress.recommendation,
+        const RecommendationStep(interestId: 'music'),
+      );
+      expect(progress.demo, isNull);
       expect(progress.isComplete, isFalse);
       expect(progress.completedAt, isNull);
-    });
-  });
-
-  group('IntroductionProgress', () {
-    const warmUpCount = 2;
-
-    test('starts at the warm-ups', () {
-      const progress = IntroductionProgress.notStarted();
-
-      expect(progress.hasStarted, isFalse);
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.warmUps,
-      );
-    });
-
-    test('moves through the stages as steps are recorded', () {
-      var progress = const IntroductionProgress.notStarted().started(
-        Language.spanish,
-      );
-      expect(progress.hasStarted, isTrue);
-      expect(progress.language, Language.spanish);
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.warmUps,
-      );
-
-      progress = progress.withWarmUpAnswered('typed');
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.warmUps,
-      );
-
-      progress = progress.withWarmUpAnswered('spoken');
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.interests,
-      );
-
-      progress = progress.withInterestsChosen(
-        fullerQuestionIds: ['travel-1', 'music-2'],
-      );
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.fullerQuestions,
-      );
-      expect(progress.hasFullerAnswer, isFalse);
-      expect(progress.unansweredFullerQuestionIds, ['travel-1', 'music-2']);
-
-      progress = progress.withFullerAnswer(
-        const FullerAnswer(questionId: 'travel-1'),
-      );
-      expect(progress.hasFullerAnswer, isTrue);
-      expect(progress.unansweredFullerQuestionIds, ['music-2']);
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.fullerQuestions,
-      );
-
-      progress = progress.withFullerAnswer(
-        const FullerAnswer(questionId: 'music-2', submissionId: 'sub-2'),
-      );
-      expect(progress.allFullerQuestionsAnswered, isTrue);
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.endScreen,
-      );
-
-      progress = progress.completed(DateTime(2026, 11, 12));
-      expect(progress.isComplete, isTrue);
-      expect(progress.completedAt, DateTime(2026, 11, 12));
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.complete,
-      );
-    });
-
-    test('a completed introduction stays complete whatever else is set', () {
-      final progress = const IntroductionProgress.notStarted().completed(
-        DateTime(2026, 11, 12),
-      );
-
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.complete,
-      );
-    });
-
-    test('the language is recorded once', () {
-      final progress = const IntroductionProgress.notStarted()
-          .started(Language.spanish)
-          .started(Language.portuguese);
-
-      expect(progress.language, Language.spanish);
-    });
-
-    test('answering the same warm-up twice records it once', () {
-      final progress = const IntroductionProgress.notStarted()
-          .withWarmUpAnswered('typed')
-          .withWarmUpAnswered('typed');
-
-      expect(progress.answeredWarmUpIds, ['typed']);
-    });
-
-    test('answering a fuller question again replaces the earlier record', () {
-      final progress = const IntroductionProgress.notStarted()
-          .withInterestsChosen(fullerQuestionIds: ['travel-1'])
-          .withFullerAnswer(const FullerAnswer(questionId: 'travel-1'))
-          .withFullerAnswer(
-            const FullerAnswer(questionId: 'travel-1', submissionId: 'sub-1'),
-          );
-
-      expect(progress.fullerAnswers, const [
-        FullerAnswer(questionId: 'travel-1', submissionId: 'sub-1'),
-      ]);
-    });
-
-    test('with no questions drawn there is nothing to answer', () {
-      final progress = const IntroductionProgress.notStarted()
-          .withWarmUpAnswered('typed')
-          .withWarmUpAnswered('spoken')
-          .withInterestsChosen(fullerQuestionIds: const []);
-
-      expect(progress.allFullerQuestionsAnswered, isFalse);
-      expect(
-        progress.stageFor(warmUpCount: warmUpCount),
-        IntroductionStage.fullerQuestions,
-      );
     });
   });
 }
