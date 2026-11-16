@@ -655,18 +655,9 @@ class _WalkthroughState extends State<_Walkthrough> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ChatBubble.learnerRich(
-          TextSpan(children: spans),
-          key: const ValueKey('walkthrough-highlighted-answer'),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        const Text(
-          IntroductionContent.walkthroughCategoriesLine,
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-        ),
-        const SizedBox(height: AppSpacing.sm),
         Wrap(
           key: const ValueKey('walkthrough-categories'),
+          alignment: WrapAlignment.center,
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
@@ -680,17 +671,34 @@ class _WalkthroughState extends State<_Walkthrough> {
                 ),
           ],
         ),
+        const SizedBox(height: AppSpacing.lg),
+        Text.rich(
+          TextSpan(children: spans),
+          key: const ValueKey('walkthrough-highlighted-answer'),
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 16,
+            height: 24 / 16,
+          ),
+        ),
       ],
     );
   }
 
-  /// The tapped point: what was said, the suggestion, the reason, and Save.
+  /// The tapped point: its category and Save on one row, then what was said,
+  /// the suggestion and the reason, kept compact so the screen does not need
+  /// scrolling.
   Widget _pointCard(DemoFeedbackPoint point, int index) {
     final isSaved = _savedPoints.contains(index);
     return Container(
       key: const ValueKey('walkthrough-point-card'),
-      margin: const EdgeInsets.only(top: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      margin: const EdgeInsets.only(top: AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+      ),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -699,11 +707,27 @@ class _WalkthroughState extends State<_Walkthrough> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CategoryPill(
-            label: point.category.label,
-            color: point.category.color,
+          Row(
+            children: [
+              CategoryPill(
+                label: point.category.label,
+                color: point.category.color,
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: isSaved
+                    ? null
+                    : () => setState(() => _savedPoints.add(index)),
+                icon: Icon(isSaved ? Icons.check : Icons.bookmark_border),
+                label: Text(isSaved ? 'Saved' : 'Save'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.cyan,
+                  disabledForegroundColor: AppColors.success,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: AppSpacing.sm,
@@ -712,7 +736,7 @@ class _WalkthroughState extends State<_Walkthrough> {
                 point.originalPhrase,
                 style: const TextStyle(
                   color: AppColors.textSecondary,
-                  fontSize: 17,
+                  fontSize: 16,
                   decoration: TextDecoration.lineThrough,
                   decorationColor: AppColors.textSecondary,
                 ),
@@ -720,37 +744,25 @@ class _WalkthroughState extends State<_Walkthrough> {
               const Icon(
                 Icons.arrow_forward,
                 color: AppColors.textSecondary,
-                size: 18,
+                size: 16,
               ),
               Text(
                 point.correctedPhrase,
                 style: TextStyle(
                   color: point.category.color,
-                  fontSize: 17,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             point.shortExplanation,
             style: const TextStyle(
               color: AppColors.textSecondary,
-              fontSize: 15,
-              height: 22 / 15,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          OutlinedButton.icon(
-            onPressed: isSaved
-                ? null
-                : () => setState(() => _savedPoints.add(index)),
-            icon: Icon(isSaved ? Icons.check : Icons.bookmark_border),
-            label: Text(isSaved ? 'Saved' : 'Save'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.cyan),
+              fontSize: 14,
+              height: 20 / 14,
             ),
           ),
         ],
@@ -799,11 +811,6 @@ class _ChatBubble extends StatelessWidget {
 
   const _ChatBubble.learner(String this.text, {required this.icon})
     : rich = null,
-      fromApp = false;
-
-  const _ChatBubble.learnerRich(TextSpan this.rich, {super.key})
-    : text = null,
-      icon = null,
       fromApp = false;
 
   final String? text;
