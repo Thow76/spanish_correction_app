@@ -658,7 +658,7 @@ class _WalkthroughState extends State<_Walkthrough> {
       children: [
         Wrap(
           key: const ValueKey('walkthrough-categories'),
-          alignment: WrapAlignment.end,
+          alignment: WrapAlignment.start,
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
