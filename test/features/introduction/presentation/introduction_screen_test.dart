@@ -105,14 +105,14 @@ void main() {
     await tapAndSettle(tester, find.text('Start now'));
 
     // Friendly opener, typed.
-    expect(find.text('FRIENDLY OPENER'), findsOneWidget);
+    expect(find.text('CHAT ABOUT YOUR DAY'), findsOneWidget);
     expect(find.text('¿Qué tal estás hoy?'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'Estoy bien, gracias.');
     await tester.pump();
     await tapAndSettle(tester, find.text('Send'));
 
     // Something you're into, spoken.
-    expect(find.text("SOMETHING YOU'RE INTO"), findsOneWidget);
+    expect(find.text('CHAT ABOUT YOUR INTERESTS'), findsOneWidget);
     await tester.ensureVisible(find.byIcon(Icons.mic_none));
     await tester.tap(find.byIcon(Icons.mic_none));
     // The recording counts down once a second, so pump rather than settle.
@@ -124,7 +124,7 @@ void main() {
     await tapAndSettle(tester, find.text('Send'));
 
     // A recommendation, for the second chip.
-    expect(find.text('A RECOMMENDATION'), findsOneWidget);
+    expect(find.text('CHAT ABOUT A RECOMMENDATION'), findsOneWidget);
     expect(find.byKey(const ValueKey('recommendation-card')), findsOneWidget);
     await tapAndSettle(tester, find.text('Open now'));
     final travelItem = IntroductionContent.recommendationsForInterest(
@@ -153,11 +153,7 @@ void main() {
       await tapAndSettle(tester, find.text('Show me how it works'));
 
       // Part 1: the friendly opener and a sample typed answer.
-      expect(find.text('FRIENDLY OPENER'), findsOneWidget);
-      expect(
-        find.text(IntroductionContent.walkthroughOpenerHeading),
-        findsOneWidget,
-      );
+      expect(find.text('CHAT ABOUT YOUR DAY'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('walkthrough-progress')),
         findsOneWidget,
@@ -173,13 +169,13 @@ void main() {
         'sport',
         Language.spanish,
       )!;
-      expect(find.text("SOMETHING YOU'RE INTO"), findsOneWidget);
+      expect(find.text('CHAT ABOUT YOUR INTERESTS'), findsOneWidget);
       expect(find.text(demo.question), findsOneWidget);
       expect(find.text(demo.sampleAnswer), findsOneWidget);
       await tapAndSettle(tester, find.text('Next'));
 
       // Part 3: the recommendation card, not opened.
-      expect(find.text('A RECOMMENDATION'), findsOneWidget);
+      expect(find.text('CHAT ABOUT A RECOMMENDATION'), findsOneWidget);
       expect(find.byKey(const ValueKey('recommendation-card')), findsOneWidget);
       expect(find.text('Open now'), findsNothing);
       await tapAndSettle(tester, find.text('Next'));
@@ -226,7 +222,7 @@ void main() {
 
       // Then the learner's own turn.
       expect(repository.stored.introduction.hasWatchedDemo, isTrue);
-      expect(find.text('FRIENDLY OPENER'), findsOneWidget);
+      expect(find.text('CHAT ABOUT YOUR DAY'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
       expect(linkOpener.opened, isEmpty);
     },
@@ -257,7 +253,7 @@ void main() {
         );
     await pumpIntroduction(tester);
 
-    expect(find.text("SOMETHING YOU'RE INTO"), findsOneWidget);
+    expect(find.text('CHAT ABOUT YOUR INTERESTS'), findsOneWidget);
     expect(find.text(spanishLabel('music')), findsOneWidget);
   });
 

@@ -211,14 +211,8 @@ class IntroductionContent {
       'Estoy bien, gracias. Hoy estoy un poco cansado porque he trabajado '
       'mucho.';
 
-  /// The heading of each part of the walk-through: one short line saying
-  /// what the learner is looking at.
-  static const String walkthroughOpenerHeading =
-      'Some chats start with an everyday question.';
-  static const String walkthroughInterestHeading =
-      'Some are about your interests.';
-  static const String walkthroughRecommendationHeading =
-      'Some suggest something to read, watch or listen to.';
+  /// The heading of the walk-through's feedback part. The other parts have
+  /// no heading: their label says what kind of chat it is.
   static const String walkthroughFeedbackHeading = 'Tap a highlighted phrase';
 
   /// The small English label above the walk-through's feedback part.

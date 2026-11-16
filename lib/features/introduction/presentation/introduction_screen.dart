@@ -484,13 +484,13 @@ class _RecommendationCard extends StatelessWidget {
 }
 
 /// "Show me how it works" (decision A4): four short guided parts, each in
-/// the usual frame with its label, one short heading and a small chat to
-/// look at, with dots showing how far through the learner is.
+/// the usual frame with its label and a small chat to look at, with dots
+/// showing how far through the learner is.
 ///
-/// 1. Friendly opener: the app's question and a sample typed answer.
-/// 2. Something you're into: the question on the learner's first chip and
+/// 1. Chat about your day: the app's question and a sample typed answer.
+/// 2. Chat about your interests: the question on the learner's first chip and
 ///    the sample learner's spoken answer.
-/// 3. A recommendation: the card the learner's own turn will show.
+/// 3. Chat about a recommendation: the card the learner's own turn will show.
 /// 4. Feedback: the sample answer with its phrases highlighted; tapping one
 ///    shows its category, the suggestion and the reason, with Save. Nothing is sent to the
 ///    AI and nothing is kept, so the sample learner's mistakes never reach
@@ -543,10 +543,10 @@ class _WalkthroughState extends State<_Walkthrough> {
       onPressed: () => setState(() => _part++),
     );
 
-    final (String label, String heading, List<Widget> body) = switch (_part) {
+    final (String label, String? heading, List<Widget> body) = switch (_part) {
       0 => (
         IntroductionStepKind.friendlyOpener.label,
-        IntroductionContent.walkthroughOpenerHeading,
+        null,
         [
           if (opener != null) _ChatBubble.app(opener.text),
           const _ChatBubble.learner(
@@ -559,7 +559,7 @@ class _WalkthroughState extends State<_Walkthrough> {
       ),
       1 => (
         IntroductionStepKind.somethingYoureInto.label,
-        IntroductionContent.walkthroughInterestHeading,
+        null,
         [
           if (interest != null)
             Align(
@@ -576,7 +576,7 @@ class _WalkthroughState extends State<_Walkthrough> {
       ),
       2 => (
         IntroductionStepKind.recommendation.label,
-        IntroductionContent.walkthroughRecommendationHeading,
+        null,
         [
           if (recommendation != null)
             _RecommendationCard(
