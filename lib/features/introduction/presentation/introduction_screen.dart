@@ -113,6 +113,13 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
     return IntroductionStepFrame(
       key: ValueKey(_controller.stage),
       label: step.label,
+      labelColor: introductionLabelColor(switch (_controller.stage) {
+        IntroductionStage.friendlyOpener => IntroductionStepKind.friendlyOpener,
+        IntroductionStage.interestQuestion =>
+          IntroductionStepKind.somethingYoureInto,
+        IntroductionStage.recommendation => IntroductionStepKind.recommendation,
+        _ => null,
+      }),
       questionText: step.questionText,
       hint: step.hint,
       onStopForNow: isEnd ? null : _stopForNow,
@@ -596,9 +603,17 @@ class _WalkthroughState extends State<_Walkthrough> {
       ),
     };
 
+    final color = switch (_part) {
+      0 => introductionLabelColor(IntroductionStepKind.friendlyOpener),
+      1 => introductionLabelColor(IntroductionStepKind.somethingYoureInto),
+      2 => introductionLabelColor(IntroductionStepKind.recommendation),
+      _ => introductionFeedbackLabelColor,
+    };
+
     return IntroductionStepFrame(
       key: ValueKey('walkthrough-$_part'),
       label: label,
+      labelColor: color,
       questionText: heading,
       centerQuestion: _part == _partCount - 1,
       onStopForNow: widget.onStopForNow,
@@ -613,7 +628,7 @@ class _WalkthroughState extends State<_Walkthrough> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProgressDots(count: _partCount, current: _part),
+          _ProgressDots(count: _partCount, current: _part, color: color),
           const SizedBox(height: AppSpacing.lg),
           ...body,
         ],
@@ -778,10 +793,17 @@ class _WalkthroughState extends State<_Walkthrough> {
 
 /// Dots showing which part of the walk-through is showing.
 class _ProgressDots extends StatelessWidget {
-  const _ProgressDots({required this.count, required this.current});
+  const _ProgressDots({
+    required this.count,
+    required this.current,
+    required this.color,
+  });
 
   final int count;
   final int current;
+
+  /// The colour of the current part's label; the dots take it on.
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -796,7 +818,7 @@ class _ProgressDots extends StatelessWidget {
             width: i == current ? 20 : 8,
             height: 8,
             decoration: BoxDecoration(
-              color: i <= current ? AppColors.cyan : AppColors.textDisabled,
+              color: i <= current ? color : AppColors.textDisabled,
               borderRadius: BorderRadius.circular(4),
             ),
           ),

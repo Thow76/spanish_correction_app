@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
+import '../content/introduction_step_kind.dart';
 
 /// The frame every introduction step sits in: the English label centred at
 /// the top, the question and its hint, the step's own content, and "Stop for
@@ -13,6 +14,7 @@ class IntroductionStepFrame extends StatelessWidget {
     required this.child,
     this.questionText,
     this.centerQuestion = false,
+    this.labelColor = AppColors.cyan,
     this.hint,
     this.onStopForNow,
     this.bottomAction,
@@ -24,6 +26,10 @@ class IntroductionStepFrame extends StatelessWidget {
 
   /// Whether the question is centred rather than left-aligned.
   final bool centerQuestion;
+
+  /// The colour of the label at the top. Each kind of chat has its own
+  /// colour, so the label catches the eye (see `introductionLabelColor`).
+  final Color labelColor;
   final String? hint;
 
   /// Null on the end screen, which has no "Stop for now".
@@ -56,9 +62,9 @@ class IntroductionStepFrame extends StatelessWidget {
                           label.toUpperCase(),
                           key: const ValueKey('introduction-step-label'),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.cyan,
-                            fontSize: 15,
+                          style: TextStyle(
+                            color: labelColor,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.2,
                           ),
@@ -123,3 +129,17 @@ class IntroductionStepFrame extends StatelessWidget {
     );
   }
 }
+
+/// The label colour for each screen of the introduction, from the app's own
+/// palette: one colour per kind of chat, the same in the walk-through and in
+/// the learner's own turn, and amber for the walk-through's feedback. Other
+/// screens (the chips, the choice, the end) keep cyan.
+Color introductionLabelColor(IntroductionStepKind? kind) => switch (kind) {
+  IntroductionStepKind.friendlyOpener => AppColors.cyan,
+  IntroductionStepKind.somethingYoureInto => AppColors.coral,
+  IntroductionStepKind.recommendation => AppColors.mint,
+  null => AppColors.cyan,
+};
+
+/// The label colour for the walk-through's feedback part.
+const Color introductionFeedbackLabelColor = AppColors.amber;
