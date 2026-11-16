@@ -497,7 +497,8 @@ class _RecommendationCard extends StatelessWidget {
 /// 1. Chat about your day: the app's question and a sample typed answer.
 /// 2. Chat about your interests: the question on the learner's first chip and
 ///    the sample learner's spoken answer.
-/// 3. Chat about a recommendation: the card the learner's own turn will show.
+/// 3. Chat about a recommendation: three small examples under Read, Watch
+///    and Listen (an article, a programme, a podcast), none opened.
 /// 4. Feedback: the sample answer with its phrases highlighted; tapping one
 ///    shows its category, the suggestion and the reason, with Save. Nothing is sent to the
 ///    AI and nothing is kept, so the sample learner's mistakes never reach
@@ -543,7 +544,7 @@ class _WalkthroughState extends State<_Walkthrough> {
     final controller = widget.controller;
     final demo = controller.currentDemo;
     final opener = controller.currentOpenerForWalkthrough;
-    final recommendation = controller.walkthroughRecommendation;
+    final readExample = controller.walkthroughReadExample;
     final interest = controller.currentDemoInterest;
     final next = PrimaryActionButton(
       label: 'Next',
@@ -581,13 +582,36 @@ class _WalkthroughState extends State<_Walkthrough> {
         IntroductionStepKind.recommendation.label,
         null,
         [
-          if (recommendation != null)
-            _RecommendationCard(
-              item: recommendation,
-              interestLabel: IntroductionContent.interestById(
-                recommendation.interestId,
-              )?.labelFor(controller.language),
+          for (final (title, item) in [
+            (IntroductionContent.walkthroughReadTitle, readExample),
+            (
+              IntroductionContent.walkthroughWatchTitle,
+              IntroductionContent.walkthroughWatchExample,
             ),
+            (
+              IntroductionContent.walkthroughListenTitle,
+              IntroductionContent.walkthroughListenExample,
+            ),
+          ])
+            if (item != null) ...[
+              Padding(
+                padding: const EdgeInsets.only(
+                  top: AppSpacing.md,
+                  bottom: AppSpacing.sm,
+                ),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: introductionLabelColor(
+                      IntroductionStepKind.recommendation,
+                    ),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              _CompactRecommendationCard(item: item),
+            ],
         ],
       ),
       _ => (
@@ -901,6 +925,86 @@ class _EndStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PrimaryActionButton(label: 'Continue', onPressed: onContinue);
+  }
+}
+
+/// A small recommendation card for the walk-through's examples: an icon for
+/// the kind of item (or its thumbnail), the title and where it comes from.
+class _CompactRecommendationCard extends StatelessWidget {
+  const _CompactRecommendationCard({required this.item});
+
+  final RecommendationItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (item.type) {
+      RecommendationType.article => Icons.article_outlined,
+      RecommendationType.video => Icons.play_circle_outline,
+      RecommendationType.other => Icons.headphones_outlined,
+    };
+    final iconBox = Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: AppColors.cyan.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, color: AppColors.cyan, size: 28),
+    );
+    final thumbnailUrl = item.thumbnailUrl;
+    return Container(
+      key: ValueKey('walkthrough-example-${item.id}'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cyan.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          if (thumbnailUrl != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                thumbnailUrl,
+                width: 56,
+                height: 56,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => iconBox,
+              ),
+            )
+          else
+            iconBox,
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.source,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

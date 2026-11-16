@@ -3,6 +3,7 @@ import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/features/introduction/application/introduction_controller.dart';
 import 'package:spanish_correction_app/features/introduction/application/introduction_step.dart';
 import 'package:spanish_correction_app/features/introduction/content/introduction_content.dart';
+import 'package:spanish_correction_app/features/introduction/content/recommendation_item.dart';
 import 'package:spanish_correction_app/features/introduction/content/introduction_step_kind.dart';
 import 'package:spanish_correction_app/features/profile/domain/introduction_progress.dart';
 
@@ -178,6 +179,11 @@ void main() {
           '¿Qué tal estás hoy?',
         );
         expect(controller.walkthroughRecommendation?.interestId, 'sport');
+        expect(controller.walkthroughReadExample?.interestId, 'sport');
+        expect(
+          controller.walkthroughReadExample?.type,
+          RecommendationType.article,
+        );
 
         await controller.finishDemo();
         expect(controller.stage, IntroductionStage.friendlyOpener);

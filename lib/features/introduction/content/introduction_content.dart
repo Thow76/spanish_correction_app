@@ -211,6 +211,38 @@ class IntroductionContent {
       'Estoy bien, gracias. Hoy estoy un poco cansado porque he trabajado '
       'mucho.';
 
+  /// The small titles above the three example cards on the walk-through's
+  /// recommendation screen.
+  static const String walkthroughReadTitle = 'Read';
+  static const String walkthroughWatchTitle = 'Watch';
+  static const String walkthroughListenTitle = 'Listen';
+
+  /// The "Watch" example on the walk-through's recommendation screen, the
+  /// same for everyone. Placeholder content: a programme page on RTVE Play,
+  /// which is more stable than a single clip (some clips are region-locked).
+  /// Not opened from the walk-through.
+  static const RecommendationItem walkthroughWatchExample = RecommendationItem(
+    id: 'walkthrough-watch',
+    interestId: 'travel',
+    language: Language.spanish,
+    title: 'Españoles en el mundo',
+    url: 'https://www.rtve.es/play/videos/espanoles-en-el-mundo/',
+    source: 'RTVE Play',
+    type: RecommendationType.video,
+  );
+
+  /// The "Listen" example on the walk-through's recommendation screen, the
+  /// same for everyone. Placeholder content. Not opened from the walk-through.
+  static const RecommendationItem walkthroughListenExample = RecommendationItem(
+    id: 'walkthrough-listen',
+    interestId: 'travel',
+    language: Language.spanish,
+    title: 'Radio Ambulante: crónicas de América Latina en audio',
+    url: 'https://radioambulante.org/',
+    source: 'Radio Ambulante',
+    type: RecommendationType.other,
+  );
+
   /// The heading of the walk-through's feedback part. The other parts have
   /// no heading: their label says what kind of chat it is.
   static const String walkthroughFeedbackHeading = 'Tap a highlighted phrase';

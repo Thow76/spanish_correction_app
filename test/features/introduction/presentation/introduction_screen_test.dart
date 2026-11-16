@@ -174,9 +174,28 @@ void main() {
       expect(find.text(demo.sampleAnswer), findsOneWidget);
       await tapAndSettle(tester, find.text('Next'));
 
-      // Part 3: the recommendation card, not opened.
+      // Part 3: three examples under Read, Watch and Listen, none opened.
       expect(find.text('CHAT ABOUT A RECOMMENDATION'), findsOneWidget);
-      expect(find.byKey(const ValueKey('recommendation-card')), findsOneWidget);
+      expect(
+        find.text(IntroductionContent.walkthroughReadTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.text(IntroductionContent.walkthroughWatchTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.text(IntroductionContent.walkthroughListenTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('walkthrough-example-walkthrough-watch')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('walkthrough-example-walkthrough-listen')),
+        findsOneWidget,
+      );
       expect(find.text('Open now'), findsNothing);
       await tapAndSettle(tester, find.text('Next'));
 

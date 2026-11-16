@@ -205,6 +205,22 @@ class IntroductionController extends ChangeNotifier {
         language: language,
       )?.recommendation;
 
+  /// The "Read" example on the walk-through's recommendation screen: the
+  /// learner's own recommendation when it is an article, otherwise the first
+  /// article written for the language.
+  RecommendationItem? get walkthroughReadExample {
+    final own = walkthroughRecommendation;
+    if (own != null && own.type == RecommendationType.article) {
+      return own;
+    }
+    for (final item in IntroductionContent.recommendationsFor(language)) {
+      if (item.type == RecommendationType.article) {
+        return item;
+      }
+    }
+    return own;
+  }
+
   /// The closing line on the end screen.
   String get endScreenLine =>
       IntroductionContent.endScreenLineFor(language) ??
