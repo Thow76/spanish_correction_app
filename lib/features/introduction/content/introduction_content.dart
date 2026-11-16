@@ -166,6 +166,53 @@ class IntroductionContent {
     Language.portuguese => null,
   };
 
+  /// The closing line on the end screen after "Show me", when there are no
+  /// answers to see (task 1.3). Spanish only in slice 1.
+  static const String endScreenLineAfterDemo =
+      '¡Gracias! Ya sabes cómo funciona. Tus intereses están guardados, y '
+      'puedes empezar cuando quieras.';
+
+  // ---------------------------------------------------------------------------
+  // The words around the steps (task 1.3)
+  // ---------------------------------------------------------------------------
+
+  /// The small English label above the chips step.
+  static const String interestsLabel = 'Your interests';
+
+  /// The question above the chips, in Spanish (slice 1 runs in Spanish only).
+  static const String interestsQuestion = '¿Qué te interesa?';
+
+  /// The small English hint under the chips question.
+  static const String interestsHint =
+      'Tap one to five things you enjoy. You can change them later.';
+
+  /// The small English label above the choice between Try it and Show me.
+  static const String choiceLabel = 'Try it or Show me';
+
+  /// The question above the two choices, in English.
+  static const String choiceQuestion = 'How would you like to start?';
+
+  /// What "Try it" does, under its button.
+  static const String tryItDescription =
+      'Answer two short questions, one by typing and one by speaking, then '
+      'see a recommendation. About two minutes.';
+
+  /// What "Show me" does, under its button.
+  static const String showMeDescription =
+      'Watch an example on one of your interests. Nothing to answer.';
+
+  /// The small English hint under the recommendation card.
+  static const String recommendationHint =
+      'Nothing to answer. Open it now, or skip it.';
+
+  /// The small English hint on the "Show me" demo, before the feedback.
+  static const String demoHint =
+      'Next you will see the feedback on this answer. Tap a highlighted '
+      'phrase to read the reason, and save it for later.';
+
+  /// The small English label above the end screen.
+  static const String endLabel = 'All done';
+
   // ---------------------------------------------------------------------------
   // Friendly openers
   // ---------------------------------------------------------------------------

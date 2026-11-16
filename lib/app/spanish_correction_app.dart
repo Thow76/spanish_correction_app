@@ -7,8 +7,14 @@ import '../features/corrections/application/correction_repository_controller.dar
 import '../features/corrections/application/correction_service.dart';
 import '../features/corrections/data/file_correction_repository.dart';
 import '../features/corrections/data/open_ai_correction_service.dart';
+import '../features/introduction/content/introduction_content.dart';
+import '../features/introduction/data/record_voice_recorder.dart';
+import '../features/introduction/data/url_launcher_link_opener.dart';
+import '../features/introduction/presentation/introduction_screen.dart';
 import '../features/language_selection/language_selection_screen.dart';
 import '../features/navigation/presentation/app_shell.dart';
+import '../features/profile/application/profile_repository.dart';
+import '../features/profile/data/file_profile_repository.dart';
 import '../features/write/application/transcription_service.dart';
 import '../features/write/data/open_ai_whisper_transcription_service.dart';
 import '../shared/design/app_colors.dart';
@@ -30,8 +36,17 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   late final CorrectionRepositoryController _repositoryController;
   late final TranscriptionService _transcriptionService;
   late final WalkthroughService _walkthroughService;
+  late final ProfileRepository _profileRepository;
   Language? _selectedLanguage;
   bool _isInitialising = true;
+
+  /// Whether the introduction has been finished on this install (task 1.3).
+  /// Once it has, it never shows again, including after a language switch.
+  bool _introductionComplete = false;
+
+  /// Whether "Stop for now" took the learner to the app this session. The
+  /// introduction then waits for the next launch to resume.
+  bool _introductionStoppedThisSession = false;
 
   @override
   void initState() {
@@ -52,11 +67,14 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
     _repositoryController = CorrectionRepositoryController(
       FileCorrectionRepository(),
     );
+    _profileRepository = FileProfileRepository();
 
     _init();
   }
 
   Future<void> _init() async {
+    final profile = await _profileRepository.getProfile();
+    _introductionComplete = profile.introduction.isComplete;
     final prefs = await SharedPreferences.getInstance();
     final skip = prefs.getBool(_keySkipLanguageSelection) ?? false;
     if (skip) {
@@ -99,6 +117,28 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
       );
     }
 
+    if (_shouldShowIntroduction(selectedLanguage)) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Corrector de Espanol',
+        theme: buildAppTheme(),
+        home: IntroductionScreen(
+          language: selectedLanguage,
+          profileRepository: _profileRepository,
+          transcriptionService: _transcriptionService,
+          recorderFactory: RecordVoiceRecorder.new,
+          linkOpener: const UrlLauncherLinkOpener(),
+          onDone: (completed) => setState(() {
+            if (completed) {
+              _introductionComplete = true;
+            } else {
+              _introductionStoppedThisSession = true;
+            }
+          }),
+        ),
+      );
+    }
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Corrector de Espanol',
@@ -113,4 +153,13 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
       ),
     );
   }
+
+  /// The introduction shows once per install, between the language choice
+  /// and the app (task 1.3). It is skipped once it is complete, after "Stop
+  /// for now" this session, and for a language with no introduction content
+  /// yet (Portuguese in slice 1, decision F1).
+  bool _shouldShowIntroduction(Language language) =>
+      !_introductionComplete &&
+      !_introductionStoppedThisSession &&
+      IntroductionContent.hasContentFor(language);
 }
