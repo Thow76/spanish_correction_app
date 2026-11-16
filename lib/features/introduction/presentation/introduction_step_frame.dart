@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 
-/// The frame every introduction step sits in: the small English label at the
-/// top left, "Stop for now" at the top right (on every step but the end
-/// screen), the question and its hint, then the step's own content.
+/// The frame every introduction step sits in: the English label centred at
+/// the top, the question and its hint, the step's own content, and "Stop for
+/// now" in small text centred at the bottom (on every step but the end
+/// screen).
 class IntroductionStepFrame extends StatelessWidget {
   const IntroductionStepFrame({
     required this.label,
@@ -32,66 +33,71 @@ class IntroductionStepFrame extends StatelessWidget {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 390),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: 48,
-                    child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: Text(
-                            label.toUpperCase(),
-                            key: const ValueKey('introduction-step-label'),
-                            style: const TextStyle(
-                              color: AppColors.cyan,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
-                            ),
+                        Text(
+                          label.toUpperCase(),
+                          key: const ValueKey('introduction-step-label'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: AppColors.cyan,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
                           ),
                         ),
-                        if (onStopForNow != null)
-                          TextButton(
-                            onPressed: onStopForNow,
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.textSecondary,
+                        if (questionText != null) ...[
+                          const SizedBox(height: AppSpacing.lg),
+                          Text(
+                            questionText!,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontFamily: 'Sora',
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              height: 32 / 24,
                             ),
-                            child: const Text('Stop for now'),
                           ),
+                        ],
+                        if (hint != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            hint!,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
+                              height: 20 / 14,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.xl),
+                        child,
                       ],
                     ),
                   ),
-                  if (questionText != null) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      questionText!,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontFamily: 'Sora',
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        height: 32 / 24,
+                ),
+                if (onStopForNow != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Center(
+                      child: TextButton(
+                        onPressed: onStopForNow,
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                          textStyle: const TextStyle(fontSize: 13),
+                        ),
+                        child: const Text('Stop for now'),
                       ),
                     ),
-                  ],
-                  if (hint != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      hint!,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        height: 20 / 14,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.xl),
-                  child,
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),

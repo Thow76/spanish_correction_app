@@ -4,7 +4,6 @@ import '../../../core/enums/language.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/primary_action_button.dart';
-import '../../../shared/widgets/secondary_action_button.dart';
 import '../../../shared/widgets/text_input_panel.dart';
 import '../../corrections/presentation/corrections_screen.dart';
 import '../../profile/application/profile_repository.dart';
@@ -271,7 +270,7 @@ class _ChoiceStep extends StatelessWidget {
           style: descriptionStyle,
         ),
         const SizedBox(height: AppSpacing.xl),
-        SecondaryActionButton(
+        _OutlinedChoiceButton(
           label: 'Show me',
           onPressed: () => controller.choose(IntroductionChoice.showMe),
         ),
@@ -398,7 +397,7 @@ class _RecommendationStepState extends State<_RecommendationStep> {
           onPressed: _isBusy ? null : () => _run(widget.onOpen),
         ),
         const SizedBox(height: AppSpacing.md),
-        SecondaryActionButton(
+        _OutlinedChoiceButton(
           label: 'Skip',
           onPressed: _isBusy ? null : () => _run(controller.skipRecommendation),
         ),
@@ -559,5 +558,41 @@ class _EndStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PrimaryActionButton(label: 'Continue', onPressed: onContinue);
+  }
+}
+
+/// A second choice that looks as clearly tappable as the main button: a
+/// solid cyan outline and white text, without the main button's fill. Used
+/// for Show me beside Try it, and Skip beside Open now.
+class _OutlinedChoiceButton extends StatelessWidget {
+  const _OutlinedChoiceButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          side: const BorderSide(color: AppColors.cyan, width: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Sora',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
   }
 }
