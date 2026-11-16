@@ -1,7 +1,7 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
-import 'package:spanish_correction_app/features/corrections/presentation/corrections_screen.dart';
 import 'package:spanish_correction_app/features/introduction/application/link_opener.dart';
 import 'package:spanish_correction_app/features/introduction/application/voice_recorder.dart';
 import 'package:spanish_correction_app/features/introduction/content/introduction_content.dart';
@@ -155,6 +155,14 @@ void main() {
       // Part 1: the friendly opener and a sample typed answer.
       expect(find.text('FRIENDLY OPENER'), findsOneWidget);
       expect(
+        find.text(IntroductionContent.walkthroughOpenerHeading),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('walkthrough-progress')),
+        findsOneWidget,
+      );
+      expect(
         find.text(IntroductionContent.walkthroughOpenerAnswer),
         findsOneWidget,
       );
@@ -176,21 +184,50 @@ void main() {
       expect(find.text('Open now'), findsNothing);
       await tapAndSettle(tester, find.text('Next'));
 
-      // Part 4: what the feedback is, then the feedback, with no AI call.
+      // Part 4: tap a highlighted phrase, see the suggestion, save it.
       expect(find.text('FEEDBACK'), findsOneWidget);
-      await tapAndSettle(tester, find.text('See the feedback'));
-      expect(find.byType(CorrectionsScreen), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.arrow_back));
+      final yourTurn = find.widgetWithText(
+        FilledButton,
+        IntroductionContent.walkthroughYourTurnButton,
+      );
+      expect(tester.widget<FilledButton>(yourTurn).onPressed, isNull);
+
+      final answer = find.byKey(
+        const ValueKey('walkthrough-highlighted-answer'),
+      );
+      final firstPoint = demo.points.first;
+      final rich = tester.widget<RichText>(
+        find.descendant(of: answer, matching: find.byType(RichText)),
+      );
+      var tapped = false;
+      rich.text.visitChildren((span) {
+        if (!tapped &&
+            span is TextSpan &&
+            span.text == firstPoint.originalPhrase &&
+            span.recognizer is TapGestureRecognizer) {
+          (span.recognizer! as TapGestureRecognizer).onTap!();
+          tapped = true;
+        }
+        return true;
+      });
+      expect(tapped, isTrue);
       await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('walkthrough-point-card')),
+        findsOneWidget,
+      );
+      expect(find.text(firstPoint.correctedPhrase), findsOneWidget);
+      expect(find.text(firstPoint.shortExplanation), findsOneWidget);
+      await tapAndSettle(tester, find.text('Save'));
+      expect(find.text('Saved'), findsOneWidget);
+
+      await tapAndSettle(tester, yourTurn);
 
       // Then the learner's own turn.
       expect(repository.stored.introduction.hasWatchedDemo, isTrue);
       expect(find.text('FRIENDLY OPENER'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
-      expect(
-        find.text(IntroductionContent.walkthroughYourTurn),
-        findsOneWidget,
-      );
       expect(linkOpener.opened, isEmpty);
     },
   );

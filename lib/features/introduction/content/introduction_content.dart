@@ -181,7 +181,7 @@ class IntroductionContent {
       'Tap one to five things you enjoy. You can change them later.';
 
   /// The small English label above the choice between Try it and Show me.
-  static const String choiceLabel = 'Try it or Show me';
+  static const String choiceLabel = 'Getting started';
 
   /// The question above the two choices, in English.
   static const String choiceQuestion = 'How would you like to start?';
@@ -192,13 +192,10 @@ class IntroductionContent {
 
   /// What "Start now" does, under its button.
   static const String startNowDescription =
-      'Answer two short questions, one by typing and one by speaking, then '
-      'see a recommendation. About two minutes.';
+      'Two short questions, then a recommendation.';
 
   /// What "Show me how it works" does, under its button.
-  static const String showMeDescription =
-      'First see an example of each kind of chat and the feedback, then '
-      'answer the two questions yourself.';
+  static const String showMeDescription = 'See an example first, then answer.';
 
   /// The small English hint under the recommendation card.
   static const String recommendationHint =
@@ -214,34 +211,22 @@ class IntroductionContent {
       'Estoy bien, gracias. Hoy estoy un poco cansado porque he trabajado '
       'mucho.';
 
-  /// The English line under each part of the walk-through, saying what the
-  /// learner is looking at.
-  static const String walkthroughOpenerCaption =
-      'Some chats start with an everyday question. A learner typed this '
-      'answer:';
-  static const String walkthroughInterestCaption =
-      'Some chats are about one of your interests. You can type or speak. A '
-      'learner said this:';
-  static const String walkthroughRecommendationCaption =
-      'Sometimes the app suggests something to read, watch or listen to, '
-      'linked to your interests. You can open it or skip it.';
+  /// The heading of each part of the walk-through: one short line saying
+  /// what the learner is looking at.
+  static const String walkthroughOpenerHeading =
+      'Some chats start with an everyday question.';
+  static const String walkthroughInterestHeading =
+      'Some are about your interests.';
+  static const String walkthroughRecommendationHeading =
+      'Some suggest something to read, watch or listen to.';
+  static const String walkthroughFeedbackHeading =
+      'Then you get feedback. Tap a highlighted phrase.';
 
   /// The small English label above the walk-through's feedback part.
   static const String walkthroughFeedbackLabel = 'Feedback';
 
-  /// The heading of the walk-through's feedback part.
-  static const String walkthroughFeedbackQuestion = 'After you answer';
-
-  /// The English line explaining the feedback, before it is shown.
-  static const String walkthroughFeedbackCaption =
-      'The app looks at what you wrote or said. It highlights things to look '
-      'at, with a reason for each. Tap a highlighted phrase to read the '
-      'reason, and save it for later if it is useful. Here is the feedback on '
-      'the answer about your interest.';
-
-  /// Shown when the walk-through hands over to the learner's own turn.
-  static const String walkthroughYourTurn =
-      'Now it is your turn: two short questions.';
+  /// The button that ends the walk-through and starts the learner's turn.
+  static const String walkthroughYourTurnButton = 'Your turn';
 
   /// The small English label above the end screen.
   static const String endLabel = 'All done';

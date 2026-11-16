@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/enums/language.dart';
@@ -5,7 +6,6 @@ import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/widgets/primary_action_button.dart';
 import '../../../shared/widgets/text_input_panel.dart';
-import '../../corrections/presentation/corrections_screen.dart';
 import '../../profile/application/profile_repository.dart';
 import '../../profile/domain/introduction_progress.dart';
 import '../../write/application/transcription_service.dart';
@@ -16,6 +16,7 @@ import '../application/voice_recorder.dart';
 import '../content/introduction_content.dart';
 import '../content/introduction_step_kind.dart';
 import '../content/recommendation_item.dart';
+import '../content/show_me_demo.dart';
 import 'introduction_step_frame.dart';
 import 'spoken_answer_step.dart';
 
@@ -102,7 +103,7 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
         key: const ValueKey(IntroductionStage.showMeDemo),
         controller: _controller,
         onStopForNow: _stopForNow,
-        onSeeFeedback: _playDemoFeedback,
+        onFinished: _controller.finishDemo,
       );
     }
     final isEnd = step.mode == IntroductionAnswerMode.end;
@@ -165,44 +166,6 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('The link could not be opened: ${item.url}')),
-      );
-    }
-  }
-
-  /// Shows the walk-through's feedback on the existing results screen, with
-  /// no AI call. Saving a point there shows how saving works but keeps
-  /// nothing, so the sample learner's mistakes never reach the learner's own
-  /// Saved list. Coming back marks the walk-through watched, and the
-  /// learner's own turn begins (decision A4).
-  Future<void> _playDemoFeedback() async {
-    final demo = _controller.currentDemo;
-    if (demo == null) {
-      await _controller.finishDemo();
-      return;
-    }
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (routeContext) => CorrectionsScreen(
-          response: demo.toCorrectionResponse(),
-          onSaveCorrection: (_) {
-            ScaffoldMessenger.of(routeContext).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'This is how a point is saved for later. In the demo, '
-                  'nothing is kept.',
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-    if (mounted) {
-      await _controller.finishDemo();
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(IntroductionContent.walkthroughYourTurn)),
       );
     }
   }
@@ -517,15 +480,19 @@ class _RecommendationCard extends StatelessWidget {
   }
 }
 
-/// "Show me how it works" (decision A4): four short parts, each in the
-/// usual frame with its label, then the learner's own turn.
+/// "Show me how it works" (decision A4): four short guided parts, each in
+/// the usual frame with its label, one short heading and a small chat to
+/// look at, with dots showing how far through the learner is.
 ///
-/// 1. Friendly opener: the first opener and a sample typed answer.
-/// 2. Something you're into: the demo question on the learner's first chip
-///    and the sample learner's answer.
+/// 1. Friendly opener: the app's question and a sample typed answer.
+/// 2. Something you're into: the question on the learner's first chip and
+///    the sample learner's spoken answer.
 /// 3. A recommendation: the card the learner's own turn will show.
-/// 4. Feedback: what the feedback is, then the sample answer's feedback on
-///    the results screen, with no AI call.
+/// 4. Feedback: the sample answer with its phrases highlighted; tapping one
+///    shows the suggestion and the reason, with Save. Nothing is sent to the
+///    AI and nothing is kept, so the sample learner's mistakes never reach
+///    the learner's own Saved list. "Your turn" appears once a phrase has
+///    been tapped.
 ///
 /// Which part is showing is not saved: a learner who stops part-way sees the
 /// walk-through from its start next time.
@@ -533,26 +500,33 @@ class _Walkthrough extends StatefulWidget {
   const _Walkthrough({
     required this.controller,
     required this.onStopForNow,
-    required this.onSeeFeedback,
+    required this.onFinished,
     super.key,
   });
 
   final IntroductionController controller;
   final VoidCallback onStopForNow;
-  final Future<void> Function() onSeeFeedback;
+  final Future<void> Function() onFinished;
 
   @override
   State<_Walkthrough> createState() => _WalkthroughState();
 }
 
 class _WalkthroughState extends State<_Walkthrough> {
-  int _part = 0;
+  static const _partCount = 4;
 
-  static const _captionStyle = TextStyle(
-    color: AppColors.textSecondary,
-    fontSize: 14,
-    height: 20 / 14,
-  );
+  int _part = 0;
+  int? _selectedPoint;
+  final Set<int> _savedPoints = {};
+  final List<TapGestureRecognizer> _recognizers = [];
+
+  @override
+  void dispose() {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -566,128 +540,302 @@ class _WalkthroughState extends State<_Walkthrough> {
       onPressed: () => setState(() => _part++),
     );
 
-    return switch (_part) {
-      0 => IntroductionStepFrame(
-        key: const ValueKey('walkthrough-opener'),
-        label: IntroductionStepKind.friendlyOpener.label,
-        questionText: opener?.text,
-        onStopForNow: widget.onStopForNow,
-        child: _part0(next),
+    final (String label, String heading, List<Widget> body) = switch (_part) {
+      0 => (
+        IntroductionStepKind.friendlyOpener.label,
+        IntroductionContent.walkthroughOpenerHeading,
+        [
+          if (opener != null) _ChatBubble.app(opener.text),
+          const _ChatBubble.learner(
+            IntroductionContent.walkthroughOpenerAnswer,
+            icon: Icons.keyboard_outlined,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          next,
+        ],
       ),
-      1 => IntroductionStepFrame(
-        key: const ValueKey('walkthrough-interest'),
-        label: IntroductionStepKind.somethingYoureInto.label,
-        questionText: demo?.question,
-        onStopForNow: widget.onStopForNow,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (interest != null) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Chip(
-                  label: Text(interest.labelFor(controller.language)),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            const Text(
-              IntroductionContent.walkthroughInterestCaption,
-              style: _captionStyle,
+      1 => (
+        IntroductionStepKind.somethingYoureInto.label,
+        IntroductionContent.walkthroughInterestHeading,
+        [
+          if (interest != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Chip(label: Text(interest.labelFor(controller.language))),
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (demo != null) _SampleAnswer(text: demo.sampleAnswer),
-            const SizedBox(height: AppSpacing.xl),
-            next,
+          if (demo != null) ...[
+            _ChatBubble.app(demo.question),
+            _ChatBubble.learner(demo.sampleAnswer, icon: Icons.mic_none),
           ],
-        ),
+          const SizedBox(height: AppSpacing.xl),
+          next,
+        ],
       ),
-      2 => IntroductionStepFrame(
-        key: const ValueKey('walkthrough-recommendation'),
-        label: IntroductionStepKind.recommendation.label,
-        questionText: recommendation?.title,
-        onStopForNow: widget.onStopForNow,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              IntroductionContent.walkthroughRecommendationCaption,
-              style: _captionStyle,
+      2 => (
+        IntroductionStepKind.recommendation.label,
+        IntroductionContent.walkthroughRecommendationHeading,
+        [
+          if (recommendation != null)
+            _RecommendationCard(
+              item: recommendation,
+              interestLabel: IntroductionContent.interestById(
+                recommendation.interestId,
+              )?.labelFor(controller.language),
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (recommendation != null)
-              _RecommendationCard(
-                item: recommendation,
-                interestLabel: IntroductionContent.interestById(
-                  recommendation.interestId,
-                )?.labelFor(controller.language),
-              ),
-            const SizedBox(height: AppSpacing.xl),
-            next,
-          ],
-        ),
+          const SizedBox(height: AppSpacing.xl),
+          next,
+        ],
       ),
-      _ => IntroductionStepFrame(
-        key: const ValueKey('walkthrough-feedback'),
-        label: IntroductionContent.walkthroughFeedbackLabel,
-        questionText: IntroductionContent.walkthroughFeedbackQuestion,
-        onStopForNow: widget.onStopForNow,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              IntroductionContent.walkthroughFeedbackCaption,
-              style: _captionStyle,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            PrimaryActionButton(
-              label: 'See the feedback',
-              onPressed: widget.onSeeFeedback,
-            ),
+      _ => (
+        IntroductionContent.walkthroughFeedbackLabel,
+        IntroductionContent.walkthroughFeedbackHeading,
+        [
+          if (demo != null) ...[
+            _highlightedAnswer(demo),
+            if (_selectedPoint != null)
+              _pointCard(demo.points[_selectedPoint!], _selectedPoint!),
           ],
-        ),
+          const SizedBox(height: AppSpacing.xl),
+          PrimaryActionButton(
+            label: IntroductionContent.walkthroughYourTurnButton,
+            onPressed: _selectedPoint == null && demo != null
+                ? null
+                : widget.onFinished,
+          ),
+        ],
       ),
     };
+
+    return IntroductionStepFrame(
+      key: ValueKey('walkthrough-$_part'),
+      label: label,
+      questionText: heading,
+      onStopForNow: widget.onStopForNow,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ProgressDots(count: _partCount, current: _part),
+          const SizedBox(height: AppSpacing.lg),
+          ...body,
+        ],
+      ),
+    );
   }
 
-  Widget _part0(Widget next) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text(
-          IntroductionContent.walkthroughOpenerCaption,
-          style: _captionStyle,
+  /// The sample answer in a learner bubble, each feedback phrase highlighted
+  /// and tappable.
+  Widget _highlightedAnswer(ShowMeDemo demo) {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
+
+    final text = demo.sampleAnswer;
+    final spans = <InlineSpan>[];
+    var cursor = 0;
+    for (var i = 0; i < demo.points.length; i++) {
+      final phrase = demo.points[i].originalPhrase;
+      final start = text.indexOf(phrase, cursor);
+      if (start < 0) {
+        continue;
+      }
+      if (start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, start)));
+      }
+      final recognizer = TapGestureRecognizer()
+        ..onTap = () => setState(() => _selectedPoint = i);
+      _recognizers.add(recognizer);
+      final isSelected = _selectedPoint == i;
+      spans.add(
+        TextSpan(
+          text: phrase,
+          recognizer: recognizer,
+          style: TextStyle(
+            color: AppColors.background,
+            fontWeight: FontWeight.w600,
+            backgroundColor: AppColors.amber.withValues(
+              alpha: isSelected ? 1 : 0.8,
+            ),
+          ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        const _SampleAnswer(text: IntroductionContent.walkthroughOpenerAnswer),
-        const SizedBox(height: AppSpacing.xl),
-        next,
+      );
+      cursor = start + phrase.length;
+    }
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor)));
+    }
+
+    return _ChatBubble.learnerRich(
+      TextSpan(children: spans),
+      key: const ValueKey('walkthrough-highlighted-answer'),
+    );
+  }
+
+  /// The tapped point: what was said, the suggestion, the reason, and Save.
+  Widget _pointCard(DemoFeedbackPoint point, int index) {
+    final isSaved = _savedPoints.contains(index);
+    return Container(
+      key: const ValueKey('walkthrough-point-card'),
+      margin: const EdgeInsets.only(top: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cyan.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            children: [
+              Text(
+                point.originalPhrase,
+                style: const TextStyle(
+                  color: AppColors.coral,
+                  fontSize: 17,
+                  decoration: TextDecoration.lineThrough,
+                  decorationColor: AppColors.coral,
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward,
+                color: AppColors.textSecondary,
+                size: 18,
+              ),
+              Text(
+                point.correctedPhrase,
+                style: const TextStyle(
+                  color: AppColors.mint,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            point.shortExplanation,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 15,
+              height: 22 / 15,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: isSaved
+                ? null
+                : () => setState(() => _savedPoints.add(index)),
+            icon: Icon(isSaved ? Icons.check : Icons.bookmark_border),
+            label: Text(isSaved ? 'Saved' : 'Save'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.cyan),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Dots showing which part of the walk-through is showing.
+class _ProgressDots extends StatelessWidget {
+  const _ProgressDots({required this.count, required this.current});
+
+  final int count;
+  final int current;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      key: const ValueKey('walkthrough-progress'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < count; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            width: i == current ? 20 : 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: i <= current ? AppColors.cyan : AppColors.textDisabled,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
       ],
     );
   }
 }
 
-/// A sample learner's answer in the walk-through, in a tinted box.
-class _SampleAnswer extends StatelessWidget {
-  const _SampleAnswer({required this.text});
+/// One message in the walk-through's small chats: the app's on the left,
+/// the sample learner's on the right with a small icon saying whether it was
+/// typed or spoken.
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble.app(String this.text)
+    : rich = null,
+      icon = null,
+      fromApp = true;
 
-  final String text;
+  const _ChatBubble.learner(String this.text, {required this.icon})
+    : rich = null,
+      fromApp = false;
+
+  const _ChatBubble.learnerRich(TextSpan this.rich, {super.key})
+    : text = null,
+      icon = null,
+      fromApp = false;
+
+  final String? text;
+  final TextSpan? rich;
+  final IconData? icon;
+  final bool fromApp;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.cyan.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 15,
-          height: 24 / 15,
+    const style = TextStyle(
+      color: AppColors.textPrimary,
+      fontSize: 16,
+      height: 24 / 16,
+    );
+    final content = rich != null
+        ? Text.rich(rich!, style: style)
+        : Text(text!, style: style);
+    return Align(
+      alignment: fromApp ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(top: AppSpacing.md),
+        constraints: const BoxConstraints(maxWidth: 300),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
         ),
+        decoration: BoxDecoration(
+          color: fromApp
+              ? AppColors.surface
+              : AppColors.cyan.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(fromApp ? 4 : 16),
+            bottomRight: Radius.circular(fromApp ? 16 : 4),
+          ),
+        ),
+        child: icon == null
+            ? content
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3, right: 8),
+                    child: Icon(icon, size: 16, color: AppColors.cyan),
+                  ),
+                  Flexible(child: content),
+                ],
+              ),
       ),
     );
   }
