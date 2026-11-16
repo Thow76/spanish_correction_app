@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import '../../../core/enums/language.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
+import '../../../shared/text/correction_highlight_spans.dart';
+import '../../../shared/widgets/category_pill.dart';
+import '../../corrections/domain/error_category.dart';
 import '../../../shared/widgets/primary_action_button.dart';
 import '../../../shared/widgets/text_input_panel.dart';
 import '../../profile/application/profile_repository.dart';
@@ -489,7 +492,7 @@ class _RecommendationCard extends StatelessWidget {
 ///    the sample learner's spoken answer.
 /// 3. A recommendation: the card the learner's own turn will show.
 /// 4. Feedback: the sample answer with its phrases highlighted; tapping one
-///    shows the suggestion and the reason, with Save. Nothing is sent to the
+///    shows its category, the suggestion and the reason, with Save. Nothing is sent to the
 ///    AI and nothing is kept, so the sample learner's mistakes never reach
 ///    the learner's own Saved list. "Your turn" appears once a phrase has
 ///    been tapped.
@@ -622,52 +625,62 @@ class _WalkthroughState extends State<_Walkthrough> {
     );
   }
 
-  /// The sample answer in a learner bubble, each feedback phrase highlighted
-  /// and tappable.
+  /// The sample answer in a learner bubble, highlighted the way the app's
+  /// results screen highlights: each phrase in bold in its category's
+  /// colour, and tappable. Under it, the four categories and their colours.
   Widget _highlightedAnswer(ShowMeDemo demo) {
     for (final recognizer in _recognizers) {
       recognizer.dispose();
     }
     _recognizers.clear();
 
-    final text = demo.sampleAnswer;
-    final spans = <InlineSpan>[];
-    var cursor = 0;
-    for (var i = 0; i < demo.points.length; i++) {
-      final phrase = demo.points[i].originalPhrase;
-      final start = text.indexOf(phrase, cursor);
-      if (start < 0) {
-        continue;
-      }
-      if (start > cursor) {
-        spans.add(TextSpan(text: text.substring(cursor, start)));
-      }
-      final recognizer = TapGestureRecognizer()
-        ..onTap = () => setState(() => _selectedPoint = i);
-      _recognizers.add(recognizer);
-      final isSelected = _selectedPoint == i;
-      spans.add(
-        TextSpan(
-          text: phrase,
-          recognizer: recognizer,
-          style: TextStyle(
-            color: AppColors.background,
-            fontWeight: FontWeight.w600,
-            backgroundColor: AppColors.amber.withValues(
-              alpha: isSelected ? 1 : 0.8,
-            ),
-          ),
-        ),
-      );
-      cursor = start + phrase.length;
-    }
-    if (cursor < text.length) {
-      spans.add(TextSpan(text: text.substring(cursor)));
-    }
+    final response = demo.toCorrectionResponse();
+    final spans = buildHighlightedSpans(
+      text: demo.sampleAnswer,
+      corrections: response.corrections,
+      color: AppColors.cyan,
+      colorOf: (item) => item.category.color,
+      decoration: TextDecoration.underline,
+      recognizerOf: (item) {
+        final index = demo.points.indexWhere(
+          (point) => point.originalPhrase == item.originalPhrase,
+        );
+        final recognizer = TapGestureRecognizer()
+          ..onTap = () => setState(() => _selectedPoint = index);
+        _recognizers.add(recognizer);
+        return recognizer;
+      },
+    );
 
-    return _ChatBubble.learnerRich(
-      TextSpan(children: spans),
-      key: const ValueKey('walkthrough-highlighted-answer'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ChatBubble.learnerRich(
+          TextSpan(children: spans),
+          key: const ValueKey('walkthrough-highlighted-answer'),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        const Text(
+          IntroductionContent.walkthroughCategoriesLine,
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          key: const ValueKey('walkthrough-categories'),
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final category in ErrorCategory.values)
+              if (category != ErrorCategory.other)
+                IntrinsicWidth(
+                  child: CategoryPill(
+                    label: category.label,
+                    color: category.color,
+                  ),
+                ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -681,11 +694,16 @@ class _WalkthroughState extends State<_Walkthrough> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cyan.withValues(alpha: 0.3)),
+        border: Border.all(color: point.category.color.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          CategoryPill(
+            label: point.category.label,
+            color: point.category.color,
+          ),
+          const SizedBox(height: AppSpacing.md),
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: AppSpacing.sm,
@@ -693,10 +711,10 @@ class _WalkthroughState extends State<_Walkthrough> {
               Text(
                 point.originalPhrase,
                 style: const TextStyle(
-                  color: AppColors.coral,
+                  color: AppColors.textSecondary,
                   fontSize: 17,
                   decoration: TextDecoration.lineThrough,
-                  decorationColor: AppColors.coral,
+                  decorationColor: AppColors.textSecondary,
                 ),
               ),
               const Icon(
@@ -706,10 +724,10 @@ class _WalkthroughState extends State<_Walkthrough> {
               ),
               Text(
                 point.correctedPhrase,
-                style: const TextStyle(
-                  color: AppColors.mint,
+                style: TextStyle(
+                  color: point.category.color,
                   fontSize: 17,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],

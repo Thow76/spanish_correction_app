@@ -222,6 +222,11 @@ class IntroductionContent {
   static const String walkthroughFeedbackHeading =
       'Then you get feedback. Tap a highlighted phrase.';
 
+  /// The line above the category colours on the walk-through's feedback
+  /// part.
+  static const String walkthroughCategoriesLine =
+      'Each colour is a kind of point:';
+
   /// The small English label above the walk-through's feedback part.
   static const String walkthroughFeedbackLabel = 'Feedback';
 
