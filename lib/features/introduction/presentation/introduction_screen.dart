@@ -641,7 +641,6 @@ class _WalkthroughState extends State<_Walkthrough> {
       corrections: response.corrections,
       color: AppColors.cyan,
       colorOf: (item) => item.category.color,
-      decoration: TextDecoration.underline,
       recognizerOf: (item) {
         final index = demo.points.indexWhere(
           (point) => point.originalPhrase == item.originalPhrase,
