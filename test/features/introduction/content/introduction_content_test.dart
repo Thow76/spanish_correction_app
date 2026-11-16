@@ -246,33 +246,42 @@ void main() {
       },
     );
 
-    test('each demo has a couple of points, each found exactly once in the '
-        'answer, with a suggestion that differs and a reason', () {
-      for (final demo in IntroductionContent.demos) {
-        expect(demo.points.length, inInclusiveRange(2, 3), reason: demo.id);
-        for (final point in demo.points) {
-          final first = demo.sampleAnswer.indexOf(point.originalPhrase);
-          final last = demo.sampleAnswer.lastIndexOf(point.originalPhrase);
-          expect(
-            first,
-            greaterThanOrEqualTo(0),
-            reason: '${demo.id}: "${point.originalPhrase}" not in answer',
-          );
-          expect(
-            first,
-            last,
-            reason: '${demo.id}: "${point.originalPhrase}" appears twice',
-          );
-          expect(point.correctedPhrase.trim(), isNotEmpty, reason: demo.id);
-          expect(
-            point.correctedPhrase,
-            isNot(point.originalPhrase),
-            reason: demo.id,
-          );
-          expect(point.shortExplanation.trim(), isNotEmpty, reason: demo.id);
+    test(
+      'each demo has four points, one per category, each found exactly once in the '
+      'answer, with a suggestion that differs and a reason',
+      () {
+        for (final demo in IntroductionContent.demos) {
+          expect(demo.points.length, 4, reason: demo.id);
+          expect(demo.points.map((point) => point.category).toSet(), {
+            ErrorCategory.grammar,
+            ErrorCategory.naturalLanguage,
+            ErrorCategory.spelling,
+            ErrorCategory.wordChoice,
+          }, reason: '${demo.id}: one point in each of the four categories');
+          for (final point in demo.points) {
+            final first = demo.sampleAnswer.indexOf(point.originalPhrase);
+            final last = demo.sampleAnswer.lastIndexOf(point.originalPhrase);
+            expect(
+              first,
+              greaterThanOrEqualTo(0),
+              reason: '${demo.id}: "${point.originalPhrase}" not in answer',
+            );
+            expect(
+              first,
+              last,
+              reason: '${demo.id}: "${point.originalPhrase}" appears twice',
+            );
+            expect(point.correctedPhrase.trim(), isNotEmpty, reason: demo.id);
+            expect(
+              point.correctedPhrase,
+              isNot(point.originalPhrase),
+              reason: demo.id,
+            );
+            expect(point.shortExplanation.trim(), isNotEmpty, reason: demo.id);
+          }
         }
-      }
-    });
+      },
+    );
 
     test('the reasons keep to the app\'s wording rule (C1)', () {
       final banned = RegExp(
@@ -340,9 +349,13 @@ void main() {
       expect(response.corrections.map((c) => c.category), [
         ErrorCategory.wordChoice,
         ErrorCategory.naturalLanguage,
+        ErrorCategory.spelling,
+        ErrorCategory.grammar,
       ]);
       expect(response.correctedText, contains('Estoy muy emocionado'));
       expect(response.correctedText, contains('tomar una decisión'));
+      expect(response.correctedText, contains('será inolvidable'));
+      expect(response.correctedText, contains('Nos van a gustar'));
     });
 
     test('there are none for Portuguese in slice 1', () {

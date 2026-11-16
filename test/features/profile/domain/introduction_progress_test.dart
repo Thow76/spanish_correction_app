@@ -97,7 +97,7 @@ void main() {
     });
 
     test(
-      'Show me moves through the demo to the end screen with no answers',
+      'Show me how it works plays the walk-through, then the Try it steps',
       () {
         var progress = const IntroductionProgress.notStarted()
             .started(Language.spanish)
@@ -112,9 +112,28 @@ void main() {
 
         progress = progress.withDemoWatched();
         expect(progress.hasWatchedDemo, isTrue);
-        expect(progress.hasFinishedChosenPath, isTrue);
+        expect(progress.hasFinishedChosenPath, isFalse);
         expect(progress.hasAnswer, isFalse);
-        expect(progress.answers, isEmpty);
+        expect(progress.nextStage, IntroductionStage.friendlyOpener);
+
+        progress = progress
+            .withOpenerShown('opener-how-are-you')
+            .withOpenerAnswered();
+        expect(progress.nextStage, IntroductionStage.interestQuestion);
+
+        progress = progress
+            .withInterestQuestionShown(
+              interestId: 'sport',
+              questionId: 'question-sport',
+            )
+            .withInterestQuestionAnswered();
+        expect(progress.nextStage, IntroductionStage.recommendation);
+
+        progress = progress
+            .withRecommendationShown('sport')
+            .withRecommendationSkipped();
+        expect(progress.hasFinishedChosenPath, isTrue);
+        expect(progress.answers, hasLength(2));
         expect(progress.nextStage, IntroductionStage.endScreen);
       },
     );

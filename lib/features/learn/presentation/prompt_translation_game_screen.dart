@@ -677,7 +677,8 @@ class _PromptTranslationGameScreenState
         'Sem conexão. Verifique sua internet.',
       ),
       TranscriptionFailureReason.apiFailure ||
-      TranscriptionFailureReason.invalidResponse => _str(
+      TranscriptionFailureReason.invalidResponse ||
+      TranscriptionFailureReason.nothingHeard => _str(
         'No se pudo transcribir.',
         'Não foi possível transcrever.',
       ),

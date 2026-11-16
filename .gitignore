@@ -46,3 +46,6 @@ app.*.map.json
 
 # Secrets (copy .env.example to .env and fill it in)
 .env
+# The app's key file, read when the app starts (see lib/app/app_config.dart)
+secrets/*
+!secrets/.gitkeep

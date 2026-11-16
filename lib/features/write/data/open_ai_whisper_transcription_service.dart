@@ -30,6 +30,16 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
       );
     }
 
+    // Every recorder in the app writes mono WAV at 16 kHz, 16 bits: 32,000
+    // bytes a second after a 44-byte header. Under about half a second there
+    // are no words to hear, and Whisper tends to invent a line instead.
+    if (await audioFile.length() < minimumAudioBytes) {
+      throw const TranscriptionServiceException(
+        TranscriptionFailureReason.nothingHeard,
+        'The recording is too short to hold any words.',
+      );
+    }
+
     final boundary = 'language-correction-${Random().nextInt(1 << 32)}';
 
     try {
@@ -91,6 +101,13 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
         throw const FormatException('OpenAI transcription text is empty.');
       }
 
+      if (isSilenceHallucination(text)) {
+        throw TranscriptionServiceException(
+          TranscriptionFailureReason.nothingHeard,
+          'Whisper returned a line it invents for silence: $text',
+        );
+      }
+
       return text.trim();
     } on SocketException catch (error) {
       throw TranscriptionServiceException(
@@ -108,6 +125,55 @@ class OpenAiWhisperTranscriptionService implements TranscriptionService {
         'OpenAI returned an invalid transcription response: $error',
       );
     }
+  }
+
+  /// About half a second of mono 16 kHz 16-bit WAV, plus its header.
+  static const int minimumAudioBytes = 44 + 16000;
+
+  /// Lines Whisper is known to invent when it hears silence or noise, learnt
+  /// from the subtitled videos it was trained on (for example "Subtítulos
+  /// realizados por la comunidad de Amara.org"). Matched without regard to
+  /// case or accents.
+  static const List<String> _inventedLineFragments = [
+    'amara.org',
+    'subtitulos realizados por',
+    'subtitulos por la comunidad',
+    'subtitulado por la comunidad',
+    'legendas pela comunidade',
+  ];
+
+  /// Short lines that are invented when they are the whole transcription.
+  static const List<String> _inventedWholeLines = [
+    'gracias por ver el video',
+    'gracias por ver',
+    'suscribete',
+    'subtitulos',
+    'obrigado por assistir',
+  ];
+
+  /// Whether [text] is one of Whisper's invented lines rather than speech.
+  static bool isSilenceHallucination(String text) {
+    final plain = _plain(text);
+    if (plain.isEmpty) {
+      return true;
+    }
+    if (_inventedLineFragments.any(plain.contains)) {
+      return true;
+    }
+    final bare = plain.replaceAll(RegExp(r'[^a-z0-9 ]'), '').trim();
+    return _inventedWholeLines.contains(bare);
+  }
+
+  static String _plain(String text) {
+    const accented = 'áàâäãéèêëíìîïóòôöõúùûüñç';
+    const plain = 'aaaaaeeeeiiiiooooouuuunc';
+    final buffer = StringBuffer();
+    for (final rune in text.toLowerCase().trim().runes) {
+      final char = String.fromCharCode(rune);
+      final index = accented.indexOf(char);
+      buffer.write(index >= 0 ? plain[index] : char);
+    }
+    return buffer.toString();
   }
 
   void _ensureConfigured() {

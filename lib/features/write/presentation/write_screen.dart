@@ -361,7 +361,7 @@ class _WriteScreenState extends State<WriteScreen> {
   String _messageForCorrectionError(CorrectionServiceException error) {
     return switch (error.reason) {
       CorrectionFailureReason.missingConfiguration =>
-        'OpenAI API key is missing. Run with --dart-define=OPENAI_API_KEY=...',
+        'OpenAI key is missing. Put it in secrets/openai_key.txt and run the app again.',
       CorrectionFailureReason.networkUnavailable =>
         'No internet available. Please check your connection.',
       CorrectionFailureReason.apiFailure ||
@@ -373,9 +373,11 @@ class _WriteScreenState extends State<WriteScreen> {
   String _messageForTranscriptionError(TranscriptionServiceException error) {
     return switch (error.reason) {
       TranscriptionFailureReason.missingConfiguration =>
-        'OpenAI API key is missing. Run with --dart-define=OPENAI_API_KEY=...',
+        'OpenAI key is missing. Put it in secrets/openai_key.txt and run the app again.',
       TranscriptionFailureReason.networkUnavailable =>
         'No internet available. Please check your connection.',
+      TranscriptionFailureReason.nothingHeard =>
+        'Nothing was heard. Hold the phone close, tap the microphone, speak, then tap it again to stop.',
       TranscriptionFailureReason.apiFailure ||
       TranscriptionFailureReason.invalidResponse =>
         'Unable to transcribe audio - please try again.',

@@ -167,6 +167,96 @@ class IntroductionContent {
   };
 
   // ---------------------------------------------------------------------------
+  // The words around the steps (task 1.3)
+  // ---------------------------------------------------------------------------
+
+  /// The small English label above the chips step.
+  static const String interestsLabel = 'Your interests';
+
+  /// The question above the chips, in Spanish (slice 1 runs in Spanish only).
+  static const String interestsQuestion = '¿Qué te interesa?';
+
+  /// The small English hint under the chips question.
+  static const String interestsHint =
+      'Tap one to five things you enjoy. You can change them later.';
+
+  /// The small English label above the choice between Try it and Show me.
+  static const String choiceLabel = 'Getting started';
+
+  /// The question above the two choices, in English.
+  static const String choiceQuestion = 'How would you like to start?';
+
+  /// The two buttons on the choice step (decision A4).
+  static const String startNowButton = 'Start now';
+  static const String showMeButton = 'Show me how it works';
+
+  /// What "Start now" does, under its button.
+  static const String startNowDescription =
+      'Two short questions, then a recommendation.';
+
+  /// What "Show me how it works" does, under its button.
+  static const String showMeDescription = 'See an example first, then answer.';
+
+  /// The small English hint under the recommendation card.
+  static const String recommendationHint =
+      'Nothing to answer. Open it now, or skip it.';
+
+  // ---------------------------------------------------------------------------
+  // The "Show me how it works" walk-through (decision A4)
+  // ---------------------------------------------------------------------------
+
+  /// A sample learner's typed answer to the first friendly opener, shown in
+  /// the walk-through's first part. Placeholder content.
+  static const String walkthroughOpenerAnswer =
+      'Estoy bien, gracias. Hoy estoy un poco cansado porque he trabajado '
+      'mucho.';
+
+  /// The small titles above the three example cards on the walk-through's
+  /// recommendation screen.
+  static const String walkthroughReadTitle = 'Read';
+  static const String walkthroughWatchTitle = 'Watch';
+  static const String walkthroughListenTitle = 'Listen';
+
+  /// The "Watch" example on the walk-through's recommendation screen, the
+  /// same for everyone. Placeholder content: a programme page on RTVE Play,
+  /// which is more stable than a single clip (some clips are region-locked).
+  /// Not opened from the walk-through.
+  static const RecommendationItem walkthroughWatchExample = RecommendationItem(
+    id: 'walkthrough-watch',
+    interestId: 'travel',
+    language: Language.spanish,
+    title: 'Españoles en el mundo',
+    url: 'https://www.rtve.es/play/videos/espanoles-en-el-mundo/',
+    source: 'RTVE Play',
+    type: RecommendationType.video,
+  );
+
+  /// The "Listen" example on the walk-through's recommendation screen, the
+  /// same for everyone. Placeholder content. Not opened from the walk-through.
+  static const RecommendationItem walkthroughListenExample = RecommendationItem(
+    id: 'walkthrough-listen',
+    interestId: 'travel',
+    language: Language.spanish,
+    title: 'Radio Ambulante: crónicas de América Latina en audio',
+    url: 'https://radioambulante.org/',
+    source: 'Radio Ambulante',
+    type: RecommendationType.other,
+  );
+
+  /// The heading of the walk-through's feedback part. The other parts have
+  /// no heading: their label says what kind of chat it is.
+  static const String walkthroughFeedbackHeading = 'Tap a highlighted phrase';
+
+  /// The small English label above the walk-through's feedback part.
+  static const String walkthroughFeedbackLabel = 'Feedback';
+
+  /// The button that ends the walk-through and starts the learner's turn.
+  static const String walkthroughYourTurnButton = 'Your turn';
+
+  /// The small English label above the end screen.
+  static const String endLabel = 'All done';
+
+  // ---------------------------------------------------------------------------
   // Friendly openers
   // ---------------------------------------------------------------------------
 
@@ -436,9 +526,11 @@ class IntroductionContent {
 
   /// The "Show me" material, one demo per interest.
   ///
-  /// Each sample answer carries two typical mistakes of an English-speaking
-  /// learner, and the points use today's categories (Grammar, Spelling, Word
-  /// Choice, Natural Language) until slice 2.
+  /// Each sample answer is short and carries four typical points of an
+  /// English-speaking learner, one in each of today's categories (Grammar,
+  /// Natural Language, Spelling, Word Choice), so the walk-through shows every
+  /// category once. The categories change when slice 2 brings in the new
+  /// list (decision C3).
   static const List<ShowMeDemo> demos = [
     ShowMeDemo(
       id: 'travel-demo',
@@ -446,10 +538,10 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Adónde te gustaría viajar el año que viene?',
       sampleAnswer:
-          'El año que viene quiero viajar a Perú con mi hermana. Estoy muy '
-          'excitado porque nunca he estado en Sudamérica. Todavía tenemos que '
-          'hacer una decisión sobre las fechas, pero seguro que va a ser '
-          'inolvidable.',
+          'Quiero viajar a Perú con mi hermana. Estoy muy excitado porque '
+          'nunca he estado allí. Todavía tenemos que hacer una decisión '
+          'sobre las fechas, pero sera inolvidable. Nos va a gustar mucho '
+          'las montañas.',
       points: [
         DemoFeedbackPoint(
           originalPhrase: 'excitado',
@@ -467,6 +559,22 @@ class IntroductionContent {
               'Spanish takes decisions rather than making them: "tomar una '
               'decisión".',
         ),
+        DemoFeedbackPoint(
+          originalPhrase: 'sera',
+          correctedPhrase: 'será',
+          category: ErrorCategory.spelling,
+          shortExplanation:
+              'The future form carries a written accent on the last syllable: '
+              '"será".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'Nos va a gustar mucho las montañas',
+          correctedPhrase: 'Nos van a gustar mucho las montañas',
+          category: ErrorCategory.grammar,
+          shortExplanation:
+              '"Gustar" agrees with the thing liked: "las montañas" is '
+              'plural, so "van a gustar".',
+        ),
       ],
     ),
     ShowMeDemo(
@@ -475,9 +583,9 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Qué plato te sale mejor cuando cocinas?',
       sampleAnswer:
-          'Me sale muy bien la lasaña. La hago casi cada domingo porque me '
-          'gusta mucho los platos de pasta. Al principio me quedaba un poco '
-          'seca, pero ahora, después de mucha practica, queda perfecta.',
+          'Me sale muy bien la lasaña porque me gusta mucho los platos de '
+          'pasta. Al principio no realizaba que necesitaba más salsa, '
+          'pero después de mucha practica ahora es un pedazo de pastel.',
       points: [
         DemoFeedbackPoint(
           originalPhrase: 'me gusta mucho los platos',
@@ -488,12 +596,28 @@ class IntroductionContent {
               'so the verb is "gustan".',
         ),
         DemoFeedbackPoint(
+          originalPhrase: 'no realizaba que',
+          correctedPhrase: 'no me daba cuenta de que',
+          category: ErrorCategory.wordChoice,
+          shortExplanation:
+              '"Realizar" means to carry out; for noticing something Spanish '
+              'uses "darse cuenta de".',
+        ),
+        DemoFeedbackPoint(
           originalPhrase: 'practica',
           correctedPhrase: 'práctica',
           category: ErrorCategory.spelling,
           shortExplanation:
               'The noun carries a written accent, "práctica"; without it the '
               'word reads as the verb form "practica".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'es un pedazo de pastel',
+          correctedPhrase: 'es pan comido',
+          category: ErrorCategory.naturalLanguage,
+          shortExplanation:
+              '"A piece of cake" does not carry over word for word; Spanish '
+              'says "es pan comido".',
         ),
       ],
     ),
@@ -503,11 +627,19 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Qué música escuchas normalmente?',
       sampleAnswer:
-          'Escucho de todo, pero sobre todo pop en español. Cuando trabajo '
-          'pongo música tranquila para me concentrar. Hace poco descubrí un '
-          'grupo argentino que me encanta: sus canciones son muy pegajosas y '
-          'no puedo dejar de cantarlas.',
+          'Escucho sobre todo pop en español. Cuando trabajo pongo musica '
+          'tranquila para me concentrar. Quiero atender a un concierto de '
+          'mi grupo favorito, porque siempre tengo un buen tiempo en los '
+          'conciertos.',
       points: [
+        DemoFeedbackPoint(
+          originalPhrase: 'musica',
+          correctedPhrase: 'música',
+          category: ErrorCategory.spelling,
+          shortExplanation:
+              'The word is stressed on the first syllable, so it carries a '
+              'written accent: "música".',
+        ),
         DemoFeedbackPoint(
           originalPhrase: 'para me concentrar',
           correctedPhrase: 'para concentrarme',
@@ -517,12 +649,20 @@ class IntroductionContent {
               '"concentrarme".',
         ),
         DemoFeedbackPoint(
-          originalPhrase: 'pegajosas',
-          correctedPhrase: 'pegadizas',
+          originalPhrase: 'atender a un concierto',
+          correctedPhrase: 'asistir a un concierto',
           category: ErrorCategory.wordChoice,
           shortExplanation:
-              '"Pegajoso" is sticky to the touch; a tune that stays in your '
-              'head is "pegadizo".',
+              '"Atender" means to attend to or serve someone; to go to a '
+              'concert Spanish says "asistir a".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'tengo un buen tiempo',
+          correctedPhrase: 'lo paso bien',
+          category: ErrorCategory.naturalLanguage,
+          shortExplanation:
+              '"Have a good time" does not carry over word for word; Spanish '
+              'says "pasarlo bien".',
         ),
       ],
     ),
@@ -532,25 +672,40 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Qué película o serie has visto hace poco?',
       sampleAnswer:
-          'La semana pasada terminé una serie española que se llama La casa '
-          'de papel. Al principio no me enganchó, pero despues de dos '
-          'episodios no podía parar. La trama es un poco larga, pero en el '
-          'fin vale la pena.',
+          'Hace poco vi una serie coreana que era muy divertido. Despues '
+          'de ocho capítulos, eventualmente descubrimos quién era el '
+          'asesino, pero el final no hizo sentido.',
       points: [
         DemoFeedbackPoint(
-          originalPhrase: 'despues',
-          correctedPhrase: 'después',
-          category: ErrorCategory.spelling,
+          originalPhrase: 'era muy divertido',
+          correctedPhrase: 'era muy divertida',
+          category: ErrorCategory.grammar,
           shortExplanation:
-              '"Después" carries a written accent on the last syllable.',
+              '"Serie" is feminine, so the adjective is "divertida".',
         ),
         DemoFeedbackPoint(
-          originalPhrase: 'en el fin',
+          originalPhrase: 'Despues',
+          correctedPhrase: 'Después',
+          category: ErrorCategory.spelling,
+          shortExplanation:
+              'The word is stressed on the last syllable, so it carries a '
+              'written accent: "después".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'eventualmente',
           correctedPhrase: 'al final',
+          category: ErrorCategory.wordChoice,
+          shortExplanation:
+              '"Eventualmente" means possibly or now and then; for "in the '
+              'end" Spanish says "al final".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'no hizo sentido',
+          correctedPhrase: 'no tuvo sentido',
           category: ErrorCategory.naturalLanguage,
           shortExplanation:
-              '"En el fin" is a word-for-word "in the end"; Spanish says '
-              '"al final".',
+              'In Spanish something "tiene sentido"; "hacer sentido" copies '
+              'the English "make sense".',
         ),
       ],
     ),
@@ -560,27 +715,40 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Qué estás leyendo ahora mismo?',
       sampleAnswer:
-          'Ahora mismo estoy leyendo una novela de Isabel Allende. Es la '
-          'primera vez que leo un libro entero en español, así que voy '
-          'despacio. Las personajes son muy interesantes, y aunque hay '
-          'palabras que no conozco, realizo que es mejor seguir leyendo sin '
-          'parar a buscarlas todas.',
+          'Estoy leyendo una novela de Isabel Allende que saqué de la '
+          'librería de mi barrio. Los personajes son muy divertidas y no '
+          'puedo ponerlo abajo. Me gustaría leer mas libros suyos.',
       points: [
         DemoFeedbackPoint(
-          originalPhrase: 'Las personajes',
-          correctedPhrase: 'Los personajes',
-          category: ErrorCategory.grammar,
-          shortExplanation:
-              '"Personaje" is masculine even for a female character: "los '
-              'personajes".',
-        ),
-        DemoFeedbackPoint(
-          originalPhrase: 'realizo que',
-          correctedPhrase: 'me doy cuenta de que',
+          originalPhrase: 'la librería de mi barrio',
+          correctedPhrase: 'la biblioteca de mi barrio',
           category: ErrorCategory.wordChoice,
           shortExplanation:
-              '"Realizar" means to carry out. For "realise" in the sense of '
-              'noticing, Spanish says "darse cuenta".',
+              'A "librería" sells books; the place you borrow them from is a '
+              '"biblioteca".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'muy divertidas',
+          correctedPhrase: 'muy divertidos',
+          category: ErrorCategory.grammar,
+          shortExplanation:
+              'The adjective agrees with "los personajes", which is '
+              'masculine: "divertidos".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'no puedo ponerlo abajo',
+          correctedPhrase: 'no puedo dejarlo',
+          category: ErrorCategory.naturalLanguage,
+          shortExplanation:
+              '"Put it down" does not carry over word for word; Spanish says '
+              '"no puedo dejarlo".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'mas',
+          correctedPhrase: 'más',
+          category: ErrorCategory.spelling,
+          shortExplanation:
+              'Meaning "more", the word carries a written accent: "más".',
         ),
       ],
     ),
@@ -590,26 +758,41 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Haces algún deporte, o prefieres verlo?',
       sampleAnswer:
-          'Juego al fútbol con unos amigos todos los jueves por la noche. No '
-          'somos muy buenos, pero nos divertimos mucho. También me gusta '
-          'correr, aunque en invierno es dificil salir cuando hace frío. Y '
-          'soporto al Betis desde que era niño: voy al estadio siempre que '
-          'puedo.',
+          'Juego al fútbol con unos amigos los jueves. En invierno es '
+          'dificil salir cuando hace frío, pero siempre tenemos una '
+          'explosión. Soporto al Betis desde niño, aunque las entradas es '
+          'muy caras.',
       points: [
         DemoFeedbackPoint(
           originalPhrase: 'dificil',
           correctedPhrase: 'difícil',
           category: ErrorCategory.spelling,
           shortExplanation:
-              '"Difícil" carries a written accent on the middle syllable.',
+              'The word carries a written accent on the middle syllable: '
+              '"difícil".',
         ),
         DemoFeedbackPoint(
-          originalPhrase: 'soporto al Betis',
-          correctedPhrase: 'soy del Betis',
+          originalPhrase: 'tenemos una explosión',
+          correctedPhrase: 'lo pasamos genial',
+          category: ErrorCategory.naturalLanguage,
+          shortExplanation:
+              '"Have a blast" does not carry over word for word; Spanish says '
+              '"lo pasamos genial".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'Soporto al Betis',
+          correctedPhrase: 'Soy del Betis',
           category: ErrorCategory.wordChoice,
           shortExplanation:
-              '"Soportar" means to put up with. For supporting a team, Spanish '
-              'says "ser de" or "seguir a".',
+              '"Soportar" means to put up with; to support a team Spanish '
+              'says "ser de" or "apoyar".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'las entradas es muy caras',
+          correctedPhrase: 'las entradas son muy caras',
+          category: ErrorCategory.grammar,
+          shortExplanation:
+              'The verb agrees with "las entradas", which is plural: "son".',
         ),
       ],
     ),
@@ -619,26 +802,39 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Cuál es tu lugar favorito al aire libre?',
       sampleAnswer:
-          'Mi lugar favorito es un bosque que está a diez minutos de mi casa. '
-          'Voy allí casi todos los fines de semana a pasear con mi perro. Hay '
-          'un rio pequeño y, en otoño, las hojas cambian de color. Es un '
-          'sitio muy pacífico y me ayuda a desconectar.',
+          'Mi lugar favorito es un lago cerca de una pequeña villa en las '
+          'montañas. Voy alli casi todos los domingos para tomar un '
+          'paseo. Las vistas son precioso.',
       points: [
         DemoFeedbackPoint(
-          originalPhrase: 'rio',
-          correctedPhrase: 'río',
-          category: ErrorCategory.spelling,
-          shortExplanation:
-              '"Río" carries a written accent; without it, "rio" is a form of '
-              'the verb "reír".',
-        ),
-        DemoFeedbackPoint(
-          originalPhrase: 'pacífico',
-          correctedPhrase: 'tranquilo',
+          originalPhrase: 'una pequeña villa',
+          correctedPhrase: 'un pequeño pueblo',
           category: ErrorCategory.wordChoice,
           shortExplanation:
-              '"Pacífico" describes a person or a country that avoids '
-              'conflict; a quiet place is "tranquilo".',
+              'A "villa" is a large country house; a village is a "pueblo".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'alli',
+          correctedPhrase: 'allí',
+          category: ErrorCategory.spelling,
+          shortExplanation:
+              'The word is stressed on the last syllable, so it carries a '
+              'written accent: "allí".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'tomar un paseo',
+          correctedPhrase: 'dar un paseo',
+          category: ErrorCategory.naturalLanguage,
+          shortExplanation:
+              'Spanish gives a walk rather than taking one: "dar un paseo".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'son precioso',
+          correctedPhrase: 'son preciosas',
+          category: ErrorCategory.grammar,
+          shortExplanation:
+              'The adjective agrees with "las vistas", which is feminine '
+              'and plural: "preciosas".',
         ),
       ],
     ),
@@ -648,24 +844,41 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Qué aplicación o aparato usas más cada día?',
       sampleAnswer:
-          'Uso el móvil todo el tiempo, sobre todo para mensajes y para leer '
-          'las noticias. Creo que la gente usan el teléfono demasiado, yo '
-          'incluido. En el largo plazo me gustaría pasar menos horas delante '
-          'de la pantalla.',
+          'Uso el móvil en una base diaria para casi todo. Leo las '
+          'noticias, escucho podcasts y tambien recuerdo vídeos de mis '
+          'hijos. Las aplicaciones que más uso es WhatsApp y el correo.',
       points: [
         DemoFeedbackPoint(
-          originalPhrase: 'la gente usan',
-          correctedPhrase: 'la gente usa',
-          category: ErrorCategory.grammar,
-          shortExplanation:
-              '"La gente" is singular in Spanish, so the verb is "usa".',
-        ),
-        DemoFeedbackPoint(
-          originalPhrase: 'En el largo plazo',
-          correctedPhrase: 'A largo plazo',
+          originalPhrase: 'en una base diaria',
+          correctedPhrase: 'a diario',
           category: ErrorCategory.naturalLanguage,
           shortExplanation:
-              'The set phrase is "a largo plazo", with "a" and no article.',
+              '"On a daily basis" does not carry over word for word; Spanish '
+              'says "a diario".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'tambien',
+          correctedPhrase: 'también',
+          category: ErrorCategory.spelling,
+          shortExplanation:
+              'The word is stressed on the last syllable, so it carries a '
+              'written accent: "también".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'recuerdo vídeos',
+          correctedPhrase: 'grabo vídeos',
+          category: ErrorCategory.wordChoice,
+          shortExplanation:
+              '"Recordar" means to remember; to record a video Spanish says '
+              '"grabar".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'es WhatsApp',
+          correctedPhrase: 'son WhatsApp',
+          category: ErrorCategory.grammar,
+          shortExplanation:
+              'The verb agrees with "las aplicaciones", which is plural: '
+              '"son".',
         ),
       ],
     ),
@@ -675,25 +888,41 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Qué época de la historia te parece más interesante?',
       sampleAnswer:
-          'Soy muy interesado en la época de Al-Ándalus, cuando musulmanes, '
-          'cristianos y judíos convivieron durante siglos en la península. El '
-          'año pasado visité la Alhambra, que es en Granada, y me pareció '
-          'impresionante.',
+          'Me fascina la época romana. Los romanos eran muy educados y '
+          'construyeron acueductos sin maquinas modernas. El teatro de '
+          'Mérida todavía está en muy buen condición. Creo que la '
+          'historia se repite a sí misma.',
       points: [
         DemoFeedbackPoint(
-          originalPhrase: 'Soy muy interesado en',
-          correctedPhrase: 'Me interesa mucho',
-          category: ErrorCategory.naturalLanguage,
+          originalPhrase: 'muy educados',
+          correctedPhrase: 'muy cultos',
+          category: ErrorCategory.wordChoice,
           shortExplanation:
-              'A word-for-word "I am interested in"; Spanish says "me '
-              'interesa" or "estoy interesado en".',
+              '"Educado" usually means polite; for learned or cultured '
+              'Spanish says "culto".',
         ),
         DemoFeedbackPoint(
-          originalPhrase: 'es en Granada',
-          correctedPhrase: 'está en Granada',
+          originalPhrase: 'maquinas',
+          correctedPhrase: 'máquinas',
+          category: ErrorCategory.spelling,
+          shortExplanation:
+              'The word is stressed on the first syllable, so it carries a '
+              'written accent: "máquinas".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'en muy buen condición',
+          correctedPhrase: 'en muy buena condición',
           category: ErrorCategory.grammar,
           shortExplanation:
-              'Where something is takes "estar": "está en Granada".',
+              '"Condición" is feminine, so the adjective is "buena".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'se repite a sí misma',
+          correctedPhrase: 'se repite',
+          category: ErrorCategory.naturalLanguage,
+          shortExplanation:
+              'Spanish says "la historia se repite"; "a sí misma" copies the '
+              'English "itself" and is not needed.',
         ),
       ],
     ),
@@ -703,25 +932,40 @@ class IntroductionContent {
       language: Language.spanish,
       question: '¿Qué obra de arte, edificio o diseño te gusta especialmente?',
       sampleAnswer:
-          'Me encanta la Sagrada Familia de Barcelona. Es un edificio muy '
-          'largo y, cuando entras, la luz de las vidrieras te deja sin '
-          'palabras. Gaudí era un genio, aunque sé que su estilo no gusta a '
-          'todo el mundo. Espero que la terminan pronto.',
+          'Me encanta la Sagrada Familia de Barcelona. La primera vez que '
+          'la vi, me sopló la mente: es muy alto y las columnas parecen '
+          'árboles. Es increible que todavía no esté terminada, pero ya '
+          'es un gran suceso.',
       points: [
         DemoFeedbackPoint(
-          originalPhrase: 'muy largo',
-          correctedPhrase: 'muy grande',
-          category: ErrorCategory.wordChoice,
+          originalPhrase: 'me sopló la mente',
+          correctedPhrase: 'me dejó alucinado',
+          category: ErrorCategory.naturalLanguage,
           shortExplanation:
-              '"Largo" means long. For "large", Spanish says "grande".',
+              '"Blew my mind" does not carry over word for word; Spanish says '
+              '"me dejó alucinado".',
         ),
         DemoFeedbackPoint(
-          originalPhrase: 'la terminan',
-          correctedPhrase: 'la terminen',
+          originalPhrase: 'es muy alto',
+          correctedPhrase: 'es muy alta',
           category: ErrorCategory.grammar,
           shortExplanation:
-              'After "espero que" the verb goes in the subjunctive: '
-              '"terminen".',
+              'The adjective agrees with "la Sagrada Familia", which is '
+              'feminine: "alta".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'increible',
+          correctedPhrase: 'increíble',
+          category: ErrorCategory.spelling,
+          shortExplanation:
+              'The word carries a written accent on the "i" before "ble": '
+              '"increíble".',
+        ),
+        DemoFeedbackPoint(
+          originalPhrase: 'un gran suceso',
+          correctedPhrase: 'un gran éxito',
+          category: ErrorCategory.wordChoice,
+          shortExplanation: '"Suceso" means an event; success is "éxito".',
         ),
       ],
     ),
