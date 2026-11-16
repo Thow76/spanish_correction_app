@@ -116,9 +116,8 @@ class IntroductionController extends ChangeNotifier {
     ),
     IntroductionStage.showMeDemo => IntroductionStep(
       mode: IntroductionAnswerMode.demo,
-      label: IntroductionStepKind.somethingYoureInto.label,
-      questionText: currentDemo?.question,
-      hint: IntroductionContent.demoHint,
+      label: IntroductionStepKind.friendlyOpener.label,
+      questionText: currentOpenerForWalkthrough?.text,
     ),
     IntroductionStage.endScreen ||
     IntroductionStage.complete => IntroductionStep(
@@ -191,12 +190,25 @@ class IntroductionController extends ChangeNotifier {
     return id == null ? null : IntroductionContent.interestById(id);
   }
 
-  /// The closing line: the one about seeing suggestions when there are
-  /// answers, otherwise the one for after Show me.
-  String get endScreenLine => progress.hasAnswer
-      ? IntroductionContent.endScreenLineFor(language) ??
-            IntroductionContent.endScreenLine
-      : IntroductionContent.endScreenLineAfterDemo;
+  /// The friendly opener the walk-through shows, with its sample answer:
+  /// the first in the list, the same one "Start now" asks.
+  FriendlyOpener? get currentOpenerForWalkthrough {
+    final openers = IntroductionContent.friendlyOpenersFor(language);
+    return openers.isEmpty ? null : openers.first;
+  }
+
+  /// The recommendation card the walk-through shows: the one the learner's
+  /// own card will show later, picked from the chips the same way.
+  RecommendationItem? get walkthroughRecommendation =>
+      IntroductionContent.pickForChips(
+        chosenInterestIds: _profile.interestIds,
+        language: language,
+      )?.recommendation;
+
+  /// The closing line on the end screen.
+  String get endScreenLine =>
+      IntroductionContent.endScreenLineFor(language) ??
+      IntroductionContent.endScreenLine;
 
   // ---------------------------------------------------------------------------
   // What the learner does
@@ -269,7 +281,8 @@ class IntroductionController extends ChangeNotifier {
     await _advance();
   }
 
-  /// Records that the Show me demo has been watched.
+  /// Records that the "Show me how it works" walk-through has been watched.
+  /// The learner's own Try it steps come next (decision A4).
   Future<void> finishDemo() async {
     _update(progress.withDemoWatched());
     await _advance();

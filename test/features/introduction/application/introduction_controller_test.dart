@@ -161,28 +161,34 @@ void main() {
     });
   });
 
-  group('Show me', () {
-    test('plays the demo on the first chip, then the end', () async {
-      final controller = await loaded();
-      controller.toggleInterest('sport');
-      await controller.confirmInterests();
-      await controller.choose(IntroductionChoice.showMe);
+  group('Show me how it works', () {
+    test(
+      'plays the walk-through on the first chip, then the Try it steps',
+      () async {
+        final controller = await loaded();
+        controller.toggleInterest('sport');
+        await controller.confirmInterests();
+        await controller.choose(IntroductionChoice.showMe);
 
-      expect(controller.stage, IntroductionStage.showMeDemo);
-      expect(controller.currentStep.mode, IntroductionAnswerMode.demo);
-      expect(controller.currentDemo?.interestId, 'sport');
-      expect(
-        controller.currentStep.questionText,
-        controller.currentDemo?.question,
-      );
+        expect(controller.stage, IntroductionStage.showMeDemo);
+        expect(controller.currentStep.mode, IntroductionAnswerMode.demo);
+        expect(controller.currentDemo?.interestId, 'sport');
+        expect(
+          controller.currentOpenerForWalkthrough?.text,
+          '¿Qué tal estás hoy?',
+        );
+        expect(controller.walkthroughRecommendation?.interestId, 'sport');
 
-      await controller.finishDemo();
-      expect(controller.stage, IntroductionStage.endScreen);
-      expect(
-        controller.endScreenLine,
-        IntroductionContent.endScreenLineAfterDemo,
-      );
-    });
+        await controller.finishDemo();
+        expect(controller.stage, IntroductionStage.friendlyOpener);
+
+        await controller.answerOpener();
+        await controller.answerInterestQuestion();
+        await controller.skipRecommendation();
+        expect(controller.stage, IntroductionStage.endScreen);
+        expect(controller.endScreenLine, IntroductionContent.endScreenLine);
+      },
+    );
   });
 
   group('Stop for now', () {
@@ -256,6 +262,9 @@ void main() {
       await controller.confirmInterests();
       await controller.choose(IntroductionChoice.showMe);
       await controller.finishDemo();
+      await controller.answerOpener();
+      await controller.answerInterestQuestion();
+      await controller.skipRecommendation();
       await controller.finish();
 
       expect(repository.saved?.introduction.isComplete, isTrue);

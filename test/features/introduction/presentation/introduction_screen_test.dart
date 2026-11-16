@@ -92,7 +92,7 @@ void main() {
     }
   });
 
-  testWidgets('Try it runs the three labelled steps to the end screen', (
+  testWidgets('Start now runs the three labelled steps to the end screen', (
     tester,
   ) async {
     await pumpIntroduction(tester);
@@ -102,7 +102,7 @@ void main() {
     await tapAndSettle(tester, find.text('Continue'));
 
     expect(find.text(IntroductionContent.choiceQuestion), findsOneWidget);
-    await tapAndSettle(tester, find.text('Try it'));
+    await tapAndSettle(tester, find.text('Start now'));
 
     // Friendly opener, typed.
     expect(find.text('FRIENDLY OPENER'), findsOneWidget);
@@ -143,34 +143,57 @@ void main() {
     expect(repository.stored.interestIds, ['music', 'travel']);
   });
 
-  testWidgets('Show me plays the demo and its feedback with no AI call', (
-    tester,
-  ) async {
-    await pumpIntroduction(tester);
+  testWidgets(
+    'Show me how it works walks through each kind of chat, then your turn',
+    (tester) async {
+      await pumpIntroduction(tester);
 
-    await tapAndSettle(tester, find.text(spanishLabel('sport')));
-    await tapAndSettle(tester, find.text('Continue'));
-    await tapAndSettle(tester, find.text('Show me'));
+      await tapAndSettle(tester, find.text(spanishLabel('sport')));
+      await tapAndSettle(tester, find.text('Continue'));
+      await tapAndSettle(tester, find.text('Show me how it works'));
 
-    final demo = IntroductionContent.demoForInterest(
-      'sport',
-      Language.spanish,
-    )!;
-    expect(find.text(demo.question), findsOneWidget);
-    expect(find.text(demo.sampleAnswer), findsOneWidget);
+      // Part 1: the friendly opener and a sample typed answer.
+      expect(find.text('FRIENDLY OPENER'), findsOneWidget);
+      expect(
+        find.text(IntroductionContent.walkthroughOpenerAnswer),
+        findsOneWidget,
+      );
+      await tapAndSettle(tester, find.text('Next'));
 
-    await tapAndSettle(tester, find.text('See the feedback'));
-    expect(find.byType(CorrectionsScreen), findsOneWidget);
+      // Part 2: the question about the chip and the sample answer.
+      final demo = IntroductionContent.demoForInterest(
+        'sport',
+        Language.spanish,
+      )!;
+      expect(find.text("SOMETHING YOU'RE INTO"), findsOneWidget);
+      expect(find.text(demo.question), findsOneWidget);
+      expect(find.text(demo.sampleAnswer), findsOneWidget);
+      await tapAndSettle(tester, find.text('Next'));
 
-    await tester.tap(find.byIcon(Icons.arrow_back));
-    await tester.pumpAndSettle();
+      // Part 3: the recommendation card, not opened.
+      expect(find.text('A RECOMMENDATION'), findsOneWidget);
+      expect(find.byKey(const ValueKey('recommendation-card')), findsOneWidget);
+      expect(find.text('Open now'), findsNothing);
+      await tapAndSettle(tester, find.text('Next'));
 
-    expect(
-      find.text(IntroductionContent.endScreenLineAfterDemo),
-      findsOneWidget,
-    );
-    expect(repository.stored.introduction.hasWatchedDemo, isTrue);
-  });
+      // Part 4: what the feedback is, then the feedback, with no AI call.
+      expect(find.text('FEEDBACK'), findsOneWidget);
+      await tapAndSettle(tester, find.text('See the feedback'));
+      expect(find.byType(CorrectionsScreen), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+
+      // Then the learner's own turn.
+      expect(repository.stored.introduction.hasWatchedDemo, isTrue);
+      expect(find.text('FRIENDLY OPENER'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(
+        find.text(IntroductionContent.walkthroughYourTurn),
+        findsOneWidget,
+      );
+      expect(linkOpener.opened, isEmpty);
+    },
+  );
 
   testWidgets('Stop for now with no answer goes to the app', (tester) async {
     await pumpIntroduction(tester);

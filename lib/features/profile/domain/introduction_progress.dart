@@ -26,19 +26,20 @@ enum IntroductionStage {
   /// chips, with Open now or Skip and nothing to answer.
   recommendation,
 
-  /// Show me: the fixed demo on one of the chosen chips.
+  /// "Show me how it works": the guided walk-through on one of the chosen
+  /// chips, played before the Try it steps (decision A4).
   showMeDemo,
 
-  /// The end screen: "See suggestions" or "Not now" after Try it; after Show
-  /// me there are no answers to show.
+  /// The end screen: "See suggestions" or "Not now".
   endScreen,
 
   /// The introduction has been finished and will not show again.
   complete,
 }
 
-/// What the learner chose after the chips (decision A3): to try the three
-/// steps, or to watch the demo.
+/// What the learner chose after the chips (decisions A3 and A4): "Start now"
+/// ([tryIt]) goes straight to the three steps; "Show me how it works"
+/// ([showMe]) plays the walk-through first, then the same three steps.
 enum IntroductionChoice {
   tryIt,
   showMe;
@@ -315,8 +316,7 @@ class IntroductionProgress {
 
   /// Whether at least one answer exists (the opener's or the interest
   /// question's). "Stop for now" goes to the end screen when this is true and
-  /// straight to the app when it is false (build plan task 1.3). After Show
-  /// me there are no answers, so this stays false.
+  /// straight to the app when it is false (build plan task 1.3).
   bool get hasAnswer => hasAnsweredOpener || hasAnsweredInterestQuestion;
 
   /// The answers given so far, opener first, for the end screen's walk
@@ -335,15 +335,22 @@ class IntroductionProgress {
   /// Whether every step of the chosen path is behind the learner, so the
   /// end screen is next.
   bool get hasFinishedChosenPath => switch (choice) {
-    IntroductionChoice.tryIt =>
-      hasAnsweredOpener &&
-          hasAnsweredInterestQuestion &&
-          hasDecidedRecommendation,
-    IntroductionChoice.showMe => hasWatchedDemo,
+    IntroductionChoice.tryIt => _hasFinishedTryItSteps,
+    IntroductionChoice.showMe => hasWatchedDemo && _hasFinishedTryItSteps,
     null => false,
   };
 
+  bool get _hasFinishedTryItSteps =>
+      hasAnsweredOpener &&
+      hasAnsweredInterestQuestion &&
+      hasDecidedRecommendation;
+
   /// The step the introduction should show next when it resumes.
+  ///
+  /// "Start now" (Try it) goes straight to the opener, the interest question
+  /// and the recommendation card. "Show me how it works" plays the walk-
+  /// through first, then the same three steps (decision A4), so every
+  /// learner answers the two questions.
   IntroductionStage get nextStage {
     if (isComplete) {
       return IntroductionStage.complete;
@@ -351,26 +358,22 @@ class IntroductionProgress {
     if (!interestsChosen) {
       return IntroductionStage.interests;
     }
-    switch (choice) {
-      case null:
-        return IntroductionStage.choice;
-      case IntroductionChoice.tryIt:
-        if (!hasAnsweredOpener) {
-          return IntroductionStage.friendlyOpener;
-        }
-        if (!hasAnsweredInterestQuestion) {
-          return IntroductionStage.interestQuestion;
-        }
-        if (!hasDecidedRecommendation) {
-          return IntroductionStage.recommendation;
-        }
-        return IntroductionStage.endScreen;
-      case IntroductionChoice.showMe:
-        if (!hasWatchedDemo) {
-          return IntroductionStage.showMeDemo;
-        }
-        return IntroductionStage.endScreen;
+    if (choice == null) {
+      return IntroductionStage.choice;
     }
+    if (choice == IntroductionChoice.showMe && !hasWatchedDemo) {
+      return IntroductionStage.showMeDemo;
+    }
+    if (!hasAnsweredOpener) {
+      return IntroductionStage.friendlyOpener;
+    }
+    if (!hasAnsweredInterestQuestion) {
+      return IntroductionStage.interestQuestion;
+    }
+    if (!hasDecidedRecommendation) {
+      return IntroductionStage.recommendation;
+    }
+    return IntroductionStage.endScreen;
   }
 
   IntroductionProgress copyWith({

@@ -14,6 +14,7 @@ import '../application/introduction_step.dart';
 import '../application/link_opener.dart';
 import '../application/voice_recorder.dart';
 import '../content/introduction_content.dart';
+import '../content/introduction_step_kind.dart';
 import '../content/recommendation_item.dart';
 import 'introduction_step_frame.dart';
 import 'spoken_answer_step.dart';
@@ -21,10 +22,11 @@ import 'spoken_answer_step.dart';
 /// The introduction (decisions A1, A2 and A3; build plan task 1.3).
 ///
 /// Shown once per install between the language choice and the app. The
-/// steps are: the interest chips; the choice of Try it or Show me; for Try
-/// it, the friendly opener (typed), a question about one of the chosen chips
-/// (spoken) and a recommendation card (Open now or Skip); for Show me, the
-/// fixed demo; then the end screen. "Stop for now" is on every step.
+/// steps are: the interest chips; the choice of "Start now" or "Show me how
+/// it works"; for Show me how it works, the guided walk-through first; then
+/// for everyone the friendly opener (typed), a question about one of the
+/// chosen chips (spoken) and a recommendation card (Open now or Skip); then
+/// the end screen. "Stop for now" is on every step (decisions A3 and A4).
 ///
 /// [onDone] is called when the learner leaves: with true when the
 /// introduction was finished from the end screen, with false when "Stop for
@@ -95,6 +97,14 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
     }
 
     final step = _controller.currentStep;
+    if (step.mode == IntroductionAnswerMode.demo) {
+      return _Walkthrough(
+        key: const ValueKey(IntroductionStage.showMeDemo),
+        controller: _controller,
+        onStopForNow: _stopForNow,
+        onSeeFeedback: _playDemoFeedback,
+      );
+    }
     final isEnd = step.mode == IntroductionAnswerMode.end;
     return IntroductionStepFrame(
       key: ValueKey(_controller.stage),
@@ -126,10 +136,8 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
         controller: _controller,
         onOpen: _openRecommendation,
       ),
-      IntroductionAnswerMode.demo => _ShowMeStep(
-        controller: _controller,
-        onSeeFeedback: _playDemoFeedback,
-      ),
+      // The walk-through builds its own frames, in [build].
+      IntroductionAnswerMode.demo => const SizedBox.shrink(),
       IntroductionAnswerMode.end => _EndStep(onContinue: _finish),
     };
   }
@@ -161,10 +169,11 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
     }
   }
 
-  /// Shows the demo's feedback on the existing results screen, with no AI
-  /// call. Saving a point there shows how saving works but keeps nothing,
-  /// so the sample learner's mistakes never reach the learner's own Saved
-  /// list. Coming back marks the demo watched.
+  /// Shows the walk-through's feedback on the existing results screen, with
+  /// no AI call. Saving a point there shows how saving works but keeps
+  /// nothing, so the sample learner's mistakes never reach the learner's own
+  /// Saved list. Coming back marks the walk-through watched, and the
+  /// learner's own turn begins (decision A4).
   Future<void> _playDemoFeedback() async {
     final demo = _controller.currentDemo;
     if (demo == null) {
@@ -190,6 +199,11 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
     );
     if (mounted) {
       await _controller.finishDemo();
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(IntroductionContent.walkthroughYourTurn)),
+      );
     }
   }
 }
@@ -261,17 +275,17 @@ class _ChoiceStep extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         PrimaryActionButton(
-          label: 'Try it',
+          label: IntroductionContent.startNowButton,
           onPressed: () => controller.choose(IntroductionChoice.tryIt),
         ),
         const SizedBox(height: AppSpacing.sm),
         const Text(
-          IntroductionContent.tryItDescription,
+          IntroductionContent.startNowDescription,
           style: descriptionStyle,
         ),
         const SizedBox(height: AppSpacing.xl),
         _OutlinedChoiceButton(
-          label: 'Show me',
+          label: IntroductionContent.showMeButton,
           onPressed: () => controller.choose(IntroductionChoice.showMe),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -503,49 +517,178 @@ class _RecommendationCard extends StatelessWidget {
   }
 }
 
-class _ShowMeStep extends StatelessWidget {
-  const _ShowMeStep({required this.controller, required this.onSeeFeedback});
+/// "Show me how it works" (decision A4): four short parts, each in the
+/// usual frame with its label, then the learner's own turn.
+///
+/// 1. Friendly opener: the first opener and a sample typed answer.
+/// 2. Something you're into: the demo question on the learner's first chip
+///    and the sample learner's answer.
+/// 3. A recommendation: the card the learner's own turn will show.
+/// 4. Feedback: what the feedback is, then the sample answer's feedback on
+///    the results screen, with no AI call.
+///
+/// Which part is showing is not saved: a learner who stops part-way sees the
+/// walk-through from its start next time.
+class _Walkthrough extends StatefulWidget {
+  const _Walkthrough({
+    required this.controller,
+    required this.onStopForNow,
+    required this.onSeeFeedback,
+    super.key,
+  });
 
   final IntroductionController controller;
+  final VoidCallback onStopForNow;
   final Future<void> Function() onSeeFeedback;
 
   @override
+  State<_Walkthrough> createState() => _WalkthroughState();
+}
+
+class _WalkthroughState extends State<_Walkthrough> {
+  int _part = 0;
+
+  static const _captionStyle = TextStyle(
+    color: AppColors.textSecondary,
+    fontSize: 14,
+    height: 20 / 14,
+  );
+
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
     final demo = controller.currentDemo;
+    final opener = controller.currentOpenerForWalkthrough;
+    final recommendation = controller.walkthroughRecommendation;
     final interest = controller.currentDemoInterest;
-    const smallStyle = TextStyle(color: AppColors.textSecondary, fontSize: 14);
+    final next = PrimaryActionButton(
+      label: 'Next',
+      onPressed: () => setState(() => _part++),
+    );
+
+    return switch (_part) {
+      0 => IntroductionStepFrame(
+        key: const ValueKey('walkthrough-opener'),
+        label: IntroductionStepKind.friendlyOpener.label,
+        questionText: opener?.text,
+        onStopForNow: widget.onStopForNow,
+        child: _part0(next),
+      ),
+      1 => IntroductionStepFrame(
+        key: const ValueKey('walkthrough-interest'),
+        label: IntroductionStepKind.somethingYoureInto.label,
+        questionText: demo?.question,
+        onStopForNow: widget.onStopForNow,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (interest != null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Chip(
+                  label: Text(interest.labelFor(controller.language)),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            const Text(
+              IntroductionContent.walkthroughInterestCaption,
+              style: _captionStyle,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (demo != null) _SampleAnswer(text: demo.sampleAnswer),
+            const SizedBox(height: AppSpacing.xl),
+            next,
+          ],
+        ),
+      ),
+      2 => IntroductionStepFrame(
+        key: const ValueKey('walkthrough-recommendation'),
+        label: IntroductionStepKind.recommendation.label,
+        questionText: recommendation?.title,
+        onStopForNow: widget.onStopForNow,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              IntroductionContent.walkthroughRecommendationCaption,
+              style: _captionStyle,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (recommendation != null)
+              _RecommendationCard(
+                item: recommendation,
+                interestLabel: IntroductionContent.interestById(
+                  recommendation.interestId,
+                )?.labelFor(controller.language),
+              ),
+            const SizedBox(height: AppSpacing.xl),
+            next,
+          ],
+        ),
+      ),
+      _ => IntroductionStepFrame(
+        key: const ValueKey('walkthrough-feedback'),
+        label: IntroductionContent.walkthroughFeedbackLabel,
+        questionText: IntroductionContent.walkthroughFeedbackQuestion,
+        onStopForNow: widget.onStopForNow,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              IntroductionContent.walkthroughFeedbackCaption,
+              style: _captionStyle,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            PrimaryActionButton(
+              label: 'See the feedback',
+              onPressed: widget.onSeeFeedback,
+            ),
+          ],
+        ),
+      ),
+    };
+  }
+
+  Widget _part0(Widget next) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (interest != null)
-          Text(
-            'An example chat about ${interest.english.toLowerCase()}. '
-            'A learner was asked the question above, and answered:',
-            style: smallStyle,
-          ),
-        const SizedBox(height: AppSpacing.md),
-        if (demo != null)
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: AppColors.cyan.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              demo.sampleAnswer,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-                height: 24 / 15,
-              ),
-            ),
-          ),
-        const SizedBox(height: AppSpacing.xl),
-        PrimaryActionButton(
-          label: 'See the feedback',
-          onPressed: onSeeFeedback,
+        const Text(
+          IntroductionContent.walkthroughOpenerCaption,
+          style: _captionStyle,
         ),
+        const SizedBox(height: AppSpacing.md),
+        const _SampleAnswer(text: IntroductionContent.walkthroughOpenerAnswer),
+        const SizedBox(height: AppSpacing.xl),
+        next,
       ],
+    );
+  }
+}
+
+/// A sample learner's answer in the walk-through, in a tinted box.
+class _SampleAnswer extends StatelessWidget {
+  const _SampleAnswer({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.cyan.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 15,
+          height: 24 / 15,
+        ),
+      ),
     );
   }
 }

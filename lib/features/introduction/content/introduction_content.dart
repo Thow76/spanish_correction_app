@@ -166,12 +166,6 @@ class IntroductionContent {
     Language.portuguese => null,
   };
 
-  /// The closing line on the end screen after "Show me", when there are no
-  /// answers to see (task 1.3). Spanish only in slice 1.
-  static const String endScreenLineAfterDemo =
-      '¡Gracias! Ya sabes cómo funciona. Tus intereses están guardados, y '
-      'puedes empezar cuando quieras.';
-
   // ---------------------------------------------------------------------------
   // The words around the steps (task 1.3)
   // ---------------------------------------------------------------------------
@@ -192,23 +186,62 @@ class IntroductionContent {
   /// The question above the two choices, in English.
   static const String choiceQuestion = 'How would you like to start?';
 
-  /// What "Try it" does, under its button.
-  static const String tryItDescription =
+  /// The two buttons on the choice step (decision A4).
+  static const String startNowButton = 'Start now';
+  static const String showMeButton = 'Show me how it works';
+
+  /// What "Start now" does, under its button.
+  static const String startNowDescription =
       'Answer two short questions, one by typing and one by speaking, then '
       'see a recommendation. About two minutes.';
 
-  /// What "Show me" does, under its button.
+  /// What "Show me how it works" does, under its button.
   static const String showMeDescription =
-      'Watch an example on one of your interests. Nothing to answer.';
+      'First see an example of each kind of chat and the feedback, then '
+      'answer the two questions yourself.';
 
   /// The small English hint under the recommendation card.
   static const String recommendationHint =
       'Nothing to answer. Open it now, or skip it.';
 
-  /// The small English hint on the "Show me" demo, before the feedback.
-  static const String demoHint =
-      'Next you will see the feedback on this answer. Tap a highlighted '
-      'phrase to read the reason, and save it for later.';
+  // ---------------------------------------------------------------------------
+  // The "Show me how it works" walk-through (decision A4)
+  // ---------------------------------------------------------------------------
+
+  /// A sample learner's typed answer to the first friendly opener, shown in
+  /// the walk-through's first part. Placeholder content.
+  static const String walkthroughOpenerAnswer =
+      'Estoy bien, gracias. Hoy estoy un poco cansado porque he trabajado '
+      'mucho.';
+
+  /// The English line under each part of the walk-through, saying what the
+  /// learner is looking at.
+  static const String walkthroughOpenerCaption =
+      'Some chats start with an everyday question. A learner typed this '
+      'answer:';
+  static const String walkthroughInterestCaption =
+      'Some chats are about one of your interests. You can type or speak. A '
+      'learner said this:';
+  static const String walkthroughRecommendationCaption =
+      'Sometimes the app suggests something to read, watch or listen to, '
+      'linked to your interests. You can open it or skip it.';
+
+  /// The small English label above the walk-through's feedback part.
+  static const String walkthroughFeedbackLabel = 'Feedback';
+
+  /// The heading of the walk-through's feedback part.
+  static const String walkthroughFeedbackQuestion = 'After you answer';
+
+  /// The English line explaining the feedback, before it is shown.
+  static const String walkthroughFeedbackCaption =
+      'The app looks at what you wrote or said. It highlights things to look '
+      'at, with a reason for each. Tap a highlighted phrase to read the '
+      'reason, and save it for later if it is useful. Here is the feedback on '
+      'the answer about your interest.';
+
+  /// Shown when the walk-through hands over to the learner's own turn.
+  static const String walkthroughYourTurn =
+      'Now it is your turn: two short questions.';
 
   /// The small English label above the end screen.
   static const String endLabel = 'All done';
