@@ -12,6 +12,7 @@ class IntroductionStepFrame extends StatelessWidget {
     required this.label,
     required this.child,
     this.questionText,
+    this.centerQuestion = false,
     this.hint,
     this.onStopForNow,
     super.key,
@@ -19,6 +20,9 @@ class IntroductionStepFrame extends StatelessWidget {
 
   final String label;
   final String? questionText;
+
+  /// Whether the question is centred rather than left-aligned.
+  final bool centerQuestion;
   final String? hint;
 
   /// Null on the end screen, which has no "Stop for now".
@@ -57,6 +61,9 @@ class IntroductionStepFrame extends StatelessWidget {
                           const SizedBox(height: AppSpacing.lg),
                           Text(
                             questionText!,
+                            textAlign: centerQuestion
+                                ? TextAlign.center
+                                : TextAlign.start,
                             style: const TextStyle(
                               color: AppColors.textPrimary,
                               fontFamily: 'Sora',

@@ -613,6 +613,7 @@ class _WalkthroughState extends State<_Walkthrough> {
       key: ValueKey('walkthrough-$_part'),
       label: label,
       questionText: heading,
+      centerQuestion: _part == _partCount - 1,
       onStopForNow: widget.onStopForNow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -657,7 +658,7 @@ class _WalkthroughState extends State<_Walkthrough> {
       children: [
         Wrap(
           key: const ValueKey('walkthrough-categories'),
-          alignment: WrapAlignment.center,
+          alignment: WrapAlignment.end,
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
@@ -672,13 +673,23 @@ class _WalkthroughState extends State<_Walkthrough> {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        Text.rich(
-          TextSpan(children: spans),
-          key: const ValueKey('walkthrough-highlighted-answer'),
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 16,
-            height: 24 / 16,
+        // The sample answer, in a container the same width and shape as the
+        // point card below it.
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.cyan.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.cyan.withValues(alpha: 0.3)),
+          ),
+          child: Text.rich(
+            TextSpan(children: spans),
+            key: const ValueKey('walkthrough-highlighted-answer'),
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+              height: 24 / 16,
+            ),
           ),
         ),
       ],

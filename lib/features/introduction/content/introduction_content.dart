@@ -219,7 +219,7 @@ class IntroductionContent {
       'Some are about your interests.';
   static const String walkthroughRecommendationHeading =
       'Some suggest something to read, watch or listen to.';
-  static const String walkthroughFeedbackHeading = 'Tap a highlighted phrase.';
+  static const String walkthroughFeedbackHeading = 'Tap a highlighted phrase';
 
   /// The small English label above the walk-through's feedback part.
   static const String walkthroughFeedbackLabel = 'Feedback';
