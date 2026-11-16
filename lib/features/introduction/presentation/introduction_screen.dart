@@ -553,8 +553,6 @@ class _WalkthroughState extends State<_Walkthrough> {
             IntroductionContent.walkthroughOpenerAnswer,
             icon: Icons.keyboard_outlined,
           ),
-          const SizedBox(height: AppSpacing.xl),
-          next,
         ],
       ),
       1 => (
@@ -570,8 +568,6 @@ class _WalkthroughState extends State<_Walkthrough> {
             _ChatBubble.app(demo.question),
             _ChatBubble.learner(demo.sampleAnswer, icon: Icons.mic_none),
           ],
-          const SizedBox(height: AppSpacing.xl),
-          next,
         ],
       ),
       2 => (
@@ -585,8 +581,6 @@ class _WalkthroughState extends State<_Walkthrough> {
                 recommendation.interestId,
               )?.labelFor(controller.language),
             ),
-          const SizedBox(height: AppSpacing.xl),
-          next,
         ],
       ),
       _ => (
@@ -598,13 +592,6 @@ class _WalkthroughState extends State<_Walkthrough> {
             if (_selectedPoint != null)
               _pointCard(demo.points[_selectedPoint!], _selectedPoint!),
           ],
-          const SizedBox(height: AppSpacing.xl),
-          PrimaryActionButton(
-            label: IntroductionContent.walkthroughYourTurnButton,
-            onPressed: _selectedPoint == null && demo != null
-                ? null
-                : widget.onFinished,
-          ),
         ],
       ),
     };
@@ -615,6 +602,14 @@ class _WalkthroughState extends State<_Walkthrough> {
       questionText: heading,
       centerQuestion: _part == _partCount - 1,
       onStopForNow: widget.onStopForNow,
+      bottomAction: _part < _partCount - 1
+          ? next
+          : PrimaryActionButton(
+              label: IntroductionContent.walkthroughYourTurnButton,
+              onPressed: _selectedPoint == null && demo != null
+                  ? null
+                  : widget.onFinished,
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

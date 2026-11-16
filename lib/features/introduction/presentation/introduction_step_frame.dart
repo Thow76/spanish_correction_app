@@ -15,6 +15,7 @@ class IntroductionStepFrame extends StatelessWidget {
     this.centerQuestion = false,
     this.hint,
     this.onStopForNow,
+    this.bottomAction,
     super.key,
   });
 
@@ -28,6 +29,11 @@ class IntroductionStepFrame extends StatelessWidget {
   /// Null on the end screen, which has no "Stop for now".
   final VoidCallback? onStopForNow;
   final Widget child;
+
+  /// A button pinned to the bottom of the screen, above "Stop for now",
+  /// so it stays in the same place whatever the step shows (for example
+  /// the walk-through's Next).
+  final Widget? bottomAction;
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +96,11 @@ class IntroductionStepFrame extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (bottomAction != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: bottomAction,
+                  ),
                 if (onStopForNow != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
