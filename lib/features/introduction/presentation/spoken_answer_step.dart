@@ -182,7 +182,7 @@ class _SpokenAnswerStepState extends State<SpokenAnswerStep> {
     } on TranscriptionServiceException catch (error) {
       _showSnackBar(switch (error.reason) {
         TranscriptionFailureReason.missingConfiguration =>
-          'OpenAI API key is missing. Run with --dart-define-from-file=.env',
+          'OpenAI key is missing. Put it in secrets/openai_key.txt and run the app again.',
         TranscriptionFailureReason.networkUnavailable =>
           'No internet available. Please check your connection.',
         TranscriptionFailureReason.apiFailure ||

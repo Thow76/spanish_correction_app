@@ -65,6 +65,9 @@ flutter:
 
   assets:
     - assets/images/
+    # Your OpenAI key goes in secrets/openai_key.txt (never uploaded to
+    # GitHub). See lib/app/app_config.dart.
+    - secrets/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

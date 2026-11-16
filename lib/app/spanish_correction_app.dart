@@ -25,7 +25,10 @@ const _keySkipLanguageSelection = 'skip_language_selection';
 const _keyLastSelectedLanguage = 'last_selected_language';
 
 class SpanishCorrectionApp extends StatefulWidget {
-  const SpanishCorrectionApp({super.key});
+  const SpanishCorrectionApp({this.config, super.key});
+
+  /// The key and model names. Null reads them from the build settings only.
+  final AppConfig? config;
 
   @override
   State<SpanishCorrectionApp> createState() => _SpanishCorrectionAppState();
@@ -52,7 +55,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   void initState() {
     super.initState();
 
-    final config = AppConfig.fromEnvironment();
+    final config = widget.config ?? AppConfig.fromEnvironment();
     _correctionService = OpenAiCorrectionService(
       apiKey: config.openAiApiKey,
       model: config.openAiCorrectionModel,
