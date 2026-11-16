@@ -376,6 +376,8 @@ class _WriteScreenState extends State<WriteScreen> {
         'OpenAI key is missing. Put it in secrets/openai_key.txt and run the app again.',
       TranscriptionFailureReason.networkUnavailable =>
         'No internet available. Please check your connection.',
+      TranscriptionFailureReason.nothingHeard =>
+        'Nothing was heard. Hold the phone close, tap the microphone, speak, then tap it again to stop.',
       TranscriptionFailureReason.apiFailure ||
       TranscriptionFailureReason.invalidResponse =>
         'Unable to transcribe audio - please try again.',
