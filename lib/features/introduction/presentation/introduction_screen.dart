@@ -638,8 +638,6 @@ class _WalkthroughState extends State<_Walkthrough> {
       key: ValueKey('walkthrough-$_part'),
       label: label,
       labelColor: color,
-      questionText: heading,
-      centerQuestion: _part == _partCount - 1,
       onStopForNow: widget.onStopForNow,
       bottomAction: _part < _partCount - 1
           ? next
@@ -653,6 +651,22 @@ class _WalkthroughState extends State<_Walkthrough> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _ProgressDots(count: _partCount, current: _part, color: color),
+          // The heading sits under the dots, so the dots are in the same
+          // place on every part (only the feedback part has a heading).
+          if (heading != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              heading,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontFamily: 'Sora',
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                height: 32 / 24,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           ...body,
         ],
