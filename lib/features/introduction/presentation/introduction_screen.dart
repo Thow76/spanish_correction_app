@@ -6,13 +6,18 @@ import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/text/correction_highlight_spans.dart';
 import '../../../shared/widgets/category_pill.dart';
+import '../../corrections/application/correction_service_exception.dart';
+import '../../corrections/domain/correction_item.dart';
 import '../../corrections/domain/error_category.dart';
+import '../../corrections/presentation/corrections_screen.dart';
+import '../../history/domain/correction_submission.dart';
 import '../../../shared/widgets/primary_action_button.dart';
 import '../../../shared/widgets/text_input_panel.dart';
 import '../../profile/application/profile_repository.dart';
 import '../../profile/domain/introduction_progress.dart';
 import '../../write/application/transcription_service.dart';
 import '../application/introduction_controller.dart';
+import '../application/introduction_feedback.dart';
 import '../application/introduction_step.dart';
 import '../application/link_opener.dart';
 import '../application/voice_recorder.dart';
@@ -32,6 +37,12 @@ import 'spoken_answer_step.dart';
 /// chosen chips (spoken) and a recommendation card (Open now or Skip); then
 /// the end screen. "Stop for now" is on every step (decisions A3 and A4).
 ///
+/// The two answers are sent for feedback through [feedback] as soon as they
+/// are given, so they land in History. The end screen offers "See
+/// suggestions", which walks through the results screen one answer after
+/// another with Save on each point, or "Not now", which leaves them in
+/// History (task 1.4).
+///
 /// [onDone] is called when the learner leaves: with true when the
 /// introduction was finished from the end screen, with false when "Stop for
 /// now" took them to the app with no answer yet (it resumes on the next
@@ -44,6 +55,7 @@ class IntroductionScreen extends StatefulWidget {
     required this.recorderFactory,
     required this.linkOpener,
     required this.onDone,
+    this.feedback,
     super.key,
   });
 
@@ -56,6 +68,10 @@ class IntroductionScreen extends StatefulWidget {
   final LinkOpener linkOpener;
   final ValueChanged<bool> onDone;
 
+  /// Sends the two answers for feedback and saves points. Null sends
+  /// nothing.
+  final IntroductionFeedback? feedback;
+
   @override
   State<IntroductionScreen> createState() => _IntroductionScreenState();
 }
@@ -63,6 +79,7 @@ class IntroductionScreen extends StatefulWidget {
 class _IntroductionScreenState extends State<IntroductionScreen> {
   late final IntroductionController _controller;
   VoiceRecorder? _recorder;
+  bool _isGettingSuggestions = false;
 
   @override
   void initState() {
@@ -70,6 +87,7 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
     _controller = IntroductionController(
       repository: widget.profileRepository,
       language: widget.language,
+      feedback: widget.feedback,
     )..addListener(_onChanged);
     _controller.load();
   }
@@ -132,7 +150,7 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
       IntroductionAnswerMode.chips => _InterestsStep(controller: _controller),
       IntroductionAnswerMode.choice => _ChoiceStep(controller: _controller),
       IntroductionAnswerMode.type => _TypedAnswerStep(
-        onSend: (_) => _controller.answerOpener(),
+        onSend: _controller.answerOpener,
       ),
       IntroductionAnswerMode.microphone => _InterestQuestionStep(
         controller: _controller,
@@ -140,7 +158,7 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
           recorder: _voiceRecorder,
           transcriptionService: widget.transcriptionService,
           language: widget.language,
-          onSend: (_) => _controller.answerInterestQuestion(),
+          onSend: _controller.answerInterestQuestion,
         ),
       ),
       IntroductionAnswerMode.recommendationCard => _RecommendationStep(
@@ -149,7 +167,11 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
       ),
       // The walk-through builds its own frames, in [build].
       IntroductionAnswerMode.demo => const SizedBox.shrink(),
-      IntroductionAnswerMode.end => _EndStep(onContinue: _finish),
+      IntroductionAnswerMode.end => _EndStep(
+        isGettingSuggestions: _isGettingSuggestions,
+        onSeeSuggestions: _seeSuggestions,
+        onNotNow: _finish,
+      ),
     };
   }
 
@@ -164,6 +186,87 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
     await _controller.finish();
     if (mounted) {
       widget.onDone(true);
+    }
+  }
+
+  /// "See suggestions": walks through the results screen for each answer,
+  /// opener first, then finishes the introduction (task 1.4). Each point
+  /// offers Save; moving on without saving is ignoring it (decisions C5 and
+  /// A4). Going back from a results screen also moves on.
+  Future<void> _seeSuggestions() async {
+    if (_isGettingSuggestions) {
+      return;
+    }
+    setState(() => _isGettingSuggestions = true);
+    final submissions = await _controller.suggestionsToShow();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isGettingSuggestions = false);
+    if (submissions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Your suggestions could not be fetched just now. Check your '
+            'internet connection and try again, or tap Not now.',
+          ),
+        ),
+      );
+      return;
+    }
+    for (final (index, submission) in submissions.indexed) {
+      final isLast = index == submissions.length - 1;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (routeContext) => CorrectionsScreen(
+            key: ValueKey('introduction-suggestions-$index'),
+            response: submission.response,
+            title: submissions.length == 1
+                ? 'Corrections'
+                : 'Corrections ${index + 1} of ${submissions.length}',
+            onSaveCorrection: (point) =>
+                _savePoint(routeContext, point, submission),
+            nextLabel: isLast ? 'Done' : 'Next answer',
+            onNext: () => Navigator.of(routeContext).pop(),
+          ),
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+    }
+    await _finish();
+  }
+
+  Future<void> _savePoint(
+    BuildContext routeContext,
+    CorrectionItem point,
+    CorrectionSubmission submission,
+  ) async {
+    final messenger = ScaffoldMessenger.of(routeContext);
+    try {
+      await _controller.savePoint(point, submission);
+      messenger.showSnackBar(const SnackBar(content: Text('Saved for later')));
+    } on CorrectionServiceException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(switch (error.reason) {
+            CorrectionFailureReason.missingConfiguration =>
+              'OpenAI API key is missing.',
+            CorrectionFailureReason.networkUnavailable =>
+              'No internet available. Please check your connection.',
+            CorrectionFailureReason.apiFailure ||
+            CorrectionFailureReason.invalidResponse =>
+              'Something went wrong. Please try again.',
+          }),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -931,14 +1034,38 @@ class _ChatBubble extends StatelessWidget {
   }
 }
 
+/// The end screen's two buttons (task 1.4): "See suggestions" walks through
+/// the feedback on the two answers; "Not now" leaves them in History.
 class _EndStep extends StatelessWidget {
-  const _EndStep({required this.onContinue});
+  const _EndStep({
+    required this.isGettingSuggestions,
+    required this.onSeeSuggestions,
+    required this.onNotNow,
+  });
 
-  final Future<void> Function() onContinue;
+  final bool isGettingSuggestions;
+  final Future<void> Function() onSeeSuggestions;
+  final Future<void> Function() onNotNow;
 
   @override
   Widget build(BuildContext context) {
-    return PrimaryActionButton(label: 'Continue', onPressed: onContinue);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PrimaryActionButton(
+          label: isGettingSuggestions
+              ? 'Getting your suggestions'
+              : 'See suggestions',
+          isLoading: isGettingSuggestions,
+          onPressed: onSeeSuggestions,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _OutlinedChoiceButton(
+          label: 'Not now',
+          onPressed: isGettingSuggestions ? null : onNotNow,
+        ),
+      ],
+    );
   }
 }
 

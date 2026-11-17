@@ -5,9 +5,11 @@ import '../core/enums/language.dart';
 import '../core/services/walkthrough_service.dart';
 import '../features/corrections/application/correction_repository_controller.dart';
 import '../features/corrections/application/correction_service.dart';
+import '../features/corrections/application/submit_correction_use_case.dart';
 import '../features/corrections/data/file_correction_repository.dart';
 import '../features/corrections/data/open_ai_correction_service.dart';
 import '../features/introduction/content/introduction_content.dart';
+import '../features/introduction/data/history_introduction_feedback.dart';
 import '../features/introduction/data/record_voice_recorder.dart';
 import '../features/introduction/data/url_launcher_link_opener.dart';
 import '../features/introduction/presentation/introduction_screen.dart';
@@ -15,6 +17,7 @@ import '../features/language_selection/language_selection_screen.dart';
 import '../features/navigation/presentation/app_shell.dart';
 import '../features/profile/application/profile_repository.dart';
 import '../features/profile/data/file_profile_repository.dart';
+import '../features/saved/application/save_correction_use_case.dart';
 import '../features/write/application/transcription_service.dart';
 import '../features/write/data/open_ai_whisper_transcription_service.dart';
 import '../shared/design/app_colors.dart';
@@ -131,6 +134,17 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
           transcriptionService: _transcriptionService,
           recorderFactory: RecordVoiceRecorder.new,
           linkOpener: const UrlLauncherLinkOpener(),
+          feedback: HistoryIntroductionFeedback(
+            submitCorrectionUseCase: SubmitCorrectionUseCase(
+              correctionService: _correctionService,
+              repositoryController: _repositoryController,
+            ),
+            saveCorrectionUseCase: SaveCorrectionUseCase(
+              correctionService: _correctionService,
+              repositoryController: _repositoryController,
+            ),
+            repositoryController: _repositoryController,
+          ),
           onDone: (completed) => setState(() {
             if (completed) {
               _introductionComplete = true;

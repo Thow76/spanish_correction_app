@@ -30,95 +30,104 @@ void main() {
     controller = CorrectionRepositoryController(repository);
   });
 
-  test(
-    'a successful submission returns the response directly and adds it to '
-    'the repository',
-    () async {
-      const response = CorrectionResponse(
-        originalText: 'Ayer yo fue al mercado.',
-        correctedText: 'Ayer fui al mercado.',
-        corrections: [
-          CorrectionItem(
-            originalPhrase: 'fue',
-            correctedPhrase: 'fui',
-            category: ErrorCategory.grammar,
-            shortExplanation: 'Use fui with yo in the preterite.',
-          ),
-        ],
-      );
-      final useCase = SubmitCorrectionUseCase(
-        correctionService: _FakeCorrectionService(responseToReturn: response),
-        repositoryController: controller,
-      );
-
-      final result = await useCase('Ayer yo fue al mercado.', Language.spanish);
-
-      expect(result, response);
-      expect(repository.addedSubmissions, hasLength(1));
-      expect(repository.addedSubmissions.single.response, response);
-      expect(repository.addedSubmissions.single.language, Language.spanish);
-    },
-  );
-
-  test(
-    'a network failure propagates immediately as CorrectionServiceException '
-    '— nothing is added to the repository, and there is no queue for it to '
-    'go to instead',
-    () async {
-      final useCase = SubmitCorrectionUseCase(
-        correctionService: _FakeCorrectionService(
-          exceptionToThrow: const CorrectionServiceException(
-            CorrectionFailureReason.networkUnavailable,
-            'No internet available.',
-          ),
+  test('a successful submission returns the response directly and adds it to '
+      'the repository', () async {
+    const response = CorrectionResponse(
+      originalText: 'Ayer yo fue al mercado.',
+      correctedText: 'Ayer fui al mercado.',
+      corrections: [
+        CorrectionItem(
+          originalPhrase: 'fue',
+          correctedPhrase: 'fui',
+          category: ErrorCategory.grammar,
+          shortExplanation: 'Use fui with yo in the preterite.',
         ),
-        repositoryController: controller,
-      );
+      ],
+    );
+    final useCase = SubmitCorrectionUseCase(
+      correctionService: _FakeCorrectionService(responseToReturn: response),
+      repositoryController: controller,
+    );
 
-      await expectLater(
-        () => useCase('Ayer yo fue al mercado.', Language.spanish),
-        throwsA(
-          isA<CorrectionServiceException>().having(
-            (error) => error.reason,
-            'reason',
-            CorrectionFailureReason.networkUnavailable,
-          ),
+    final result = await useCase('Ayer yo fue al mercado.', Language.spanish);
+
+    expect(result, response);
+    expect(repository.addedSubmissions, hasLength(1));
+    expect(repository.addedSubmissions.single.response, response);
+    expect(repository.addedSubmissions.single.language, Language.spanish);
+  });
+
+  test('a network failure propagates immediately as CorrectionServiceException '
+      '— nothing is added to the repository, and there is no queue for it to '
+      'go to instead', () async {
+    final useCase = SubmitCorrectionUseCase(
+      correctionService: _FakeCorrectionService(
+        exceptionToThrow: const CorrectionServiceException(
+          CorrectionFailureReason.networkUnavailable,
+          'No internet available.',
         ),
-      );
+      ),
+      repositoryController: controller,
+    );
 
-      expect(repository.addedSubmissions, isEmpty);
-    },
-  );
-
-  test(
-    'a non-network service failure propagates immediately too, exactly the '
-    'same as a network failure — both are plain errors now, neither is '
-    'treated specially',
-    () async {
-      final useCase = SubmitCorrectionUseCase(
-        correctionService: _FakeCorrectionService(
-          exceptionToThrow: const CorrectionServiceException(
-            CorrectionFailureReason.apiFailure,
-            'Something went wrong.',
-          ),
+    await expectLater(
+      () => useCase('Ayer yo fue al mercado.', Language.spanish),
+      throwsA(
+        isA<CorrectionServiceException>().having(
+          (error) => error.reason,
+          'reason',
+          CorrectionFailureReason.networkUnavailable,
         ),
-        repositoryController: controller,
-      );
+      ),
+    );
 
-      await expectLater(
-        () => useCase('Ayer yo fue al mercado.', Language.spanish),
-        throwsA(
-          isA<CorrectionServiceException>().having(
-            (error) => error.reason,
-            'reason',
-            CorrectionFailureReason.apiFailure,
-          ),
+    expect(repository.addedSubmissions, isEmpty);
+  });
+
+  test('a non-network service failure propagates immediately too, exactly the '
+      'same as a network failure — both are plain errors now, neither is '
+      'treated specially', () async {
+    final useCase = SubmitCorrectionUseCase(
+      correctionService: _FakeCorrectionService(
+        exceptionToThrow: const CorrectionServiceException(
+          CorrectionFailureReason.apiFailure,
+          'Something went wrong.',
         ),
-      );
+      ),
+      repositoryController: controller,
+    );
 
-      expect(repository.addedSubmissions, isEmpty);
-    },
-  );
+    await expectLater(
+      () => useCase('Ayer yo fue al mercado.', Language.spanish),
+      throwsA(
+        isA<CorrectionServiceException>().having(
+          (error) => error.reason,
+          'reason',
+          CorrectionFailureReason.apiFailure,
+        ),
+      ),
+    );
+
+    expect(repository.addedSubmissions, isEmpty);
+  });
+
+  test('submit returns the History entry it added, with its id', () async {
+    const response = CorrectionResponse(
+      originalText: 'Estoy bien.',
+      correctedText: 'Estoy bien.',
+      corrections: [],
+    );
+    final useCase = SubmitCorrectionUseCase(
+      correctionService: _FakeCorrectionService(responseToReturn: response),
+      repositoryController: controller,
+    );
+
+    final submission = await useCase.submit('Estoy bien.', Language.spanish);
+
+    expect(submission.response, response);
+    expect(submission.id, startsWith('submission-'));
+    expect(repository.addedSubmissions.single.id, submission.id);
+  });
 }
 
 class _FakeCorrectionService implements CorrectionService {
@@ -146,11 +155,8 @@ class _FakeCorrectionService implements CorrectionService {
   Future<SavedExplanation> generateStructuredExplanation(
     CorrectionItem correction,
     Language language,
-  ) async => const SavedExplanation(
-    whyItsWrong: '',
-    inContext: '',
-    alternatives: [],
-  );
+  ) async =>
+      const SavedExplanation(whyItsWrong: '', inContext: '', alternatives: []);
 
   @override
   Future<PromptPhraseTranslation> generatePromptPhrase({

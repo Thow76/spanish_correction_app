@@ -7,6 +7,7 @@ import 'package:spanish_correction_app/features/introduction/content/recommendat
 import 'package:spanish_correction_app/features/introduction/content/introduction_step_kind.dart';
 import 'package:spanish_correction_app/features/profile/domain/introduction_progress.dart';
 
+import '../fake_introduction_feedback.dart';
 import '../fake_profile_repository.dart';
 
 void main() {
@@ -102,7 +103,7 @@ void main() {
 
     test('then the question about the first chip, spoken', () async {
       final controller = await atTryIt();
-      await controller.answerOpener();
+      await controller.answerOpener('Estoy bien.');
 
       expect(controller.stage, IntroductionStage.interestQuestion);
       final step = controller.currentStep;
@@ -121,8 +122,8 @@ void main() {
 
     test('then the recommendation card for the second chip', () async {
       final controller = await atTryIt();
-      await controller.answerOpener();
-      await controller.answerInterestQuestion();
+      await controller.answerOpener('Estoy bien.');
+      await controller.answerInterestQuestion('Me gusta el jazz.');
 
       expect(controller.stage, IntroductionStage.recommendation);
       expect(
@@ -135,8 +136,8 @@ void main() {
 
     test('Open now is saved before the link opens, then the end', () async {
       final controller = await atTryIt();
-      await controller.answerOpener();
-      await controller.answerInterestQuestion();
+      await controller.answerOpener('Estoy bien.');
+      await controller.answerInterestQuestion('Me gusta el jazz.');
       final item = await controller.openRecommendation();
 
       expect(item?.interestId, 'travel');
@@ -150,8 +151,8 @@ void main() {
 
     test('Skip also leads to the end screen', () async {
       final controller = await atTryIt();
-      await controller.answerOpener();
-      await controller.answerInterestQuestion();
+      await controller.answerOpener('Estoy bien.');
+      await controller.answerInterestQuestion('Me gusta el jazz.');
       await controller.skipRecommendation();
 
       expect(
@@ -188,8 +189,8 @@ void main() {
         await controller.finishDemo();
         expect(controller.stage, IntroductionStage.friendlyOpener);
 
-        await controller.answerOpener();
-        await controller.answerInterestQuestion();
+        await controller.answerOpener('Estoy bien.');
+        await controller.answerInterestQuestion('Me gusta el jazz.');
         await controller.skipRecommendation();
         expect(controller.stage, IntroductionStage.endScreen);
         expect(controller.endScreenLine, IntroductionContent.endScreenLine);
@@ -212,7 +213,7 @@ void main() {
       controller.toggleInterest('music');
       await controller.confirmInterests();
       await controller.choose(IntroductionChoice.tryIt);
-      await controller.answerOpener();
+      await controller.answerOpener('Estoy bien.');
 
       expect(await controller.stopForNow(), StopDestination.endScreen);
       expect(controller.stage, IntroductionStage.endScreen);
@@ -237,7 +238,7 @@ void main() {
         ..toggleInterest('books');
       await first.confirmInterests();
       await first.choose(IntroductionChoice.tryIt);
-      await first.answerOpener();
+      await first.answerOpener('Estoy bien.');
       final questionId = first.currentInterestQuestion?.id;
       await first.stopForNow();
 
@@ -252,8 +253,8 @@ void main() {
       first.toggleInterest('music');
       await first.confirmInterests();
       await first.choose(IntroductionChoice.tryIt);
-      await first.answerOpener();
-      await first.answerInterestQuestion();
+      await first.answerOpener('Estoy bien.');
+      await first.answerInterestQuestion('Me gusta el jazz.');
       await first.openRecommendation();
 
       final second = await loaded();
@@ -262,14 +263,14 @@ void main() {
   });
 
   group('finishing', () {
-    test('Continue on the end screen marks it complete', () async {
+    test('Not now on the end screen marks it complete', () async {
       final controller = await loaded();
       controller.toggleInterest('music');
       await controller.confirmInterests();
       await controller.choose(IntroductionChoice.showMe);
       await controller.finishDemo();
-      await controller.answerOpener();
-      await controller.answerInterestQuestion();
+      await controller.answerOpener('Estoy bien.');
+      await controller.answerInterestQuestion('Me gusta el jazz.');
       await controller.skipRecommendation();
       await controller.finish();
 
@@ -279,6 +280,102 @@ void main() {
         DateTime.utc(2026, 11, 16, 9),
       );
       expect(controller.stage, IntroductionStage.complete);
+    });
+  });
+
+  group('feedback on the two answers (task 1.4)', () {
+    late FakeIntroductionFeedback feedback;
+
+    setUp(() => feedback = FakeIntroductionFeedback());
+
+    IntroductionController withFeedback() => IntroductionController(
+      repository: repository,
+      language: Language.spanish,
+      feedback: feedback,
+      clock: () => DateTime.utc(2026, 11, 16, 9),
+    );
+
+    Future<IntroductionController> atEndScreen(
+      IntroductionController controller,
+    ) async {
+      await controller.load();
+      controller
+        ..toggleInterest('music')
+        ..toggleInterest('travel');
+      await controller.confirmInterests();
+      await controller.choose(IntroductionChoice.tryIt);
+      await controller.answerOpener('Estoy bien, gracias.');
+      await controller.answerInterestQuestion('Me gusta mucho el jazz.');
+      await controller.skipRecommendation();
+      return controller;
+    }
+
+    test('both answers are sent and their History ids recorded', () async {
+      final controller = await atEndScreen(withFeedback());
+      final suggestions = await controller.suggestionsToShow();
+
+      expect(feedback.sent, [
+        'Estoy bien, gracias.',
+        'Me gusta mucho el jazz.',
+      ]);
+      expect(suggestions.map((s) => s.response.originalText), [
+        'Estoy bien, gracias.',
+        'Me gusta mucho el jazz.',
+      ]);
+      final saved = repository.saved!.introduction;
+      expect(saved.opener?.submissionId, suggestions[0].id);
+      expect(saved.interestQuestion?.submissionId, suggestions[1].id);
+    });
+
+    test('a failed send is tried once more from See suggestions', () async {
+      feedback.failuresLeft = 1;
+      final controller = await atEndScreen(withFeedback());
+      final suggestions = await controller.suggestionsToShow();
+
+      expect(feedback.sent, [
+        'Estoy bien, gracias.',
+        'Me gusta mucho el jazz.',
+        'Estoy bien, gracias.',
+      ]);
+      expect(suggestions, hasLength(2));
+      expect(suggestions.first.response.originalText, 'Estoy bien, gracias.');
+    });
+
+    test('when nothing could be sent, there is nothing to show', () async {
+      feedback.failuresLeft = 10;
+      final controller = await atEndScreen(withFeedback());
+
+      expect(await controller.suggestionsToShow(), isEmpty);
+    });
+
+    test('after a relaunch, the answers are found in History by id', () async {
+      final first = await atEndScreen(withFeedback());
+      await first.suggestionsToShow();
+
+      final second = withFeedback();
+      await second.load();
+      expect(second.stage, IntroductionStage.endScreen);
+      final suggestions = await second.suggestionsToShow();
+      expect(suggestions, hasLength(2));
+      expect(feedback.sent, hasLength(2));
+    });
+
+    test('Save on a point goes through the save path', () async {
+      final controller = await atEndScreen(withFeedback());
+      final suggestions = await controller.suggestionsToShow();
+      final point = suggestions.first.response.corrections.single;
+
+      await controller.savePoint(point, suggestions.first);
+
+      expect(feedback.saved.single.$1, point);
+      expect(feedback.saved.single.$2.id, suggestions.first.id);
+    });
+
+    test('with no feedback connected, nothing is sent', () async {
+      final controller = await atEndScreen(newController());
+
+      expect(await controller.suggestionsToShow(), isEmpty);
+      expect(feedback.sent, isEmpty);
     });
   });
 }

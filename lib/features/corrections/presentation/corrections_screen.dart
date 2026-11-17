@@ -6,6 +6,7 @@ import '../../../shared/design/app_colors.dart';
 import '../../../shared/design/app_spacing.dart';
 import '../../../shared/text/correction_highlight_spans.dart';
 import '../../../shared/widgets/app_header.dart';
+import '../../../shared/widgets/primary_action_button.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_note.dart';
 import '../domain/correction_response.dart';
@@ -14,11 +15,23 @@ class CorrectionsScreen extends StatelessWidget {
   const CorrectionsScreen({
     required this.response,
     required this.onSaveCorrection,
+    this.title = 'Corrections',
+    this.nextLabel,
+    this.onNext,
     super.key,
   });
 
   final CorrectionResponse response;
   final ValueChanged<CorrectionItem> onSaveCorrection;
+
+  /// The heading at the top of the screen.
+  final String title;
+
+  /// A button at the bottom that moves on, for walking through several
+  /// answers one after another (the introduction's suggestions, task 1.4).
+  /// Shown only when both [nextLabel] and [onNext] are given.
+  final String? nextLabel;
+  final VoidCallback? onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +44,7 @@ class CorrectionsScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 48, 16, 24),
               children: [
                 AppHeader(
-                  title: 'Corrections',
+                  title: title,
                   leading: IconButton(
                     onPressed: () => Navigator.of(context).maybePop(),
                     icon: const Icon(
@@ -86,6 +99,10 @@ class CorrectionsScreen extends StatelessWidget {
                   icon: const Icon(Icons.copy_outlined),
                   label: const Text('Copy corrected text'),
                 ),
+                if (nextLabel != null && onNext != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  PrimaryActionButton(label: nextLabel!, onPressed: onNext),
+                ],
               ],
             ),
           ),

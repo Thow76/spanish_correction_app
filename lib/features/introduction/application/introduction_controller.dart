@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/enums/language.dart';
+import '../../corrections/domain/correction_item.dart';
+import '../../history/domain/correction_submission.dart';
 import '../../profile/application/profile_repository.dart';
 import '../../profile/domain/introduction_progress.dart';
 import '../../profile/domain/learner_profile.dart';
@@ -11,6 +13,7 @@ import '../content/introduction_content.dart';
 import '../content/introduction_step_kind.dart';
 import '../content/recommendation_item.dart';
 import '../content/show_me_demo.dart';
+import 'introduction_feedback.dart';
 import 'introduction_step.dart';
 
 /// Where "Stop for now" takes the learner (task 1.3).
@@ -23,6 +26,9 @@ enum StopDestination {
   app,
 }
 
+/// The two steps the learner answers, whose answers are sent for feedback.
+enum _AnsweredStep { opener, interestQuestion }
+
 /// Runs the introduction (decisions A1, A2 and A3; build plan task 1.3).
 ///
 /// It reads the learner's profile, works out which step to show from the
@@ -32,19 +38,34 @@ enum StopDestination {
 /// chips each step uses are recorded on the profile when the step is first
 /// shown, so a resumed introduction asks the same questions.
 ///
-/// Nothing here calls the AI. Sending the two answers for feedback is task
-/// 1.4.
+/// The two answers are sent for feedback in the background through
+/// [IntroductionFeedback] as soon as they are given, so they land in History
+/// whatever the learner does next (task 1.4). With no [IntroductionFeedback]
+/// nothing is sent.
 class IntroductionController extends ChangeNotifier {
   IntroductionController({
     required ProfileRepository repository,
     required this.language,
+    IntroductionFeedback? feedback,
     DateTime Function()? clock,
   }) : _repository = repository,
+       _feedback = feedback,
        _clock = clock ?? DateTime.now;
 
   final ProfileRepository _repository;
+  final IntroductionFeedback? _feedback;
   final Language language;
   final DateTime Function() _clock;
+
+  /// Answers being sent for feedback now.
+  final Map<_AnsweredStep, Future<void>> _sending = {};
+
+  /// Answers whose send failed, kept so "See suggestions" can try once more.
+  /// Kept in memory only: after a relaunch an unsent answer is not sent.
+  final Map<_AnsweredStep, String> _unsent = {};
+
+  /// History entries received this session, by id.
+  final Map<String, CorrectionSubmission> _received = {};
 
   LearnerProfile _profile = LearnerProfile.empty();
   List<String> _selectedInterestIds = const [];
@@ -266,17 +287,19 @@ class IntroductionController extends ChangeNotifier {
     await _advance();
   }
 
-  /// Records that the friendly opener has been answered. Sending the answer
-  /// for feedback is task 1.4.
-  Future<void> answerOpener() async {
+  /// Records that the friendly opener has been answered with [answer], and
+  /// sends the answer for feedback in the background (task 1.4).
+  Future<void> answerOpener(String answer) async {
     _update(progress.withOpenerAnswered());
+    _startSending(_AnsweredStep.opener, answer);
     await _advance();
   }
 
-  /// Records that the interest question has been answered. Sending the
-  /// answer for feedback is task 1.4.
-  Future<void> answerInterestQuestion() async {
+  /// Records that the interest question has been answered with [answer], and
+  /// sends the answer for feedback in the background (task 1.4).
+  Future<void> answerInterestQuestion(String answer) async {
     _update(progress.withInterestQuestionAnswered());
+    _startSending(_AnsweredStep.interestQuestion, answer);
     await _advance();
   }
 
@@ -321,6 +344,45 @@ class IntroductionController extends ChangeNotifier {
     return StopDestination.app;
   }
 
+  /// The History entries for "See suggestions" on the end screen, opener
+  /// first (task 1.4). It waits for any answer still being sent, and tries
+  /// once more any answer whose send failed this session. An answer that
+  /// could not be sent, or whose History card is gone, is left out, so the
+  /// list can be empty.
+  Future<List<CorrectionSubmission>> suggestionsToShow() async {
+    final feedback = _feedback;
+    if (feedback == null) {
+      return const [];
+    }
+    await Future.wait(_sending.values);
+    for (final MapEntry(key: step, value: answer) in Map.of(_unsent).entries) {
+      _startSending(step, answer);
+    }
+    await Future.wait(_sending.values);
+
+    final submissions = <CorrectionSubmission>[];
+    for (final answer in progress.answers) {
+      final id = answer.submissionId;
+      if (id == null) {
+        continue;
+      }
+      final submission = _received[id] ?? await feedback.find(id, language);
+      if (submission != null) {
+        submissions.add(submission);
+      }
+    }
+    return submissions;
+  }
+
+  /// Saves one point from the suggestions into Saved, through the existing
+  /// save path. Moving on without saving is ignoring it (decisions C5, A4).
+  Future<void> savePoint(
+    CorrectionItem point,
+    CorrectionSubmission from,
+  ) async {
+    await _feedback?.save(point, from);
+  }
+
   /// Finishes the introduction from the end screen. It will not show again
   /// on this install, including after a language switch.
   Future<void> finish() async {
@@ -332,6 +394,40 @@ class IntroductionController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
+
+  void _startSending(_AnsweredStep step, String answer) {
+    final feedback = _feedback;
+    if (feedback == null || answer.trim().isEmpty) {
+      return;
+    }
+    _unsent.remove(step);
+    _sending[step] = _send(feedback, step, answer);
+  }
+
+  /// Sends one answer and records its History entry id on the profile. A
+  /// failure is kept for one more try from "See suggestions".
+  Future<void> _send(
+    IntroductionFeedback feedback,
+    _AnsweredStep step,
+    String answer,
+  ) async {
+    try {
+      final submission = await feedback.send(answer, language);
+      _received[submission.id] = submission;
+      _update(switch (step) {
+        _AnsweredStep.opener => progress.withOpenerAnswered(
+          submissionId: submission.id,
+        ),
+        _AnsweredStep.interestQuestion => progress.withInterestQuestionAnswered(
+          submissionId: submission.id,
+        ),
+      });
+      await _save();
+    } catch (error) {
+      debugPrint('The introduction could not send an answer: $error');
+      _unsent[step] = answer;
+    }
+  }
 
   void _update(IntroductionProgress next) {
     _profile = _profile.withIntroduction(next);
