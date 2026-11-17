@@ -19,21 +19,27 @@ class SubmitCorrectionUseCase {
   /// queueing, no background retry. The caller is expected to show an
   /// immediate error and let the user retry manually.
   Future<CorrectionResponse> call(String text, Language language) async {
+    final submission = await submit(text, language);
+    return submission.response;
+  }
+
+  /// The same as [call], but returns the whole History entry, so the caller
+  /// knows its id (the introduction records it, task 1.4).
+  Future<CorrectionSubmission> submit(String text, Language language) async {
     final trimmedText = text.trim();
 
     final response = await _correctionService.correctText(
       trimmedText,
       language,
     );
-    await _repositoryController.addSubmission(
-      CorrectionSubmission(
-        id: _createId('submission'),
-        response: response,
-        createdAt: DateTime.now(),
-        language: language,
-      ),
+    final submission = CorrectionSubmission(
+      id: _createId('submission'),
+      response: response,
+      createdAt: DateTime.now(),
+      language: language,
     );
-    return response;
+    await _repositoryController.addSubmission(submission);
+    return submission;
   }
 
   String _createId(String prefix) {

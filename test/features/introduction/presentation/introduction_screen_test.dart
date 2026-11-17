@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
+import 'package:spanish_correction_app/features/introduction/application/introduction_feedback.dart';
 import 'package:spanish_correction_app/features/introduction/application/link_opener.dart';
 import 'package:spanish_correction_app/features/introduction/application/voice_recorder.dart';
 import 'package:spanish_correction_app/features/introduction/content/introduction_content.dart';
@@ -9,6 +10,7 @@ import 'package:spanish_correction_app/features/introduction/presentation/introd
 import 'package:spanish_correction_app/features/profile/domain/introduction_progress.dart';
 import 'package:spanish_correction_app/features/write/application/transcription_service.dart';
 
+import '../fake_introduction_feedback.dart';
 import '../fake_profile_repository.dart';
 
 class _FakeRecorder implements VoiceRecorder {
@@ -46,7 +48,10 @@ void main() {
   late _FakeLinkOpener linkOpener;
   bool? doneWith;
 
-  Future<void> pumpIntroduction(WidgetTester tester) async {
+  Future<void> pumpIntroduction(
+    WidgetTester tester, {
+    IntroductionFeedback? feedback,
+  }) async {
     await tester.binding.setSurfaceSize(const Size(420, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
@@ -58,6 +63,7 @@ void main() {
           recorderFactory: _FakeRecorder.new,
           linkOpener: linkOpener,
           onDone: (completed) => doneWith = completed,
+          feedback: feedback,
         ),
       ),
     );
@@ -136,7 +142,7 @@ void main() {
     // The end screen, with no Stop for now.
     expect(find.text(IntroductionContent.endScreenLine), findsOneWidget);
     expect(find.text('Stop for now'), findsNothing);
-    await tapAndSettle(tester, find.text('Continue'));
+    await tapAndSettle(tester, find.text('Not now'));
 
     expect(doneWith, isTrue);
     expect(repository.stored.introduction.isComplete, isTrue);
@@ -294,5 +300,120 @@ void main() {
 
     expect(doneWith, isNull);
     expect(find.text(IntroductionContent.endScreenLine), findsOneWidget);
+  });
+
+  group('the end screen (task 1.4)', () {
+    late FakeIntroductionFeedback feedback;
+
+    setUp(() => feedback = FakeIntroductionFeedback());
+
+    /// Picks one chip, answers both questions and skips the card.
+    Future<void> answerBoth(WidgetTester tester) async {
+      await pumpIntroduction(tester, feedback: feedback);
+      await tapAndSettle(tester, find.text(spanishLabel('music')));
+      await tapAndSettle(tester, find.text('Continue'));
+      await tapAndSettle(tester, find.text('Start now'));
+      await tester.enterText(find.byType(TextField), 'Estoy bien, gracias.');
+      await tester.pump();
+      await tapAndSettle(tester, find.text('Send'));
+      await tester.ensureVisible(find.byIcon(Icons.mic_none));
+      await tester.tap(find.byIcon(Icons.mic_none));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tapAndSettle(tester, find.byIcon(Icons.stop));
+      await tapAndSettle(tester, find.text('Send'));
+      await tapAndSettle(tester, find.text('Skip'));
+    }
+
+    void tapFirstHighlight(WidgetTester tester) {
+      var tapped = false;
+      for (final rich in tester.widgetList<RichText>(find.byType(RichText))) {
+        rich.text.visitChildren((span) {
+          if (!tapped &&
+              span is TextSpan &&
+              span.recognizer is TapGestureRecognizer) {
+            (span.recognizer! as TapGestureRecognizer).onTap!();
+            tapped = true;
+          }
+          return !tapped;
+        });
+        if (tapped) {
+          break;
+        }
+      }
+      expect(tapped, isTrue);
+    }
+
+    testWidgets('both answers are sent as soon as they are given', (
+      tester,
+    ) async {
+      await answerBoth(tester);
+
+      expect(feedback.sent, [
+        'Estoy bien, gracias.',
+        'Me gusta mucho el jazz.',
+      ]);
+      expect(find.text('See suggestions'), findsOneWidget);
+      expect(find.text('Not now'), findsOneWidget);
+      expect(find.text('Stop for now'), findsNothing);
+    });
+
+    testWidgets(
+      'See suggestions walks through each answer, with Save on each point',
+      (tester) async {
+        await answerBoth(tester);
+        await tapAndSettle(tester, find.text('See suggestions'));
+
+        // The opener's answer first.
+        expect(find.text('Corrections 1 of 2'), findsOneWidget);
+        expect(find.text('Estoy bien, gracias.'), findsWidgets);
+        tapFirstHighlight(tester);
+        await tester.pumpAndSettle();
+        await tapAndSettle(tester, find.text('Save for Later'));
+        expect(feedback.saved, hasLength(1));
+        expect(
+          feedback.saved.single.$2.response.originalText,
+          'Estoy bien, gracias.',
+        );
+        await tapAndSettle(tester, find.text('Next answer'));
+
+        // Then the interest answer; moving on without saving ignores it.
+        expect(find.text('Corrections 2 of 2'), findsOneWidget);
+        expect(find.text('Me gusta mucho el jazz.'), findsWidgets);
+        await tapAndSettle(tester, find.text('Done'));
+
+        expect(feedback.saved, hasLength(1));
+        expect(doneWith, isTrue);
+        expect(repository.stored.introduction.isComplete, isTrue);
+      },
+    );
+
+    testWidgets('Not now finishes and leaves the answers in History', (
+      tester,
+    ) async {
+      await answerBoth(tester);
+      await tapAndSettle(tester, find.text('Not now'));
+
+      expect(find.textContaining('Corrections'), findsNothing);
+      expect(doneWith, isTrue);
+      expect(feedback.history, hasLength(2));
+      expect(repository.stored.introduction.isComplete, isTrue);
+    });
+
+    testWidgets('when nothing could be fetched, it says so and stays put', (
+      tester,
+    ) async {
+      feedback.failuresLeft = 10;
+      await answerBoth(tester);
+      await tapAndSettle(tester, find.text('See suggestions'));
+
+      expect(
+        find.textContaining('could not be fetched just now'),
+        findsOneWidget,
+      );
+      expect(find.text('Not now'), findsOneWidget);
+      expect(doneWith, isNull);
+      expect(repository.stored.introduction.isComplete, isFalse);
+    });
   });
 }
