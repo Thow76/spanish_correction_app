@@ -14,6 +14,7 @@ import '../features/introduction/data/record_voice_recorder.dart';
 import '../features/introduction/data/url_launcher_link_opener.dart';
 import '../features/introduction/presentation/introduction_screen.dart';
 import '../features/language_selection/language_selection_screen.dart';
+import '../features/navigation/application/new_items_marker.dart';
 import '../features/navigation/presentation/app_shell.dart';
 import '../features/profile/application/profile_repository.dart';
 import '../features/profile/data/file_profile_repository.dart';
@@ -43,6 +44,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
   late final TranscriptionService _transcriptionService;
   late final WalkthroughService _walkthroughService;
   late final ProfileRepository _profileRepository;
+  late final NewItemsMarker _newItemsMarker;
   Language? _selectedLanguage;
   bool _isInitialising = true;
 
@@ -74,11 +76,17 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
       FileCorrectionRepository(),
     );
     _profileRepository = FileProfileRepository();
+    _newItemsMarker = NewItemsMarker(
+      repositoryController: _repositoryController,
+    );
 
     _init();
   }
 
   Future<void> _init() async {
+    // Before the introduction can send anything, so its two answers count
+    // as new and bring the dot on History (task 1.4b).
+    await _newItemsMarker.load();
     final profile = await _profileRepository.getProfile();
     _introductionComplete = profile.introduction.isComplete;
     final prefs = await SharedPreferences.getInstance();
@@ -165,6 +173,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
         repositoryController: _repositoryController,
         transcriptionService: _transcriptionService,
         walkthroughService: _walkthroughService,
+        newItemsMarker: _newItemsMarker,
         language: selectedLanguage,
         onChangeLanguage: () => setState(() => _selectedLanguage = null),
       ),

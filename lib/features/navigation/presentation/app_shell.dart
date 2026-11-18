@@ -13,6 +13,7 @@ import '../../saved/application/save_correction_use_case.dart';
 import '../../saved/presentation/saved_screen.dart';
 import '../../write/application/transcription_service.dart';
 import '../../write/presentation/write_screen.dart';
+import '../application/new_items_marker.dart';
 
 const _keySkipLanguageSelection = 'skip_language_selection';
 
@@ -22,6 +23,7 @@ class AppShell extends StatefulWidget {
     required this.repositoryController,
     required this.transcriptionService,
     required this.walkthroughService,
+    required this.newItemsMarker,
     required this.language,
     required this.onChangeLanguage,
     super.key,
@@ -31,6 +33,10 @@ class AppShell extends StatefulWidget {
   final CorrectionRepositoryController repositoryController;
   final TranscriptionService transcriptionService;
   final WalkthroughService walkthroughService;
+
+  /// Decides when History and Saved show the dot for something new
+  /// (task 1.4b).
+  final NewItemsMarker newItemsMarker;
   final Language language;
   final VoidCallback onChangeLanguage;
 
@@ -46,6 +52,43 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _loadSettings();
+    widget.newItemsMarker.addListener(_onMarkerChanged);
+    // Load History and Saved for this language, so the dot is right as soon
+    // as the app opens, before either tab has been visited.
+    widget.repositoryController.setActiveLanguage(widget.language);
+    widget.newItemsMarker.setOpenTab(
+      _markedTabAt(_selectedIndex),
+      widget.language,
+    );
+  }
+
+  @override
+  void dispose() {
+    widget.newItemsMarker.removeListener(_onMarkerChanged);
+    super.dispose();
+  }
+
+  void _onMarkerChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// The bottom bar's History tab is second and Saved third.
+  static MarkedTab? _markedTabAt(int index) => switch (index) {
+    1 => MarkedTab.history,
+    2 => MarkedTab.saved,
+    _ => null,
+  };
+
+  /// The tab's icon, with a small dot while it holds something new.
+  Widget _iconWithDot(IconData icon, MarkedTab tab) {
+    final hasNew = widget.newItemsMarker.hasNew(tab, widget.language);
+    return Badge(
+      key: ValueKey('new-items-dot-${tab.name}'),
+      isLabelVisible: hasNew,
+      smallSize: 8,
+      backgroundColor: AppColors.coral,
+      child: Icon(icon),
+    );
   }
 
   Future<void> _loadSettings() async {
@@ -139,24 +182,28 @@ class _AppShellState extends State<AppShell> {
           selectedIndex: _selectedIndex,
           onDestinationSelected: (index) {
             setState(() => _selectedIndex = index);
+            widget.newItemsMarker.setOpenTab(
+              _markedTabAt(index),
+              widget.language,
+            );
           },
-          destinations: const [
-            NavigationDestination(
+          destinations: [
+            const NavigationDestination(
               icon: Icon(Icons.edit_outlined),
               selectedIcon: Icon(Icons.edit),
               label: 'Write',
             ),
             NavigationDestination(
-              icon: Icon(Icons.history_outlined),
-              selectedIcon: Icon(Icons.history),
+              icon: _iconWithDot(Icons.history_outlined, MarkedTab.history),
+              selectedIcon: _iconWithDot(Icons.history, MarkedTab.history),
               label: 'History',
             ),
             NavigationDestination(
-              icon: Icon(Icons.bookmark_border),
-              selectedIcon: Icon(Icons.bookmark),
+              icon: _iconWithDot(Icons.bookmark_border, MarkedTab.saved),
+              selectedIcon: _iconWithDot(Icons.bookmark, MarkedTab.saved),
               label: 'Saved',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.school_outlined),
               selectedIcon: Icon(Icons.school),
               label: 'Learn',
@@ -225,5 +272,4 @@ class _AppShellState extends State<AppShell> {
       },
     );
   }
-
 }
