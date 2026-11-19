@@ -9,6 +9,7 @@ import 'package:spanish_correction_app/features/navigation/application/new_items
 import 'package:spanish_correction_app/features/navigation/presentation/app_shell.dart';
 import 'package:spanish_correction_app/features/write/application/transcription_service.dart';
 
+import '../introduction/fake_profile_repository.dart';
 import 'in_memory_correction_repository.dart';
 
 /// Nothing in these tests checks a text or transcribes speech.
@@ -44,6 +45,7 @@ void main() {
           transcriptionService: _UnusedTranscriptionService(),
           walkthroughService: WalkthroughService(apiKey: '', model: 'test'),
           newItemsMarker: marker,
+          profileRepository: FakeProfileRepository(),
           language: Language.spanish,
           onChangeLanguage: () {},
         ),

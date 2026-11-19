@@ -174,6 +174,7 @@ class _SpanishCorrectionAppState extends State<SpanishCorrectionApp> {
         transcriptionService: _transcriptionService,
         walkthroughService: _walkthroughService,
         newItemsMarker: _newItemsMarker,
+        profileRepository: _profileRepository,
         language: selectedLanguage,
         onChangeLanguage: () => setState(() => _selectedLanguage = null),
       ),
