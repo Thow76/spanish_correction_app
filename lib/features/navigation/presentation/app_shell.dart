@@ -9,6 +9,8 @@ import '../../corrections/application/correction_service.dart';
 import '../../corrections/application/submit_correction_use_case.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../learn/presentation/learn_screen.dart';
+import '../../profile/application/profile_repository.dart';
+import '../../profile/presentation/profile_screen.dart';
 import '../../saved/application/save_correction_use_case.dart';
 import '../../saved/presentation/saved_screen.dart';
 import '../../write/application/transcription_service.dart';
@@ -24,6 +26,7 @@ class AppShell extends StatefulWidget {
     required this.transcriptionService,
     required this.walkthroughService,
     required this.newItemsMarker,
+    required this.profileRepository,
     required this.language,
     required this.onChangeLanguage,
     super.key,
@@ -37,6 +40,10 @@ class AppShell extends StatefulWidget {
   /// Decides when History and Saved show the dot for something new
   /// (task 1.4b).
   final NewItemsMarker newItemsMarker;
+
+  /// Where the learner's interests are kept, for the profile screen
+  /// (task 1.5).
+  final ProfileRepository profileRepository;
   final Language language;
   final VoidCallback onChangeLanguage;
 
@@ -149,6 +156,15 @@ class _AppShellState extends State<AppShell> {
         scrolledUnderElevation: 0,
         actions: [
           IconButton(
+            key: const ValueKey('open-profile'),
+            tooltip: 'Your profile',
+            icon: const Icon(
+              Icons.person_outline,
+              color: AppColors.textSecondary,
+            ),
+            onPressed: _openProfile,
+          ),
+          IconButton(
             icon: const Icon(
               Icons.settings_outlined,
               color: AppColors.textSecondary,
@@ -210,6 +226,15 @@ class _AppShellState extends State<AppShell> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ProfileScreen(profileRepository: widget.profileRepository),
       ),
     );
   }
