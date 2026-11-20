@@ -534,3 +534,159 @@ const Map<String, Object?> firstPassCorrectionResponseFormat = {
     },
   },
 };
+
+// ── Two-step check (decision P4, build step 2.1) ────────────────────────────
+//
+// The app's Spanish check: step 1 on GPT-6 Luna reports Issues (Spelling,
+// Grammar, Word meaning); step 2 on GPT-6 Sol reports Suggestions (Natural
+// phrasing). Wording moved here unchanged from the E.3 test program
+// (`test/two_step_suggestions_prompt_harness.dart`), which now uses these
+// same constants, so the measured prompts and the app's prompts cannot drift
+// apart. Used by `features/corrections/data/suggestion_client.dart`.
+//
+// The models return only the list of items; the app's code finds each
+// item's words in the text and builds the suggested version from them. The
+// whole rewritten text that E.3 also asked for (so its scores matched the
+// E.2 baseline's) was dropped on 20 Nov 2026 at Andrew's request: the app
+// never used it, and it cost output tokens on every check.
+
+/// Categories step 1 may return (Issues).
+const List<String> twoStepIssueCategories = [
+  'Spelling',
+  'Grammar',
+  'Word meaning',
+];
+
+/// The only category step 2 may return (Suggestions).
+const List<String> twoStepSuggestionCategories = ['Natural phrasing'];
+
+const String twoStepItemShape =
+    'Return a JSON object with one field, "items": a list. Each item has '
+    'exactly four fields:\n'
+    '- "written": the words exactly as the learner wrote them, copied '
+    'character for character from the text. Keep it as short as it can be '
+    'while still being unique in the text. Where you remove words, include '
+    'enough neighbouring words that the change is clear.\n'
+    '- "suggestion": what to put in their place. Give exactly one '
+    'suggestion, never a list of alternatives and never "or". Use an empty '
+    'string only when the right suggestion is to delete the words.\n'
+    '- "category": one of the allowed categories named above.\n'
+    '- "reason": one short plain-English sentence for a learner of '
+    'Spanish.\n';
+
+const String twoStepReasonRules =
+    'Rules for the reason line:\n'
+    '- Never use the words "wrong", "error" or "incorrect" (or "mistake").\n'
+    '- Be neutral and kind. Say what the suggested form does, for example '
+    '"Spanish needs the accent mark here" or "In Spanish this verb goes '
+    'with a different noun".\n'
+    '- If the learner\'s form is common in speech but avoided in careful '
+    'writing, say so, for example "Common in speech; careful writing '
+    'usually avoids it".\n';
+
+/// Step 1 (GPT-6 Luna): Issues only.
+const String twoStepIssuesPromptSpanish =
+    'You are a Spanish tutor checking a learner\'s writing for issues. '
+    'The text may be typed or transcribed.\n'
+    '\n'
+    'Report only these categories:\n'
+    '- Spelling: misspelled words, missing or wrong accent marks, missing '
+    'ñ, missing opening question or exclamation marks, capitalisation and '
+    'punctuation that Spanish writing requires.\n'
+    '- Grammar: agreement of gender, number and person, verb forms and '
+    'tenses, mood (including the subjunctive), articles, required '
+    'prepositions, the personal "a", required pronouns such as "le" or '
+    '"se", ser/estar/haber, and missing words that Spanish grammar needs.\n'
+    '- Word meaning: a real Spanish word used with the wrong meaning, such '
+    'as a false friend, or a word or verb that does not combine with its '
+    'noun the way Spanish does.\n'
+    '\n'
+    'Do not report anything else. In particular do not suggest more '
+    'natural, more idiomatic or more fluent wording, and do not remove '
+    'words only because they are repeated or unnecessary; another step '
+    'handles those. Never add or remove commas.\n'
+    '\n'
+    'Do not flag regional forms. Forms used in some Spanish-speaking '
+    'regions but not others, including regional pronouns, verb forms, '
+    'vocabulary and tense preferences, are valid and must be left alone.\n'
+    '\n'
+    'Most text needs few changes, and some needs none. If there is '
+    'nothing to report, return an empty list. If a sentence has several '
+    'separate issues, report each one as its own item.\n'
+    '\n'
+    'The allowed categories are: Spelling, Grammar, Word meaning.\n'
+    '\n'
+    '$twoStepItemShape'
+    '\n'
+    '$twoStepReasonRules'
+    '\n'
+    'Return JSON only, with no Markdown and no commentary.';
+
+/// Step 2 (GPT-6 Sol): Natural phrasing only. Includes the
+/// unnecessary-pronoun line.
+const String twoStepSuggestionsPromptSpanish =
+    'You are a Spanish tutor reading a learner\'s writing that has '
+    'already been checked for spelling, grammar and word meaning. Your '
+    'job is to suggest more natural phrasing where a native writer would '
+    'clearly say it differently.\n'
+    '\n'
+    'Report only one category: Natural phrasing. Do not report spelling, '
+    'grammar or word meaning; leave those alone even if you notice them.\n'
+    '\n'
+    'Things to look for:\n'
+    '- Unnecessary subject pronouns, but only when the same pronoun is '
+    'repeated for no reason in a second clause: suggest removing the '
+    'repeated one and keep the first. A sentence with a single subject '
+    'pronoun is fine; leave it. Keep any pronoun that adds contrast, '
+    'emphasis or clarity.\n'
+    '- Repeated words or phrases that add nothing.\n'
+    '- Literal translations from English that are understandable but that '
+    'a Spanish speaker would not say.\n'
+    '\n'
+    'Leave alone anything that Spanish speakers commonly say, even if '
+    'another wording is also possible. Do not flag regional forms: forms '
+    'used in some Spanish-speaking regions but not others are valid. '
+    'Do not change the meaning, add information, or rewrite the whole '
+    'sentence. Make the smallest change that fixes the phrasing.\n'
+    '\n'
+    'Most text needs no suggestions. If there is nothing to report, '
+    'return an empty list.\n'
+    '\n'
+    'The only allowed category is: Natural phrasing.\n'
+    '\n'
+    '$twoStepItemShape'
+    '\n'
+    '$twoStepReasonRules'
+    '\n'
+    'Return JSON only, with no Markdown and no commentary.';
+
+/// Strict JSON schema for one step's reply. [categories] is the closed
+/// list of values that step may use.
+Map<String, Object?> twoStepResponseFormat(List<String> categories) => {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'suggestion_items_response',
+    'strict': true,
+    'schema': {
+      'type': 'object',
+      'additionalProperties': false,
+      'required': ['items'],
+      'properties': {
+        'items': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'additionalProperties': false,
+            'required': ['written', 'suggestion', 'category', 'reason'],
+            'properties': {
+              'written': {'type': 'string'},
+              'suggestion': {'type': 'string'},
+              'category': {'type': 'string', 'enum': categories},
+              'reason': {'type': 'string'},
+            },
+          },
+        },
+      },
+    },
+  },
+};
