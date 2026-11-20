@@ -17,8 +17,7 @@ class _Call {
   final Map<String, Object?>? responseFormat;
 }
 
-String _reply(List<Map<String, String>> items, {String corrected = ''}) =>
-    jsonEncode({'corrected_text': corrected, 'items': items});
+String _reply(List<Map<String, String>> items) => jsonEncode({'items': items});
 
 Map<String, String> _item(
   String written,
@@ -94,6 +93,29 @@ void main() {
         () => parseSuggestionStepReply('{"corrected_text": "x"}'),
         throwsFormatException,
       );
+    });
+  });
+
+  group('the two-step prompts', () {
+    test('ask for the list of items only, not a rewritten text', () {
+      for (final prompt in [
+        twoStepIssuesPromptSpanish,
+        twoStepSuggestionsPromptSpanish,
+      ]) {
+        expect(prompt, contains('one field, "items"'));
+        expect(prompt, isNot(contains('corrected_text')));
+      }
+      for (final categories in [
+        twoStepIssueCategories,
+        twoStepSuggestionCategories,
+      ]) {
+        final schema =
+            (twoStepResponseFormat(categories)['json_schema']!
+                    as Map)['schema']!
+                as Map;
+        expect(schema['required'], ['items']);
+        expect((schema['properties']! as Map).keys, ['items']);
+      }
     });
   });
 

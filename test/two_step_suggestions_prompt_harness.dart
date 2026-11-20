@@ -62,6 +62,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/services/prompts/correction_prompt.dart';
 import 'package:spanish_correction_app/features/corrections/data/openai_chat_completions_client.dart';
+import 'package:spanish_correction_app/features/corrections/data/suggestion_client.dart'
+    show
+        SuggestionStepItem,
+        applySuggestionEdits,
+        placeSuggestionEdits,
+        wholeWordMatches;
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
 
 import 'shared/openai_key.dart';
@@ -325,57 +331,36 @@ class AppliedItems {
   final List<SuggestionItem> notApplied;
 }
 
-final RegExp _wordChar = RegExp(r'[\p{L}\p{N}]', unicode: true);
-
-/// Where [written] occurs in [text] as a whole word (or whole phrase): not
-/// inside a longer word, so "cafe" does not match inside "cafeteria" and
-/// "estudia" does not match inside "estudiar". The boundary check applies
-/// only at an end of [written] that is itself a letter or digit, so a
-/// written span that starts or ends with a space or punctuation (", y")
-/// still matches.
-List<int> wholeWordMatches(String text, String written) {
-  if (written.isEmpty) return const [];
-  final matches = <int>[];
-  var from = 0;
-  while (true) {
-    final i = text.indexOf(written, from);
-    if (i == -1) break;
-    final end = i + written.length;
-    final startOk = !_wordChar.hasMatch(written[0]) ||
-        i == 0 ||
-        !_wordChar.hasMatch(text[i - 1]);
-    final endOk = !_wordChar.hasMatch(written[written.length - 1]) ||
-        end == text.length ||
-        !_wordChar.hasMatch(text[end]);
-    if (startOk && endOk) matches.add(i);
-    from = i + 1;
-  }
-  return matches;
-}
-
-/// Applies [items] to [text] one after another. An item is applied when its
-/// "written" occurs exactly once in the text as a whole word or phrase; an
-/// item that matches nowhere, or as a whole word in more than one place, is
+/// Applies [items] to [text] with the app's own code
+/// (`placeSuggestionEdits` and `applySuggestionEdits` in
+/// `lib/features/corrections/data/suggestion_client.dart`), so the score
+/// is taken from exactly the text the app would show. An item is applied
+/// when its "written" occurs exactly once in [text] as a whole word or
+/// phrase and does not overlap an item already applied; anything else is
 /// left out rather than guessed at.
 AppliedItems applyItems(String text, List<SuggestionItem> items) {
-  var current = text;
+  final stepItems = [
+    for (final item in items)
+      SuggestionStepItem(
+        written: item.written,
+        suggestion: item.suggestion,
+        category: item.category,
+        reason: item.reason,
+      ),
+  ];
+  final placed = placeSuggestionEdits(text, stepItems, allCategories);
+  final placedItems = Set<SuggestionStepItem>.identity()
+    ..addAll(placed.map((edit) => edit.item));
   final applied = <SuggestionItem>[];
   final notApplied = <SuggestionItem>[];
-  for (final item in items) {
-    final matches = wholeWordMatches(current, item.written);
-    if (matches.length != 1) {
-      notApplied.add(item);
-      continue;
-    }
-    final first = matches.single;
-    current = current.replaceRange(
-      first,
-      first + item.written.length,
-      item.suggestion,
-    );
-    applied.add(item);
+  for (var i = 0; i < items.length; i++) {
+    (placedItems.contains(stepItems[i]) ? applied : notApplied).add(items[i]);
   }
-  return AppliedItems(text: current, applied: applied, notApplied: notApplied);
+  return AppliedItems(
+    text: applySuggestionEdits(text, placed),
+    applied: applied,
+    notApplied: notApplied,
+  );
 }
 
 /// Character ranges in [after] that differ from [before], found by a
@@ -472,7 +457,6 @@ class TwoStepResult {
     required this.suggestionsStats,
     required this.score,
     this.error,
-    this.itemsMatchCorrectedText = true,
   });
 
   final TwoPassFixture fixture;
@@ -492,10 +476,6 @@ class TwoStepResult {
   /// The service's failure message when every retry failed and this run is
   /// scored [TwoPassScoreLabel.error]; null otherwise.
   final String? error;
-
-  /// False when applying the items did not reproduce the model's own
-  /// corrected text; the score is from the corrected text either way.
-  final bool itemsMatchCorrectedText;
 
   bool get passed => isPassingScore(score);
 
@@ -586,22 +566,11 @@ _callStep({
   );
 }
 
-/// The text a step hands on: the model's own corrected text when it gave
-/// one (scored like the baseline, which asked for the whole sentence),
-/// otherwise the text with the kept items applied.
-String _textAfter(String? correctedText, AppliedItems applied) {
-  final c = correctedText?.trim();
-  return (c == null || c.isEmpty) ? applied.text : c;
-}
-
-/// Whether applying the items reproduces the model's corrected text, after
-/// trimming. False means the items and the sentence disagree, which the
-/// app would show the learner as a mismatch.
-bool _itemsMatch(String? correctedText, AppliedItems applied) {
-  final c = correctedText?.trim();
-  if (c == null || c.isEmpty) return true;
-  return c == applied.text.trim();
-}
+/// The text a step hands on, and the text that is scored: the text with
+/// the kept items applied, built by the app's code. The prompts no longer
+/// ask for a whole rewritten text (20 Nov 2026); if a reply still carries
+/// one, it is ignored.
+String _textAfter(AppliedItems applied) => applied.text;
 
 /// How many times one call is attempted before the run is given up: the
 /// first try plus [callRetries] more, with a pause of 2, 4 and 8 seconds
@@ -685,7 +654,7 @@ Future<TwoStepResult> runTwoStep({
     allowedCategories: issueCategories,
   );
   final applied1 = applyItems(fixture.text, checked1.kept);
-  final textAfter1 = _textAfter(step1.correctedText, applied1);
+  final textAfter1 = _textAfter(applied1);
 
   final step2 = await _callStep(
     apiKey: apiKey,
@@ -702,7 +671,7 @@ Future<TwoStepResult> runTwoStep({
     allowedCategories: suggestionCategories,
   );
   final applied2 = applyItems(textAfter1, checked2.kept);
-  final finalText = _textAfter(step2.correctedText, applied2);
+  final finalText = _textAfter(applied2);
 
   return TwoStepResult(
     fixture: fixture,
@@ -718,8 +687,6 @@ Future<TwoStepResult> runTwoStep({
     issuesStats: step1.stats,
     suggestionsStats: step2.stats,
     score: scoreFinalText(fixture, finalText),
-    itemsMatchCorrectedText: _itemsMatch(step1.correctedText, applied1) &&
-        _itemsMatch(step2.correctedText, applied2),
   );
 });
 
@@ -750,7 +717,7 @@ Future<TwoStepResult> runOneStep({
     allowedCategories: allCategories,
   );
   final applied = applyItems(fixture.text, checked.kept);
-  final finalText = _textAfter(step.correctedText, applied);
+  final finalText = _textAfter(applied);
   bool isIssue(SuggestionItem i) => issueCategories.contains(i.category);
 
   return TwoStepResult(
@@ -767,7 +734,6 @@ Future<TwoStepResult> runOneStep({
     issuesStats: step.stats,
     suggestionsStats: CallStats.zero,
     score: scoreFinalText(fixture, finalText),
-    itemsMatchCorrectedText: _itemsMatch(step.correctedText, applied),
   );
 });
 
@@ -973,18 +939,16 @@ String buildTwoStepReport({
       'found exactly once): `$notApplied`',
     )
     ..writeln(
-      '- Runs where the items did not add up to the corrected text the '
-      'model gave: `${results.where((r) => !r.itemsMatchCorrectedText).length}`',
-    )
-    ..writeln(
       '- Runs where step 2 changed words step 1 had already changed: '
       '`${results.where((r) => r.retouchedStepOne).length}`',
     )
     ..writeln()
     ..writeln(
-      'Scoring: each step returns the whole corrected text as well as the '
-      'items; the score is taken from the corrected text, as the baseline '
-      'harness scored its models. The items are what the app would show.',
+      'Scoring: each step returns only its list of items. The app\'s own '
+      'code applies them to the text, and the score is taken from that '
+      'text, which is exactly what the app would show the learner. (Until '
+      '20 Nov 2026 each step also returned a whole rewritten text and the '
+      'score was taken from that.)',
     )
     ..writeln();
 
@@ -1213,20 +1177,23 @@ void main() {
       expect(parseStepReply('{"items":[]}').correctedText, isNull);
     });
 
-    test('the score comes from the corrected text, not the applied items',
-        () {
-      const item = SuggestionItem(
+    test('the score comes from the applied items, as the app builds it', () {
+      const found = SuggestionItem(
+        written: 'trafico',
+        suggestion: 'tráfico',
+        category: 'Spelling',
+        reason: 'r',
+      );
+      const missing = SuggestionItem(
         written: 'nowhere',
         suggestion: 'x',
         category: 'Spelling',
         reason: 'r',
       );
-      final applied = applyItems('Vi mucho trafico ayer.', [item]);
-      expect(applied.notApplied, [item]);
-      expect(_textAfter('Vi mucho tráfico ayer.', applied), 'Vi mucho tráfico ayer.');
-      expect(_textAfter(null, applied), 'Vi mucho trafico ayer.');
-      expect(_itemsMatch('Vi mucho tráfico ayer.', applied), isFalse);
-      expect(_itemsMatch(null, applied), isTrue);
+      final applied = applyItems('Vi mucho trafico ayer.', [found, missing]);
+      expect(applied.applied, [found]);
+      expect(applied.notApplied, [missing]);
+      expect(_textAfter(applied), 'Vi mucho tráfico ayer.');
     });
 
     test('tolerates Markdown fences around the JSON', () {
@@ -1407,7 +1374,7 @@ void main() {
       expect(applied.notApplied, [twice]);
     });
 
-    test('applyItems applies items in order on the updated text', () {
+    test('applyItems looks for every item in the text the step read', () {
       const first = SuggestionItem(
         written: 'iso',
         suggestion: 'hizo',
@@ -1424,7 +1391,10 @@ void main() {
         first,
         second,
       ]);
-      expect(applied.text, 'Ayer tomó una decisión importante.');
+      // "hizo una decisión" is not in the text the step read, so the app
+      // leaves the second item out rather than chaining it onto the first.
+      expect(applied.text, 'Ayer hizo una decisión importante.');
+      expect(applied.notApplied, [second]);
     });
   });
 

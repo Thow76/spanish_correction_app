@@ -48,9 +48,9 @@ class SuggestionStepItem {
 /// Parses one step's reply into its items. Tolerates Markdown fences or
 /// commentary around the JSON object. Throws [FormatException] when there
 /// is no object or no "items" list; skips an item with a missing or
-/// non-string field. The reply's "corrected_text" is not used: the app
-/// builds the suggested version from the items, so every change the
-/// learner sees has an item explaining it.
+/// non-string field. The prompts ask for the items only; the app builds the
+/// suggested version from them, so every change the learner sees has an
+/// item explaining it. Any other field in the reply is ignored.
 List<SuggestionStepItem> parseSuggestionStepReply(String replyText) {
   final trimmed = replyText.trim();
   final start = trimmed.indexOf('{');
@@ -187,12 +187,12 @@ class SuggestionClient {
       stageLabel: 'suggestion_check_issues',
       responseFormat: twoStepResponseFormat(twoStepIssueCategories),
     );
-    final issueEdits = _placeEdits(
+    final issueEdits = placeSuggestionEdits(
       text,
       parseSuggestionStepReply(issuesReply),
       twoStepIssueCategories,
     );
-    final textAfterIssues = _applyEdits(text, issueEdits);
+    final textAfterIssues = applySuggestionEdits(text, issueEdits);
 
     final suggestionsReply = await _call(
       model: suggestionsModel,
@@ -201,12 +201,15 @@ class SuggestionClient {
       stageLabel: 'suggestion_check_suggestions',
       responseFormat: twoStepResponseFormat(twoStepSuggestionCategories),
     );
-    final suggestionEdits = _placeEdits(
+    final suggestionEdits = placeSuggestionEdits(
       textAfterIssues,
       parseSuggestionStepReply(suggestionsReply),
       twoStepSuggestionCategories,
     );
-    final suggestedText = _applyEdits(textAfterIssues, suggestionEdits);
+    final suggestedText = applySuggestionEdits(
+      textAfterIssues,
+      suggestionEdits,
+    );
 
     return buildSuggestionCheckResult(
       originalText: text,
@@ -243,8 +246,10 @@ class PlacedSuggestionEdit {
 /// Keeps the items that can be placed in [text] without guessing: an
 /// allowed category, a non-empty "written" found exactly once as a whole
 /// word or phrase, and not overlapping an item already kept. Sorted by
-/// position.
-List<PlacedSuggestionEdit> _placeEdits(
+/// position. Every item is looked for in [text] itself, the text the step
+/// read. Shared with the E.3 test program, which scores the text these
+/// edits build.
+List<PlacedSuggestionEdit> placeSuggestionEdits(
   String text,
   List<SuggestionStepItem> items,
   List<String> allowedCategories,
@@ -274,7 +279,10 @@ List<PlacedSuggestionEdit> _placeEdits(
 }
 
 /// [text] with every edit in [sortedEdits] put in place.
-String _applyEdits(String text, List<PlacedSuggestionEdit> sortedEdits) {
+String applySuggestionEdits(
+  String text,
+  List<PlacedSuggestionEdit> sortedEdits,
+) {
   final out = StringBuffer();
   var from = 0;
   for (final edit in sortedEdits) {

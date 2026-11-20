@@ -543,18 +543,26 @@ const Map<String, Object?> firstPassCorrectionResponseFormat = {
 // (`test/two_step_suggestions_prompt_harness.dart`), which now uses these
 // same constants, so the measured prompts and the app's prompts cannot drift
 // apart. Used by `features/corrections/data/suggestion_client.dart`.
+//
+// The models return only the list of items; the app's code finds each
+// item's words in the text and builds the suggested version from them. The
+// whole rewritten text that E.3 also asked for (so its scores matched the
+// E.2 baseline's) was dropped on 20 Nov 2026 at Andrew's request: the app
+// never used it, and it cost output tokens on every check.
 
 /// Categories step 1 may return (Issues).
-const List<String> twoStepIssueCategories = ['Spelling', 'Grammar', 'Word meaning'];
+const List<String> twoStepIssueCategories = [
+  'Spelling',
+  'Grammar',
+  'Word meaning',
+];
 
 /// The only category step 2 may return (Suggestions).
 const List<String> twoStepSuggestionCategories = ['Natural phrasing'];
 
 const String twoStepItemShape =
-    'Return a JSON object with two fields. "corrected_text": the whole '
-    'text with every one of your suggestions applied, and nothing else '
-    'changed; if you have nothing to report, the text exactly as it was. '
-    '"items": a list. Each item has exactly four fields:\n'
+    'Return a JSON object with one field, "items": a list. Each item has '
+    'exactly four fields:\n'
     '- "written": the words exactly as the learner wrote them, copied '
     'character for character from the text. Keep it as short as it can be '
     'while still being unique in the text. Where you remove words, include '
@@ -662,9 +670,8 @@ Map<String, Object?> twoStepResponseFormat(List<String> categories) => {
     'schema': {
       'type': 'object',
       'additionalProperties': false,
-      'required': ['corrected_text', 'items'],
+      'required': ['items'],
       'properties': {
-        'corrected_text': {'type': 'string'},
         'items': {
           'type': 'array',
           'items': {
