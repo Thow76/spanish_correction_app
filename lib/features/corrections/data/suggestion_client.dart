@@ -233,9 +233,15 @@ class PlacedSuggestionEdit {
     required this.category,
     required this.start,
     required this.end,
-  });
+    SuggestionStepItem? source,
+  }) : source = source ?? item;
 
+  /// The item as applied: trimmed to the words that change (2.2b).
   final SuggestionStepItem item;
+
+  /// The item exactly as the model returned it, before any trim. The test
+  /// program uses this to tell which of the model's items were applied.
+  final SuggestionStepItem source;
   final ErrorCategory category;
   final int start;
   final int end;
@@ -315,6 +321,7 @@ PlacedSuggestionEdit _trimToChangedWords({
       category: item.category,
       reason: item.reason,
     ),
+    source: item,
     category: category,
     start: start + trim.prefixLength,
     end: end - trim.suffixLength,
