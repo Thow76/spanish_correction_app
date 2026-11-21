@@ -45,13 +45,6 @@
 // - TWO_STEP_RUNS_PER_FIXTURE: defaults to 1.
 // - TWO_STEP_CALL_DELAY_MS: pause between runs, defaults to 750.
 // - TWO_STEP_OUTPUT: report path, defaults to docs/two_step_suggestions.md.
-// - TWO_STEP_REGIONAL_PROBE: "true" lets step 2 also return "Regional note"
-//   items (a form valid in some regions but not others, or one the model is
-//   unsure about). The app's prompt is not changed: the probe's paragraph
-//   is added at run time, in this file only. Notes never change the text,
-//   so the pass rate is scored exactly as without the probe; the report
-//   gains a "Regional notes" section showing what the model said and how
-//   often. Off by default.
 // - TWO_STEP_ONE_PROMPT: "full" (default) or "lean": the lean one-call
 //   prompt has only the categories, item shape, wording rules and the
 //   regional line, and never touches commas. For isolating the model.
@@ -323,37 +316,6 @@ CheckedItems checkItems({
   return CheckedItems(kept: kept, dropped: dropped);
 }
 
-// ---------------------------------------------------------------------------
-// Regional probe (test program only; the app's prompts are not changed)
-// ---------------------------------------------------------------------------
-
-/// The category step 2 may use for a regional note when the probe is on.
-const String regionalNoteCategory = 'Regional note';
-
-/// Added to the end of step 2's prompt, at run time, when
-/// `TWO_STEP_REGIONAL_PROBE=true`. Asks for notes, never for changes.
-const String regionalProbeAddendum =
-    'For this run only, you may also return a fifth kind of item, with the '
-    'category "Regional note": wording that is standard in some '
-    'Spanish-speaking regions but not in others, or wording you are not '
-    'sure counts as an issue because it may be regional. A regional note '
-    'is not a change: copy the words into "suggestion" exactly as written, '
-    'and in "reason" say in one short sentence where the form is used and '
-    'where it is not. Still never suggest changing a regional form, and do '
-    'not add a regional note for ordinary standard Spanish.';
-
-/// Separates step 2's regional notes from its real items.
-({List<SuggestionItem> notes, List<SuggestionItem> rest}) splitRegionalNotes(
-  List<SuggestionItem> items,
-) {
-  final notes = <SuggestionItem>[];
-  final rest = <SuggestionItem>[];
-  for (final item in items) {
-    (item.category == regionalNoteCategory ? notes : rest).add(item);
-  }
-  return (notes: notes, rest: rest);
-}
-
 /// The result of applying items to a text.
 class AppliedItems {
   const AppliedItems({
@@ -497,7 +459,6 @@ class TwoStepResult {
     required this.suggestionsStats,
     required this.score,
     this.error,
-    this.regionalNotes = const [],
   });
 
   final TwoPassFixture fixture;
@@ -513,10 +474,6 @@ class TwoStepResult {
   final CallStats issuesStats;
   final CallStats suggestionsStats;
   final TwoPassScoreLabel score;
-
-  /// Step 2's regional notes, when the regional probe is on. Never applied
-  /// to the text and never counted as flagging a problem.
-  final List<SuggestionItem> regionalNotes;
 
   /// The service's failure message when every retry failed and this run is
   /// scored [TwoPassScoreLabel.error]; null otherwise.
@@ -681,7 +638,6 @@ Future<TwoStepResult> runTwoStep({
   required String suggestionsModel,
   required TwoPassFixture fixture,
   int runIndex = 1,
-  bool regionalProbe = false,
 }) => _orErrorResult(fixture, runIndex, () async {
   final step1 = await _callStep(
     apiKey: apiKey,
@@ -704,19 +660,14 @@ Future<TwoStepResult> runTwoStep({
     apiKey: apiKey,
     httpClient: httpClient,
     model: suggestionsModel,
-    systemPrompt: regionalProbe
-        ? '$suggestionsStepPrompt\n\n$regionalProbeAddendum'
-        : suggestionsStepPrompt,
-    categories: regionalProbe
-        ? [...suggestionCategories, regionalNoteCategory]
-        : suggestionCategories,
+    systemPrompt: suggestionsStepPrompt,
+    categories: suggestionCategories,
     stageLabel: 'two_step_suggestions',
     text: textAfter1,
   );
-  final split2 = splitRegionalNotes(step2.items);
   final checked2 = checkItems(
     text: textAfter1,
-    items: split2.rest,
+    items: step2.items,
     allowedCategories: suggestionCategories,
   );
   final applied2 = applyItems(textAfter1, checked2.kept);
@@ -736,7 +687,6 @@ Future<TwoStepResult> runTwoStep({
     issuesStats: step1.stats,
     suggestionsStats: step2.stats,
     score: scoreFinalText(fixture, finalText),
-    regionalNotes: split2.notes,
   );
 });
 
@@ -820,7 +770,6 @@ String buildTwoStepReport({
   required List<TwoStepResult> results,
   required DateTime generatedAt,
   bool oneStep = false,
-  bool regionalProbe = false,
 }) {
   final b = StringBuffer()
     ..writeln('# Two-step suggestions harness (build step E.3)')
@@ -840,10 +789,6 @@ String buildTwoStepReport({
     ..writeln(baselineSummary)
     ..writeln()
     ..writeln('- Total runs: `${results.length}`')
-    ..writeln(
-      '- Regional probe: ${regionalProbe ? 'on (step 2 may also return '
-                'regional notes, which never change the text or the score)' : 'off'}',
-    )
     ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
     ..writeln();
 
@@ -1014,75 +959,25 @@ String buildTwoStepReport({
     )
     ..writeln();
 
-  // Regional notes, when the probe is on.
-  if (regionalProbe) {
-    final noted = results.where((r) => r.regionalNotes.isNotEmpty).length;
-    b
-      ..writeln('## Regional notes (probe)')
-      ..writeln()
-      ..writeln(
-        'Step 2 was allowed to return "Regional note" items: forms it sees '
-        'as standard in some regions but not others, or is unsure about. '
-        'A note never changes the text. This shows what the model notices, '
-        'and how consistently, not whether it is right.',
-      )
-      ..writeln()
-      ..writeln(
-        '- Runs with at least one regional note: `$noted` of '
-        '`${results.length}`',
-      )
-      ..writeln()
-      ..writeln(
-        '| Sentence | Language point | Runs with a note | Runs | '
-        'What the model said |',
-      )
-      ..writeln('| --- | --- | --- | --- | --- |');
-    final seenIds = <String>{};
-    for (final r in results) {
-      if (!seenIds.add(r.fixture.id)) continue;
-      final rows = results.where((x) => x.fixture.id == r.fixture.id);
-      final withNote = rows.where((x) => x.regionalNotes.isNotEmpty).length;
-      final said = <String>{};
-      for (final x in rows) {
-        for (final note in x.regionalNotes) {
-          said.add('${note.written}: ${note.reason}');
-        }
-      }
-      b.writeln(
-        '| `${r.fixture.text}` | ${r.fixture.languagePoint} | $withNote | '
-        '${rows.length} | ${said.isEmpty ? '(none)' : said.join('<br>')} |',
-      );
-    }
-    b.writeln();
-  }
-
   // Per-sentence detail.
   b
     ..writeln('## Every run')
     ..writeln()
     ..writeln(
-      '| Sentence | Run | Original | Step 1 items | Step 2 items | '
-      '${regionalProbe ? 'Regional notes | ' : ''}Final | Score |',
+      '| Sentence | Run | Original | Step 1 items | Step 2 items | Final '
+      '| Score |',
     )
-    ..writeln(
-      '| --- | --- | --- | --- | --- | ${regionalProbe ? '--- | ' : ''}'
-      '--- | --- |',
-    );
+    ..writeln('| --- | --- | --- | --- | --- | --- | --- |');
   for (final r in results) {
     b.writeln(
       '| ${r.fixture.id} | ${r.runIndex} | `${r.fixture.text}` | '
       '${_items(r.issueItems)} | ${_items(r.suggestionItems)} | '
-      '${regionalProbe ? '${_notes(r.regionalNotes)} | ' : ''}'
       '`${r.finalText}` | ${r.passed ? 'Pass' : 'Fail'} '
       '(${r.score.reportLabel}${r.error == null ? '' : ': ${r.error}'}) |',
     );
   }
   return b.toString();
 }
-
-String _notes(List<SuggestionItem> notes) => notes.isEmpty
-    ? '(none)'
-    : notes.map((n) => '${n.written}: ${n.reason}').join('<br>');
 
 // ---------------------------------------------------------------------------
 // Settings
@@ -1115,10 +1010,6 @@ bool twoStepOneCallMode(Map<String, String> env) {
   if (mode == 'one') return true;
   throw ArgumentError('TWO_STEP_MODE must be "two" or "one" (was "$mode").');
 }
-
-/// `TWO_STEP_REGIONAL_PROBE=true` turns the regional probe on.
-bool twoStepRegionalProbe(Map<String, String> env) =>
-    env['TWO_STEP_REGIONAL_PROBE']?.trim().toLowerCase() == 'true';
 
 int twoStepRunsPerFixtureFrom(Map<String, String> env) {
   final runs = int.tryParse(env['TWO_STEP_RUNS_PER_FIXTURE']?.trim() ?? '');
@@ -1218,7 +1109,6 @@ void main() {
     final prompts = {
       'issuesStepPrompt': normalise(issuesStepPrompt),
       'suggestionsStepPrompt': normalise(suggestionsStepPrompt),
-      'regionalProbeAddendum': normalise(regionalProbeAddendum),
       'oneStepPrompt': normalise(oneStepPrompt),
       'oneStepLeanPrompt': normalise(oneStepLeanPrompt),
     };
@@ -1862,102 +1752,6 @@ void main() {
     });
   });
 
-  group('regional probe (test program only)', () {
-    test('is off unless TWO_STEP_REGIONAL_PROBE=true', () {
-      expect(twoStepRegionalProbe({}), isFalse);
-      expect(
-        twoStepRegionalProbe({'TWO_STEP_REGIONAL_PROBE': 'false'}),
-        isFalse,
-      );
-      expect(twoStepRegionalProbe({'TWO_STEP_REGIONAL_PROBE': 'true'}), isTrue);
-    });
-
-    test('the app\'s step 2 prompt does not carry the probe', () {
-      expect(suggestionsStepPrompt, isNot(contains(regionalNoteCategory)));
-      expect(
-        twoStepSuggestionCategories,
-        isNot(contains(regionalNoteCategory)),
-      );
-    });
-
-    test('the addendum asks for notes, never changes', () {
-      expect(regionalProbeAddendum, contains('"$regionalNoteCategory"'));
-      expect(regionalProbeAddendum, contains('exactly as written'));
-      expect(regionalProbeAddendum, contains('never suggest changing'));
-    });
-
-    test(
-      'regional notes are separated from step 2\'s items and not applied',
-      () {
-        const note = SuggestionItem(
-          written: 'Voy para casa',
-          suggestion: 'Voy para casa',
-          category: regionalNoteCategory,
-          reason: 'Common in parts of Latin America and Spain.',
-        );
-        const real = SuggestionItem(
-          written: 'y yo estudio',
-          suggestion: 'y estudio',
-          category: 'Natural phrasing',
-          reason: 'r',
-        );
-        final split = splitRegionalNotes([note, real]);
-        expect(split.notes, [note]);
-        expect(split.rest, [real]);
-
-        final applied = applyItems('Voy para casa y yo estudio.', split.rest);
-        expect(applied.text, 'Voy para casa y estudio.');
-      },
-    );
-
-    test('the report shows notes only when the probe is on', () {
-      final fixture = allTwoPassFixtures.first;
-      final result = TwoStepResult(
-        fixture: fixture,
-        runIndex: 1,
-        issueItems: const [],
-        issuesDropped: const [],
-        issuesNotApplied: const [],
-        textAfterIssues: fixture.text,
-        suggestionItems: const [],
-        suggestionsDropped: const [],
-        suggestionsNotApplied: const [],
-        finalText: fixture.text,
-        issuesStats: CallStats.zero,
-        suggestionsStats: CallStats.zero,
-        score: scoreFinalText(fixture, fixture.text),
-        regionalNotes: const [
-          SuggestionItem(
-            written: 'x',
-            suggestion: 'x',
-            category: regionalNoteCategory,
-            reason: 'Heard in some regions.',
-          ),
-        ],
-      );
-      final on = buildTwoStepReport(
-        issuesModel: 'a',
-        suggestionsModel: 'b',
-        results: [result],
-        generatedAt: DateTime(2026),
-        regionalProbe: true,
-      );
-      final off = buildTwoStepReport(
-        issuesModel: 'a',
-        suggestionsModel: 'b',
-        results: [result],
-        generatedAt: DateTime(2026),
-      );
-      expect(on, contains('## Regional notes (probe)'));
-      expect(on, contains('x: Heard in some regions.'));
-      expect(on, contains('- Regional probe: on'));
-      expect(off, isNot(contains('## Regional notes')));
-      expect(off, contains('- Regional probe: off'));
-      // A note never counts as flagging a problem.
-      expect(result.flagged, isFalse);
-    });
-  });
-
   test(
     'two-step suggestions run against the test sentences',
     tags: 'live',
@@ -1995,7 +1789,6 @@ void main() {
       final fixtures = twoStepFixturesFrom(environment);
       final runsPerFixture = twoStepRunsPerFixtureFrom(environment);
       final oneCall = twoStepOneCallMode(environment);
-      final regionalProbe = twoStepRegionalProbe(environment);
       final onePrompt = oneStepPromptFrom(environment);
       final oneModel = _setting(
         environment,
@@ -2023,7 +1816,6 @@ void main() {
                   suggestionsModel: suggestionsModel,
                   fixture: fixture,
                   runIndex: run,
-                  regionalProbe: regionalProbe,
                 );
           results.add(result);
           // ignore: avoid_print
@@ -2046,7 +1838,6 @@ void main() {
         results: results,
         generatedAt: DateTime.now(),
         oneStep: oneCall,
-        regionalProbe: regionalProbe,
       );
       final file = File(outputPath);
       await file.parent.create(recursive: true);
