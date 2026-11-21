@@ -554,7 +554,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'hacer una decisión',
           correctedPhrase: 'tomar una decisión',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               'Spanish takes decisions rather than making them: "tomar una '
               'decisión".',
@@ -614,7 +614,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'es un pedazo de pastel',
           correctedPhrase: 'es pan comido',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"A piece of cake" does not carry over word for word; Spanish '
               'says "es pan comido".',
@@ -659,7 +659,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'tengo un buen tiempo',
           correctedPhrase: 'lo paso bien',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"Have a good time" does not carry over word for word; Spanish '
               'says "pasarlo bien".',
@@ -702,7 +702,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'no hizo sentido',
           correctedPhrase: 'no tuvo sentido',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               'In Spanish something "tiene sentido"; "hacer sentido" copies '
               'the English "make sense".',
@@ -738,7 +738,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'no puedo ponerlo abajo',
           correctedPhrase: 'no puedo dejarlo',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"Put it down" does not carry over word for word; Spanish says '
               '"no puedo dejarlo".',
@@ -774,7 +774,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'tenemos una explosión',
           correctedPhrase: 'lo pasamos genial',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"Have a blast" does not carry over word for word; Spanish says '
               '"lo pasamos genial".',
@@ -824,7 +824,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'tomar un paseo',
           correctedPhrase: 'dar un paseo',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               'Spanish gives a walk rather than taking one: "dar un paseo".',
         ),
@@ -851,7 +851,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'en una base diaria',
           correctedPhrase: 'a diario',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"On a daily basis" does not carry over word for word; Spanish '
               'says "a diario".',
@@ -919,7 +919,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'se repite a sí misma',
           correctedPhrase: 'se repite',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               'Spanish says "la historia se repite"; "a sí misma" copies the '
               'English "itself" and is not needed.',
@@ -940,7 +940,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'me sopló la mente',
           correctedPhrase: 'me dejó alucinado',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"Blew my mind" does not carry over word for word; Spanish says '
               '"me dejó alucinado".',

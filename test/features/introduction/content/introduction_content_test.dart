@@ -254,7 +254,7 @@ void main() {
           expect(demo.points.length, 4, reason: demo.id);
           expect(demo.points.map((point) => point.category).toSet(), {
             ErrorCategory.grammar,
-            ErrorCategory.naturalLanguage,
+            ErrorCategory.naturalPhrasing,
             ErrorCategory.spelling,
             ErrorCategory.wordChoice,
           }, reason: '${demo.id}: one point in each of the four categories');
@@ -348,7 +348,7 @@ void main() {
 
       expect(response.corrections.map((c) => c.category), [
         ErrorCategory.wordChoice,
-        ErrorCategory.naturalLanguage,
+        ErrorCategory.naturalPhrasing,
         ErrorCategory.spelling,
         ErrorCategory.grammar,
       ]);

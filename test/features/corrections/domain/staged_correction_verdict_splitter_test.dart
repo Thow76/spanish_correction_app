@@ -24,65 +24,58 @@ void main() {
     );
   }
 
-  test(
-    'splits error, dialectal, and not_an_error correctly — the end-to-end '
-    'guard: no dialectal or not_an_error candidate ever produces a '
-    'CorrectionItem, and not_an_error produces nothing at all',
-    () {
-      final errorCandidate = candidate(
-        originalPhrase: 'trafico',
-        correctedPhrase: 'tráfico',
-        verdict: StagedCorrectionVerdict.error,
-        category: 'Spelling',
-        startIndex: 9,
-        endIndex: 16,
-      );
-      final dialectalCandidate = candidate(
-        originalPhrase: 'coger el autobús',
-        correctedPhrase: 'coger el autobús',
-        verdict: StagedCorrectionVerdict.dialectal,
-        category: 'Other',
-        startIndex: 20,
-        endIndex: 37,
-      );
-      final notAnErrorCandidate = candidate(
-        originalPhrase: 'coche',
-        correctedPhrase: 'coche',
-        verdict: StagedCorrectionVerdict.notAnError,
-        category: null,
-        startIndex: 40,
-        endIndex: 45,
-      );
+  test('splits error, dialectal, and not_an_error correctly — the end-to-end '
+      'guard: no dialectal or not_an_error candidate ever produces a '
+      'CorrectionItem, and not_an_error produces nothing at all', () {
+    final errorCandidate = candidate(
+      originalPhrase: 'trafico',
+      correctedPhrase: 'tráfico',
+      verdict: StagedCorrectionVerdict.error,
+      category: 'Spelling',
+      startIndex: 9,
+      endIndex: 16,
+    );
+    final dialectalCandidate = candidate(
+      originalPhrase: 'coger el autobús',
+      correctedPhrase: 'coger el autobús',
+      verdict: StagedCorrectionVerdict.dialectal,
+      category: 'Other',
+      startIndex: 20,
+      endIndex: 37,
+    );
+    final notAnErrorCandidate = candidate(
+      originalPhrase: 'coche',
+      correctedPhrase: 'coche',
+      verdict: StagedCorrectionVerdict.notAnError,
+      category: null,
+      startIndex: 40,
+      endIndex: 45,
+    );
 
-      final split = splitStagedCorrections([
-        errorCandidate,
-        dialectalCandidate,
-        notAnErrorCandidate,
-      ]);
+    final split = splitStagedCorrections([
+      errorCandidate,
+      dialectalCandidate,
+      notAnErrorCandidate,
+    ]);
 
-      expect(split.errorItems, hasLength(1));
-      expect(split.errorItems.single.originalPhrase, 'trafico');
-      expect(split.errorItems.single.correctedPhrase, 'tráfico');
-      expect(split.errorItems.single.category, ErrorCategory.spelling);
+    expect(split.errorItems, hasLength(1));
+    expect(split.errorItems.single.originalPhrase, 'trafico');
+    expect(split.errorItems.single.correctedPhrase, 'tráfico');
+    expect(split.errorItems.single.category, ErrorCategory.spelling);
 
-      expect(split.dialectalCandidates, hasLength(1));
-      expect(split.dialectalCandidates.single, same(dialectalCandidate));
+    expect(split.dialectalCandidates, hasLength(1));
+    expect(split.dialectalCandidates.single, same(dialectalCandidate));
 
-      // not_an_error must not appear anywhere in either output.
-      expect(
-        split.errorItems.any(
-          (item) => item.originalPhrase == 'coche',
-        ),
-        isFalse,
-      );
-      expect(
-        split.dialectalCandidates.any(
-          (item) => item.originalPhrase == 'coche',
-        ),
-        isFalse,
-      );
-    },
-  );
+    // not_an_error must not appear anywhere in either output.
+    expect(
+      split.errorItems.any((item) => item.originalPhrase == 'coche'),
+      isFalse,
+    );
+    expect(
+      split.dialectalCandidates.any((item) => item.originalPhrase == 'coche'),
+      isFalse,
+    );
+  });
 
   test('an error CorrectionItem carries a placeholder shortExplanation and '
       'the candidate\'s resolved position, with no corrected-side position '
@@ -109,10 +102,12 @@ void main() {
   test('converts each of the five category labels correctly', () {
     final labelsToCategories = {
       'Grammar': ErrorCategory.grammar,
-      'Natural Language': ErrorCategory.naturalLanguage,
+      'Natural Language': ErrorCategory.naturalPhrasing,
       'Spelling': ErrorCategory.spelling,
       'Word Choice': ErrorCategory.wordChoice,
-      'Other': ErrorCategory.other,
+      'Other': ErrorCategory.naturalPhrasing,
+      'Word meaning': ErrorCategory.wordChoice,
+      'Natural phrasing': ErrorCategory.naturalPhrasing,
     };
 
     for (final entry in labelsToCategories.entries) {
@@ -191,14 +186,8 @@ void main() {
       ),
     ]);
 
-    expect(
-      result.errorItems.map((item) => item.originalPhrase),
-      ['a', 'b'],
-    );
-    expect(
-      result.dialectalCandidates.map((c) => c.originalPhrase),
-      ['c', 'd'],
-    );
+    expect(result.errorItems.map((item) => item.originalPhrase), ['a', 'b']);
+    expect(result.dialectalCandidates.map((c) => c.originalPhrase), ['c', 'd']);
   });
 
   test('an empty input returns empty buckets', () {

@@ -93,8 +93,6 @@ List<SuggestionStepItem> parseSuggestionStepReply(String replyText) {
 
 /// The app's category for a category name the two steps use.
 ///
-/// Until build step 2.2 renames the categories, Word meaning is shown as
-/// today's Word Choice and Natural phrasing as today's Natural Language.
 /// Returns null for any other name, and the item is then left out.
 ErrorCategory? suggestionCategoryFor(String name) {
   switch (name.trim()) {
@@ -102,10 +100,11 @@ ErrorCategory? suggestionCategoryFor(String name) {
       return ErrorCategory.spelling;
     case 'Grammar':
       return ErrorCategory.grammar;
-    case 'Word meaning':
+    case 'Word meaning': // the prompt's name until build step 2.2c
+    case 'Word Choice':
       return ErrorCategory.wordChoice;
     case 'Natural phrasing':
-      return ErrorCategory.naturalLanguage;
+      return ErrorCategory.naturalPhrasing;
   }
   return null;
 }
@@ -129,7 +128,7 @@ class SuggestionCheckResult {
   /// The text with every Issue and Suggestion applied.
   final String suggestedText;
 
-  /// Points found by step 1 (Spelling, Grammar, Word meaning).
+  /// Points found by step 1 (Spelling, Grammar, Word Choice).
   final List<CorrectionItem> issues;
 
   /// Points found by step 2 (Natural phrasing).

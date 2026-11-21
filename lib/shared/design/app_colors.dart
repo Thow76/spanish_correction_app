@@ -17,12 +17,11 @@ class AppColors {
 
   /// Amber heading accent for the "Sigue practicando" result tier
   /// (Figma 596:1358, heading fill #F59E0B). A distinct semantic token rather
-  /// than reusing the [naturalLanguage] error-category colour.
+  /// than reusing the [naturalPhrasing] error-category colour.
   static const amber = Color(0xFFF59E0B);
 
   static const grammar = Color(0xFF5B8DEF);
   static const spelling = Color(0xFFEF5B5B);
   static const wordChoice = Color(0xFF5BEF8D);
-  static const naturalLanguage = Color(0xFFEFDC5B);
-  static const other = Color(0xFF8B95A8);
+  static const naturalPhrasing = Color(0xFFEFDC5B);
 }

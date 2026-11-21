@@ -9,7 +9,10 @@ import 'package:spanish_correction_app/features/corrections/presentation/correct
 /// `hasCorrections` is true (regression coverage for existing behaviour),
 /// advisory text in its place when false.
 void main() {
-  Future<void> pumpScreen(WidgetTester tester, CorrectionResponse response) async {
+  Future<void> pumpScreen(
+    WidgetTester tester,
+    CorrectionResponse response,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(

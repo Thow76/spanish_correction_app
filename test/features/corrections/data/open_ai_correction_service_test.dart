@@ -72,7 +72,7 @@ void main() {
       await serviceWith(client).gradeRetranslation(
         attempt: 'a',
         expectedAnswer: 'b',
-        targetCategory: ErrorCategory.other,
+        targetCategory: ErrorCategory.wordChoice,
         language: Language.portuguese,
       );
 
@@ -144,7 +144,10 @@ void main() {
     test('sends both correctedSentence and correctedPhrase', () async {
       final client = _CapturingHttpClient(
         _responsesEnvelope(
-          jsonEncode({'translation': 'I went to the market.', 'highlighted_phrase': ''}),
+          jsonEncode({
+            'translation': 'I went to the market.',
+            'highlighted_phrase': '',
+          }),
         ),
       );
 
@@ -214,31 +217,28 @@ void main() {
       expect(result.highlightEndIndex, isNull);
     });
 
-    test(
-      'a highlighted_phrase that is not an actual substring of translation '
-      'resolves to null indices rather than a wrong guess',
-      () async {
-        final client = _CapturingHttpClient(
-          _responsesEnvelope(
-            jsonEncode({
-              'translation': 'I went to the market.',
-              // Not a verbatim substring of translation.
-              'highlighted_phrase': 'go to',
-            }),
-          ),
-        );
+    test('a highlighted_phrase that is not an actual substring of translation '
+        'resolves to null indices rather than a wrong guess', () async {
+      final client = _CapturingHttpClient(
+        _responsesEnvelope(
+          jsonEncode({
+            'translation': 'I went to the market.',
+            // Not a verbatim substring of translation.
+            'highlighted_phrase': 'go to',
+          }),
+        ),
+      );
 
-        final result = await serviceWith(client).generatePromptPhrase(
-          correctedSentence: 'Fui al mercado.',
-          correctedPhrase: 'Fui',
-          language: Language.spanish,
-        );
+      final result = await serviceWith(client).generatePromptPhrase(
+        correctedSentence: 'Fui al mercado.',
+        correctedPhrase: 'Fui',
+        language: Language.spanish,
+      );
 
-        expect(result.text, 'I went to the market.');
-        expect(result.highlightStartIndex, isNull);
-        expect(result.highlightEndIndex, isNull);
-      },
-    );
+      expect(result.text, 'I went to the market.');
+      expect(result.highlightStartIndex, isNull);
+      expect(result.highlightEndIndex, isNull);
+    });
 
     test(
       'a malformed JSON response -> CorrectionServiceException(invalidResponse)',

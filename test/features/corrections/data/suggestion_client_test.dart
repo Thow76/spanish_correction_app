@@ -126,7 +126,7 @@ void main() {
       expect(suggestionCategoryFor('Word meaning'), ErrorCategory.wordChoice);
       expect(
         suggestionCategoryFor('Natural phrasing'),
-        ErrorCategory.naturalLanguage,
+        ErrorCategory.naturalPhrasing,
       );
       expect(suggestionCategoryFor('Tone'), isNull);
     });
@@ -185,7 +185,7 @@ void main() {
       expect(result.issues, hasLength(1));
       expect(result.issues.single.category, ErrorCategory.wordChoice);
       expect(result.suggestions, hasLength(1));
-      expect(result.suggestions.single.category, ErrorCategory.naturalLanguage);
+      expect(result.suggestions.single.category, ErrorCategory.naturalPhrasing);
       expect(result.groupOf(result.issues.single), SuggestionGroup.issue);
       expect(
         result.groupOf(result.suggestions.single),

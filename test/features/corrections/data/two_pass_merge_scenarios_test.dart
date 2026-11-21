@@ -101,7 +101,7 @@ void main() {
 
       expect(result.correctedText, 'Voy a tomar una decisión importante.');
       expect(result.corrections, hasLength(1));
-      expect(result.corrections.single.category, ErrorCategory.naturalLanguage);
+      expect(result.corrections.single.category, ErrorCategory.naturalPhrasing);
       expect(result.corrections.single.correctedPhrase, 'tomar una decisión');
     },
   );
@@ -170,7 +170,7 @@ void main() {
         result.corrections.any(
           (item) =>
               item.correctedPhrase == 'tomó una decisión' &&
-              item.category == ErrorCategory.naturalLanguage,
+              item.category == ErrorCategory.naturalPhrasing,
         ),
         isTrue,
       );
@@ -240,7 +240,7 @@ void main() {
       );
       expect(deletionItem.correctedPhrase, isEmpty);
       final naturalnessItem = result.corrections.firstWhere(
-        (item) => item.category == ErrorCategory.naturalLanguage,
+        (item) => item.category == ErrorCategory.naturalPhrasing,
       );
       expect(naturalnessItem.correctedPhrase, 'tomé una decisión');
     },

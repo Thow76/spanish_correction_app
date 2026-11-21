@@ -45,10 +45,10 @@ void main() {
 
     expect(response.corrections.map((correction) => correction.category), [
       ErrorCategory.grammar,
-      ErrorCategory.naturalLanguage,
+      ErrorCategory.naturalPhrasing,
       ErrorCategory.spelling,
       ErrorCategory.wordChoice,
-      ErrorCategory.other,
+      ErrorCategory.naturalPhrasing,
     ]);
   });
 

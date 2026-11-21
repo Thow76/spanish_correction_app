@@ -390,7 +390,7 @@ _LinearFirstPassParsedReply _parseLinearFirstPassResponse(
 /// later" is explicitly out of scope here). `ErrorCategory.fromLabel`
 /// (not the stricter `fromApiLabel`, which throws on an unrecognized
 /// label) is used so an unmapped raw category never crashes the
-/// harness, falling back to [ErrorCategory.other] — and the raw label
+/// harness, falling back to [ErrorCategory.naturalPhrasing] — and the raw label
 /// itself is preserved in [CorrectionItem.shortExplanation] rather than
 /// silently lost to that fallback, so the actual vocabulary the model
 /// produced stays observable on the item, not just the mapped bucket.
@@ -1148,7 +1148,7 @@ String _describeReview(NaturalnessReview review) {
 /// (issue #156's own "observe what vocabulary the model naturally
 /// produces" — [CorrectionItem.category] itself is the [ErrorCategory]
 /// enum a raw, unconstrained label like this maps onto, usually
-/// [ErrorCategory.other], which isn't the informative value to show
+/// [ErrorCategory.naturalPhrasing], which isn't the informative value to show
 /// here). Omitted from an entry when Pass 1 reported an empty category.
 String _describeCorrections(List<CorrectionItem> corrections) {
   if (corrections.isEmpty) {
@@ -2381,10 +2381,10 @@ void main() {
         expect(correction.correctedPhrase, 'tráfico');
         // The raw, unconstrained category label is preserved via
         // shortExplanation even though it doesn't map onto a known
-        // ErrorCategory (falls back to .other) — issue #156's own
+        // ErrorCategory (falls back to Natural phrasing) — issue #156's own
         // "observe what vocabulary the model naturally produces".
         expect(correction.shortExplanation, 'accent');
-        expect(correction.category, ErrorCategory.other);
+        expect(correction.category, ErrorCategory.naturalPhrasing);
       });
 
       test('an empty corrections array parses correctly into an empty '

@@ -244,7 +244,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'aplicar para',
         correctedPhrase: 'solicitar',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation:
             '"Aplicar para" is an anglicism; Spanish uses "solicitar" to apply for a job.',
       ),
@@ -264,7 +264,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'atender',
         correctedPhrase: 'asistir a',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation:
             '"Atender" is a false friend; to attend a class is "asistir a".',
       ),
@@ -314,7 +314,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'en la mañana',
         correctedPhrase: 'por la mañana',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation: 'Spanish says "por la mañana" for in the morning.',
       ),
     ],
@@ -448,7 +448,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'checar',
         correctedPhrase: 'verificar',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation:
             '"Checar" is an anglicism; Brazilian Portuguese prefers "verificar" or "conferir".',
       ),
@@ -498,7 +498,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'na manhã',
         correctedPhrase: 'de manhã',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation: 'Brazilians say "de manhã" for in the morning.',
       ),
     ],
@@ -857,7 +857,9 @@ ParsedResponse _parseResponse(String raw, List<String> chunks) {
     final correct = i < chunks.length ? chunks[i] : '';
 
     if (stem is! String) {
-      findings.add('Question at index $i: english_stem missing or not a string.');
+      findings.add(
+        'Question at index $i: english_stem missing or not a string.',
+      );
     }
 
     final distractors = <String>[];
@@ -883,9 +885,7 @@ ParsedResponse _parseResponse(String raw, List<String> chunks) {
       findings.add('Question at index $i: the two distractors are identical.');
     }
     if (distractors.contains(correct)) {
-      findings.add(
-        'Question at index $i: a distractor equals the chunk text.',
-      );
+      findings.add('Question at index $i: a distractor equals the chunk text.');
     }
 
     questions.add(
@@ -971,7 +971,9 @@ void writeInputs(StringBuffer out, TestCase tc, List<String> chunks) {
     ..writeln('```text')
     ..writeln('target:        ${tc.targetSentence}')
     ..writeln('chunks:        $chunks')
-    ..writeln('attempt:       ${tc.userAttempt.isEmpty ? '(empty)' : tc.userAttempt}')
+    ..writeln(
+      'attempt:       ${tc.userAttempt.isEmpty ? '(empty)' : tc.userAttempt}',
+    )
     ..writeln('englishSource: ${tc.englishSource}')
     ..writeln('corrections:')
     ..writeln(correctionsPretty)
@@ -994,15 +996,17 @@ void writeGeneratedQuestions(StringBuffer out, ParsedResponse parsed) {
       ..writeln('Raw response:')
       ..writeln()
       ..writeln('```text')
-      ..writeln(parsed.rawResponse.isEmpty ? '(no response)' : parsed.rawResponse)
+      ..writeln(
+        parsed.rawResponse.isEmpty ? '(no response)' : parsed.rawResponse,
+      )
       ..writeln('```')
       ..writeln();
     return;
   }
 
-  final pretty = const JsonEncoder.withIndent('  ').convert({
-    'questions': parsed.questions.map((q) => q.toJson()).toList(),
-  });
+  final pretty = const JsonEncoder.withIndent(
+    '  ',
+  ).convert({'questions': parsed.questions.map((q) => q.toJson()).toList()});
 
   out
     ..writeln('```json')
@@ -1120,7 +1124,8 @@ String _readEnvironment(String key, {String defaultValue = ''}) {
 Map<String, ParsedResponse> _parseRunFile(String path) {
   final content = File(path).readAsStringSync();
   return {
-    for (final tc in testBattery) tc.id: _extractCaseFromReport(content, tc, path),
+    for (final tc in testBattery)
+      tc.id: _extractCaseFromReport(content, tc, path),
   };
 }
 
@@ -1128,7 +1133,11 @@ Map<String, ParsedResponse> _parseRunFile(String path) {
 /// chunking is mechanical and deterministic, so it's identical for any run of
 /// the same test case and there is nothing to gain from round-tripping it
 /// through the written markdown.
-ParsedResponse _extractCaseFromReport(String content, TestCase tc, String path) {
+ParsedResponse _extractCaseFromReport(
+  String content,
+  TestCase tc,
+  String path,
+) {
   final id = tc.id;
   final headerIdx = content.indexOf('## $id — ');
   if (headerIdx == -1) {
@@ -1151,10 +1160,7 @@ ParsedResponse _extractCaseFromReport(String content, TestCase tc, String path) 
     );
   }
   final nextSub = section.indexOf('\n### ', gqIdx + 1);
-  final gq = section.substring(
-    gqIdx,
-    nextSub == -1 ? section.length : nextSub,
-  );
+  final gq = section.substring(gqIdx, nextSub == -1 ? section.length : nextSub);
 
   if (gq.contains('**Parse error:**')) {
     return ParsedResponse(
@@ -1257,9 +1263,7 @@ class _CaseComparison {
 
   /// Overall divergence flag: yes if any of the three match columns is "no".
   bool get diverged =>
-      chunkCountMatch == 'no' ||
-      groundingMatch == 'no' ||
-      parseMatch == 'no';
+      chunkCountMatch == 'no' || groundingMatch == 'no' || parseMatch == 'no';
 
   bool get decompositionIdentical =>
       p1ok && p2ok && _listEquals(chunks1, chunks2);
@@ -1330,9 +1334,7 @@ void _writeDivergenceSummaryTable(
       'R1 grounding | R2 grounding | Grounding match | Parse match | '
       'Divergence |',
     )
-    ..writeln(
-      '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
-    );
+    ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
 
   for (final c in comparisons) {
     final r1Chunks = c.p1ok ? '${c.count1}' : '—';
@@ -1444,12 +1446,15 @@ void _writeStabilitySummary(
   List<_CaseComparison> comparisons,
 ) {
   final total = comparisons.length;
-  final identicalDecomp =
-      comparisons.where((c) => c.decompositionIdentical).length;
-  final groundingCases =
-      comparisons.where((c) => c.tc.track == WalkthroughTrack.grounding);
-  final groundingStable =
-      groundingCases.where((c) => c.groundingMatch == 'yes').length;
+  final identicalDecomp = comparisons
+      .where((c) => c.decompositionIdentical)
+      .length;
+  final groundingCases = comparisons.where(
+    (c) => c.tc.track == WalkthroughTrack.grounding,
+  );
+  final groundingStable = groundingCases
+      .where((c) => c.groundingMatch == 'yes')
+      .length;
   final bothParsed = comparisons.where((c) => c.p1ok && c.p2ok).length;
   final zeroDivergence = comparisons.where((c) => !c.diverged).length;
 

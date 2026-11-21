@@ -182,7 +182,7 @@ const List<_Case> _battery = [
     englishSource: 'It is raining a lot today',
     attempt: 'Está fazendo muita chuva hoje',
     expectedAnswer: 'Está chovendo muito hoje.',
-    savedCategory: ErrorCategory.naturalLanguage,
+    savedCategory: ErrorCategory.naturalPhrasing,
     expectedTier: RetranslationTier.siguePracticando,
     note:
         '"fazendo chuva" is unnatural (native: "chovendo muito"); expect '
@@ -220,123 +220,119 @@ const List<_Case> _battery = [
 ];
 
 void main() {
-  test(
-    're-translation grade validation harness',
-    () async {
-      final config = AppConfig.fromEnvironment();
-      final apiKey = _readEnvironment(
-        'OPENAI_API_KEY',
-        defaultValue: config.openAiApiKey,
-      );
-      final model = _readEnvironment(
-        'OPENAI_CORRECTION_MODEL',
-        defaultValue: config.openAiCorrectionModel,
-      );
+  test('re-translation grade validation harness', () async {
+    final config = AppConfig.fromEnvironment();
+    final apiKey = _readEnvironment(
+      'OPENAI_API_KEY',
+      defaultValue: config.openAiApiKey,
+    );
+    final model = _readEnvironment(
+      'OPENAI_CORRECTION_MODEL',
+      defaultValue: config.openAiCorrectionModel,
+    );
 
-      if (apiKey.isEmpty) {
-        fail(
-          'Set OPENAI_API_KEY (or a default in AppConfig) to run the '
-          're-translation grade validation harness.',
+    if (apiKey.isEmpty) {
+      fail(
+        'Set OPENAI_API_KEY (or a default in AppConfig) to run the '
+        're-translation grade validation harness.',
+      );
+    }
+
+    final service = OpenAiCorrectionService(apiKey: apiKey, model: model);
+    final useCase = GradeRetranslationUseCase(correctionService: service);
+
+    final report = StringBuffer()
+      ..writeln('# Re-translation Grade Validation')
+      ..writeln()
+      ..writeln('Model: `$model`  ')
+      ..writeln('Generated: ${DateTime.now().toIso8601String()}')
+      ..writeln();
+
+    var surprises = 0;
+    var errors = 0;
+    for (final testCase in _battery) {
+      final RetranslationGrade grade;
+      try {
+        grade = await useCase.call(
+          attempt: testCase.attempt,
+          expectedAnswer: testCase.expectedAnswer,
+          savedErrorCategory: testCase.savedCategory,
+          language: testCase.language,
         );
+      } catch (error) {
+        // A transient API failure on one case must not lose the whole run.
+        errors++;
+        report
+          ..writeln('## ${testCase.id}  ❌ (grader error)')
+          ..writeln()
+          ..writeln('- Attempt: `${testCase.attempt}`')
+          ..writeln('- Error: $error')
+          ..writeln();
+        // ignore: avoid_print
+        print('[ERR ] ${testCase.id}: $error');
+        continue;
       }
 
-      final service = OpenAiCorrectionService(apiKey: apiKey, model: model);
-      final useCase = GradeRetranslationUseCase(correctionService: service);
-
-      final report = StringBuffer()
-        ..writeln('# Re-translation Grade Validation')
-        ..writeln()
-        ..writeln('Model: `$model`  ')
-        ..writeln('Generated: ${DateTime.now().toIso8601String()}')
-        ..writeln();
-
-      var surprises = 0;
-      var errors = 0;
-      for (final testCase in _battery) {
-        final RetranslationGrade grade;
-        try {
-          grade = await useCase.call(
-            attempt: testCase.attempt,
-            expectedAnswer: testCase.expectedAnswer,
-            savedErrorCategory: testCase.savedCategory,
-            language: testCase.language,
-          );
-        } catch (error) {
-          // A transient API failure on one case must not lose the whole run.
-          errors++;
-          report
-            ..writeln('## ${testCase.id}  ❌ (grader error)')
-            ..writeln()
-            ..writeln('- Attempt: `${testCase.attempt}`')
-            ..writeln('- Error: $error')
-            ..writeln();
-          // ignore: avoid_print
-          print('[ERR ] ${testCase.id}: $error');
-          continue;
-        }
-
-        final tierMatched = grade.tier == testCase.expectedTier;
-        final relatedMatched = grade.isRelated == testCase.expectedIsRelated;
-        final matched = tierMatched && relatedMatched;
-        if (!matched) {
-          surprises++;
-        }
-
-        report
-          ..writeln('## ${testCase.id}  ${matched ? '✅' : '⚠️'}')
-          ..writeln()
-          ..writeln('- Language: ${testCase.language.name}')
-          ..writeln('- English: ${testCase.englishSource}')
-          ..writeln('- Attempt: `${testCase.attempt}`')
-          ..writeln('- Expected answer: `${testCase.expectedAnswer}`')
-          ..writeln(
-            '- Saved category judged: **${testCase.savedCategory.label}**',
-          )
-          ..writeln(
-            '- Related: **${grade.isRelated}** ${relatedMatched ? '✅' : '⚠️'} '
-            '(expected ${testCase.expectedIsRelated})',
-          )
-          ..writeln(
-            '- Tier: **${grade.tier.name}** ${tierMatched ? '✅' : '⚠️'} '
-            '(expected ${testCase.expectedTier.name})',
-          )
-          ..writeln(
-            '- Category errors (count ${grade.categoryErrors.length}): '
-            '${_describe(grade.categoryErrors)}',
-          )
-          ..writeln(
-            '- All corrections (count ${grade.corrections.length}): '
-            '${_describe(grade.corrections)}',
-          )
-          ..writeln('- Note: ${testCase.note}')
-          ..writeln();
-
-        // ignore: avoid_print
-        print(
-          '[${matched ? 'ok ' : 'DIFF'}] ${testCase.id}: '
-          'isRelated=${grade.isRelated} (expected ${testCase.expectedIsRelated}) '
-          'tier=${grade.tier.name} '
-          '(expected ${testCase.expectedTier.name}) '
-          'categoryErrors=${grade.categoryErrors.length} '
-          'allCorrections=${grade.corrections.length}',
-        );
+      final tierMatched = grade.tier == testCase.expectedTier;
+      final relatedMatched = grade.isRelated == testCase.expectedIsRelated;
+      final matched = tierMatched && relatedMatched;
+      if (!matched) {
+        surprises++;
       }
 
       report
-        ..writeln('---')
+        ..writeln('## ${testCase.id}  ${matched ? '✅' : '⚠️'}')
         ..writeln()
+        ..writeln('- Language: ${testCase.language.name}')
+        ..writeln('- English: ${testCase.englishSource}')
+        ..writeln('- Attempt: `${testCase.attempt}`')
+        ..writeln('- Expected answer: `${testCase.expectedAnswer}`')
         ..writeln(
-          'Cases: ${_battery.length} · Matched expectation (tier + related): '
-          '${_battery.length - surprises - errors} · Surprises: $surprises · '
-          'Grader errors: $errors',
-        );
+          '- Saved category judged: **${testCase.savedCategory.label}**',
+        )
+        ..writeln(
+          '- Related: **${grade.isRelated}** ${relatedMatched ? '✅' : '⚠️'} '
+          '(expected ${testCase.expectedIsRelated})',
+        )
+        ..writeln(
+          '- Tier: **${grade.tier.name}** ${tierMatched ? '✅' : '⚠️'} '
+          '(expected ${testCase.expectedTier.name})',
+        )
+        ..writeln(
+          '- Category errors (count ${grade.categoryErrors.length}): '
+          '${_describe(grade.categoryErrors)}',
+        )
+        ..writeln(
+          '- All corrections (count ${grade.corrections.length}): '
+          '${_describe(grade.corrections)}',
+        )
+        ..writeln('- Note: ${testCase.note}')
+        ..writeln();
 
-      File(outputPath).writeAsStringSync(report.toString());
       // ignore: avoid_print
-      print('Wrote $outputPath ($surprises tier surprise(s))');
-    },
-    timeout: const Timeout(Duration(minutes: 10)),
-  );
+      print(
+        '[${matched ? 'ok ' : 'DIFF'}] ${testCase.id}: '
+        'isRelated=${grade.isRelated} (expected ${testCase.expectedIsRelated}) '
+        'tier=${grade.tier.name} '
+        '(expected ${testCase.expectedTier.name}) '
+        'categoryErrors=${grade.categoryErrors.length} '
+        'allCorrections=${grade.corrections.length}',
+      );
+    }
+
+    report
+      ..writeln('---')
+      ..writeln()
+      ..writeln(
+        'Cases: ${_battery.length} · Matched expectation (tier + related): '
+        '${_battery.length - surprises - errors} · Surprises: $surprises · '
+        'Grader errors: $errors',
+      );
+
+    File(outputPath).writeAsStringSync(report.toString());
+    // ignore: avoid_print
+    print('Wrote $outputPath ($surprises tier surprise(s))');
+  }, timeout: const Timeout(Duration(minutes: 10)));
 }
 
 String _describe(List corrections) {

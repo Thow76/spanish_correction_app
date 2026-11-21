@@ -11,7 +11,7 @@ import 'package:spanish_correction_app/shared/widgets/highlighted_sentence.dart'
 SavedCorrection _correction({
   String originalPhrase = 'llamaron de vuelta',
   String originalSentence = 'Ayer me llamaron de vuelta del banco.',
-  ErrorCategory category = ErrorCategory.naturalLanguage,
+  ErrorCategory category = ErrorCategory.naturalPhrasing,
   String shortExplanation = 'A more natural phrasing exists.',
   String inContext = 'Spanish prefers "devolver la llamada" here.',
   String whyItsWrong = 'The phrase is a calque from English and sounds unnatural.',
@@ -69,10 +69,10 @@ void main() {
 
     // Wrong phrase, in the category colour.
     final phrase = tester.widget<Text>(find.text('llamaron de vuelta'));
-    expect(phrase.style?.color, ErrorCategory.naturalLanguage.color);
+    expect(phrase.style?.color, ErrorCategory.naturalPhrasing.color);
 
     // Category pill label.
-    expect(find.text('Natural Language'), findsOneWidget);
+    expect(find.text('Natural phrasing'), findsOneWidget);
 
     // Intro paragraph (in-context).
     expect(
