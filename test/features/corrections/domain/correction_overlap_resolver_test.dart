@@ -42,7 +42,7 @@ void main() {
         corrected: 'a',
         start: 60,
         end: 64,
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
       );
 
       final result = resolveOverlappingCorrections([first, duplicate]);
@@ -137,7 +137,7 @@ void main() {
     final unranged = CorrectionItem(
       originalPhrase: 'a',
       correctedPhrase: 'A',
-      category: ErrorCategory.other,
+      category: ErrorCategory.grammar,
       shortExplanation: 'no range',
     );
     final ranged = _item(original: 'b', corrected: 'B', start: 0, end: 1);

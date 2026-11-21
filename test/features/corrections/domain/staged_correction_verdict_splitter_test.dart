@@ -109,10 +109,12 @@ void main() {
   test('converts each of the five category labels correctly', () {
     final labelsToCategories = {
       'Grammar': ErrorCategory.grammar,
-      'Natural Language': ErrorCategory.naturalLanguage,
+      'Natural Language': ErrorCategory.naturalPhrasing,
       'Spelling': ErrorCategory.spelling,
-      'Word Choice': ErrorCategory.wordChoice,
-      'Other': ErrorCategory.other,
+      'Word Choice': ErrorCategory.wordMeaning,
+      'Other': ErrorCategory.naturalPhrasing,
+      'Word meaning': ErrorCategory.wordMeaning,
+      'Natural phrasing': ErrorCategory.naturalPhrasing,
     };
 
     for (final entry in labelsToCategories.entries) {

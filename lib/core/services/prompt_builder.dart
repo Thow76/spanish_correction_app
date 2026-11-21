@@ -125,7 +125,7 @@ Return only valid JSON with this exact shape, no Markdown, code fences, or comme
     required ErrorCategory targetCategory,
   }) =>
       'expectedAnswer: "$expectedAnswer"\n'
-      'targetCategory: ${targetCategory.label}\n'
+      'targetCategory: ${targetCategory.legacyPromptLabel}\n'
       'attempt: "$attempt"';
 
   static String whisperLanguageCode(Language language) => switch (language) {

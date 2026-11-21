@@ -366,13 +366,13 @@ void main() {
       await pumpGame(
         tester,
         savedCorrections: [
-          buildSavedCorrection(category: ErrorCategory.wordChoice),
+          buildSavedCorrection(category: ErrorCategory.wordMeaning),
         ],
       );
 
       // Dynamic category label.
       expect(
-        find.textContaining('Word Choice', findRichText: true),
+        find.textContaining('Word meaning', findRichText: true),
         findsOneWidget,
       );
       // The ORIGINAL (wrong) phrase is shown...
@@ -961,7 +961,7 @@ List<String> _styledPhrases(WidgetTester tester, {required Color color}) {
 }
 
 /// The text of every span rendered with the reveal diff treatment — an
-/// underline in the highlight yellow ([AppColors.naturalLanguage]).
+/// underline in the highlight yellow ([AppColors.naturalPhrasing]).
 List<String> _underlinedDiffPhrases(WidgetTester tester) {
   final phrases = <String>[];
   for (final rich in tester.widgetList<RichText>(find.byType(RichText))) {
@@ -969,7 +969,7 @@ List<String> _underlinedDiffPhrases(WidgetTester tester) {
       if (span is TextSpan) {
         if (span.text != null &&
             span.style?.decoration == TextDecoration.underline &&
-            span.style?.color == AppColors.naturalLanguage) {
+            span.style?.color == AppColors.naturalPhrasing) {
           phrases.add(span.text!);
         }
         span.children?.forEach(visit);

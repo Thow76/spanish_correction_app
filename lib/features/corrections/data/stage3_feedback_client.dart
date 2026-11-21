@@ -71,7 +71,7 @@ String buildStage3UserContent({
         'start_index': item.startIndex,
         'original_phrase': item.originalPhrase,
         'corrected_phrase': item.correctedPhrase,
-        'category': item.category.label,
+        'category': item.category.legacyPromptLabel,
         'verdict': StagedCorrectionVerdict.error.apiValue,
       },
     for (final candidate in dialectalCandidates)

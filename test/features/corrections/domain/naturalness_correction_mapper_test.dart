@@ -100,7 +100,7 @@ void main() {
           (item) => item.originalPhrase == 'hizo una decisión',
         );
         expect(naturalnessItem.correctedPhrase, 'tomó una decisión');
-        expect(naturalnessItem.category, ErrorCategory.naturalLanguage);
+        expect(naturalnessItem.category, ErrorCategory.naturalPhrasing);
         expect(
           naturalnessItem.shortExplanation,
           '"Hacer una decisión" is a calque.',
@@ -422,7 +422,7 @@ void main() {
         final item = result.corrections.single;
         expect(item.originalPhrase, 'hizo una decisión');
         expect(item.correctedPhrase, 'tomó una decisión');
-        expect(item.category, ErrorCategory.naturalLanguage);
+        expect(item.category, ErrorCategory.naturalPhrasing);
         expect(item.startIndex, isNull);
         expect(item.endIndex, isNull);
         expect(result.correctedText, finalCorrectedText);
@@ -534,7 +534,7 @@ void main() {
             CorrectionItem(
               originalPhrase: 'hacer una decisión',
               correctedPhrase: 'hacer una decisión',
-              category: ErrorCategory.other,
+              category: ErrorCategory.grammar,
               shortExplanation: 'Placeholder first-pass correction.',
               startIndex: spanIndex,
               endIndex: spanIndex + 'hacer una decisión'.length,
@@ -571,7 +571,7 @@ void main() {
         expect(result.corrections, hasLength(2));
 
         final firstPassItem = result.corrections.firstWhere(
-          (item) => item.category == ErrorCategory.other,
+          (item) => item.category == ErrorCategory.grammar,
         );
         expect(
           firstPassItem.shortExplanation,
@@ -579,7 +579,7 @@ void main() {
         );
 
         final naturalnessItem = result.corrections.firstWhere(
-          (item) => item.category == ErrorCategory.naturalLanguage,
+          (item) => item.category == ErrorCategory.naturalPhrasing,
         );
         expect(naturalnessItem.correctedPhrase, 'tomar una decisión');
         expect(naturalnessItem.shortExplanation, isNotEmpty);

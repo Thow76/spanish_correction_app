@@ -99,7 +99,7 @@ void main() {
         // Only the naturalness item — the first pass returns no
         // CorrectionItems of its own (issue #65).
         expect(result.corrections, hasLength(1));
-        expect(result.corrections.single.category, ErrorCategory.naturalLanguage);
+        expect(result.corrections.single.category, ErrorCategory.naturalPhrasing);
         expect(result.corrections.single.correctedPhrase, 'tomó una decisión');
         // The parallel call, then the sequential fallback.
         expect(client.naturalnessCallCount, 2);
@@ -163,7 +163,7 @@ void main() {
         );
         expect(result.corrections, hasLength(1));
         final naturalnessItem = result.corrections.single;
-        expect(naturalnessItem.category, ErrorCategory.naturalLanguage);
+        expect(naturalnessItem.category, ErrorCategory.naturalPhrasing);
         expect(naturalnessItem.correctedPhrase, 'más tránsito');
         expect(client.naturalnessCallCount, 2);
       },

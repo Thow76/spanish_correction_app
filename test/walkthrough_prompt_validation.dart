@@ -244,7 +244,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'aplicar para',
         correctedPhrase: 'solicitar',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation:
             '"Aplicar para" is an anglicism; Spanish uses "solicitar" to apply for a job.',
       ),
@@ -264,7 +264,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'atender',
         correctedPhrase: 'asistir a',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation:
             '"Atender" is a false friend; to attend a class is "asistir a".',
       ),
@@ -314,7 +314,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'en la mañana',
         correctedPhrase: 'por la mañana',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation: 'Spanish says "por la mañana" for in the morning.',
       ),
     ],
@@ -339,7 +339,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'muchas naranjas',
         correctedPhrase: 'tres manzanas',
-        category: ErrorCategory.wordChoice,
+        category: ErrorCategory.wordMeaning,
         shortExplanation: 'The source says three apples, not many oranges.',
       ),
     ],
@@ -448,7 +448,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'checar',
         correctedPhrase: 'verificar',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation:
             '"Checar" is an anglicism; Brazilian Portuguese prefers "verificar" or "conferir".',
       ),
@@ -498,7 +498,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'na manhã',
         correctedPhrase: 'de manhã',
-        category: ErrorCategory.naturalLanguage,
+        category: ErrorCategory.naturalPhrasing,
         shortExplanation: 'Brazilians say "de manhã" for in the morning.',
       ),
     ],
@@ -523,7 +523,7 @@ final List<TestCase> testBattery = [
       CorrectionItem(
         originalPhrase: 'muitas laranjas',
         correctedPhrase: 'três maçãs',
-        category: ErrorCategory.wordChoice,
+        category: ErrorCategory.wordMeaning,
         shortExplanation: 'The source says three apples, not many oranges.',
       ),
     ],

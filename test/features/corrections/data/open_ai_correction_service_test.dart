@@ -72,7 +72,7 @@ void main() {
       await serviceWith(client).gradeRetranslation(
         attempt: 'a',
         expectedAnswer: 'b',
-        targetCategory: ErrorCategory.other,
+        targetCategory: ErrorCategory.wordMeaning,
         language: Language.portuguese,
       );
 

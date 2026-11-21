@@ -1086,7 +1086,7 @@ void main() {
           correction(
             originalPhrase: 'yo estudié',
             correctedPhrase: 'estudié',
-            category: ErrorCategory.naturalLanguage,
+            category: ErrorCategory.naturalPhrasing,
           ),
         ]);
         expect(_wasTargetCaught(result, dualCategoryTarget), isTrue);

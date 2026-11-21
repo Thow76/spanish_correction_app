@@ -26,7 +26,7 @@ void main() {
       () async {
         final service = _FakeCorrectionService([
           item(ErrorCategory.spelling),
-          item(ErrorCategory.wordChoice),
+          item(ErrorCategory.wordMeaning),
         ]);
         final useCase = GradeRetranslationUseCase(correctionService: service);
 
@@ -86,9 +86,8 @@ void main() {
         // errors mean the sentence is not clean -> Bien hecho.
         final service = _FakeCorrectionService([
           item(ErrorCategory.spelling),
-          item(ErrorCategory.naturalLanguage),
-          item(ErrorCategory.wordChoice),
-          item(ErrorCategory.other),
+          item(ErrorCategory.naturalPhrasing),
+          item(ErrorCategory.wordMeaning),
         ]);
         final useCase = GradeRetranslationUseCase(correctionService: service);
 
@@ -103,7 +102,7 @@ void main() {
         expect(grade.isWellDone, isTrue);
         expect(grade.isKeepPracticing, isFalse);
         expect(grade.categoryErrors, isEmpty);
-        expect(grade.corrections, hasLength(4));
+        expect(grade.corrections, hasLength(3));
       },
     );
 
@@ -171,7 +170,7 @@ void main() {
       final grade = await useCase.call(
         attempt: 'una traducción perfecta',
         expectedAnswer: 'una traducción perfecta.',
-        savedErrorCategory: ErrorCategory.naturalLanguage,
+        savedErrorCategory: ErrorCategory.naturalPhrasing,
         language: Language.spanish,
       );
 
@@ -265,7 +264,7 @@ void main() {
           final service = _FakeCorrectionService([
             item(ErrorCategory.grammar),
             item(ErrorCategory.spelling),
-            item(ErrorCategory.wordChoice),
+            item(ErrorCategory.wordMeaning),
           ]);
           final useCase = GradeRetranslationUseCase(correctionService: service);
 
@@ -308,12 +307,12 @@ void main() {
         await useCase.call(
           attempt: 'mi intento',
           expectedAnswer: 'la respuesta esperada',
-          savedErrorCategory: ErrorCategory.wordChoice,
+          savedErrorCategory: ErrorCategory.wordMeaning,
           language: Language.spanish,
         );
 
         expect(service.lastExpectedAnswer, 'la respuesta esperada');
-        expect(service.lastTargetCategory, ErrorCategory.wordChoice);
+        expect(service.lastTargetCategory, ErrorCategory.wordMeaning);
       },
     );
 

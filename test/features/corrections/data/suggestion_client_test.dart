@@ -123,10 +123,10 @@ void main() {
     test('maps the four names onto today\'s categories until step 2.2', () {
       expect(suggestionCategoryFor('Spelling'), ErrorCategory.spelling);
       expect(suggestionCategoryFor('Grammar'), ErrorCategory.grammar);
-      expect(suggestionCategoryFor('Word meaning'), ErrorCategory.wordChoice);
+      expect(suggestionCategoryFor('Word meaning'), ErrorCategory.wordMeaning);
       expect(
         suggestionCategoryFor('Natural phrasing'),
-        ErrorCategory.naturalLanguage,
+        ErrorCategory.naturalPhrasing,
       );
       expect(suggestionCategoryFor('Tone'), isNull);
     });
@@ -183,9 +183,9 @@ void main() {
       final result = await client.check(text);
 
       expect(result.issues, hasLength(1));
-      expect(result.issues.single.category, ErrorCategory.wordChoice);
+      expect(result.issues.single.category, ErrorCategory.wordMeaning);
       expect(result.suggestions, hasLength(1));
-      expect(result.suggestions.single.category, ErrorCategory.naturalLanguage);
+      expect(result.suggestions.single.category, ErrorCategory.naturalPhrasing);
       expect(result.groupOf(result.issues.single), SuggestionGroup.issue);
       expect(
         result.groupOf(result.suggestions.single),
