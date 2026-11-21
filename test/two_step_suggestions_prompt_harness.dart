@@ -7,7 +7,8 @@
 // and a one-line reason.
 //
 // - Step 1 runs on GPT-6 Luna and returns only Issue categories:
-//   Spelling, Grammar, Word meaning.
+//   Spelling, Grammar, Word Choice (false friends and confused pairs,
+//   build step 2.2c).
 // - Step 2 runs on GPT-6 Sol, reads the text AFTER step 1's suggestions
 //   have been applied, and returns only Natural phrasing. The
 //   unnecessary-pronoun instruction lives in this step's prompt.
@@ -83,8 +84,7 @@ import 'two_pass_integration_harness.dart'
         isPassingScore,
         scoreFixtureResult,
         statsFor;
-import 'two_pass_linear_prompt_comparison_harness.dart'
-    show linearFixturesFor;
+import 'two_pass_linear_prompt_comparison_harness.dart' show linearFixturesFor;
 
 // ---------------------------------------------------------------------------
 // Categories, prompts and response format
@@ -136,7 +136,7 @@ const String oneStepPrompt =
     'tenses, mood (including the subjunctive), articles, required '
     'prepositions, the personal "a", required pronouns such as "le" or '
     '"se", ser/estar/haber, and missing words that Spanish grammar needs.\n'
-    '- Word meaning: a real Spanish word used with the wrong meaning, such '
+    '- Word Choice: a real Spanish word used with the wrong meaning, such '
     'as a false friend, or a word or verb that does not combine with its '
     'noun the way Spanish does.\n'
     '- Natural phrasing: wording a native writer would clearly say '
@@ -164,7 +164,7 @@ const String oneStepPrompt =
     'Most text needs few changes, and some needs none. If there is '
     'nothing to report, return an empty list.\n'
     '\n'
-    'The allowed categories are: Spelling, Grammar, Word meaning, Natural '
+    'The allowed categories are: Spelling, Grammar, Word Choice, Natural '
     'phrasing.\n'
     '\n'
     '$_itemShape'
@@ -186,7 +186,7 @@ const String oneStepLeanPrompt =
     '¿ or ¡.\n'
     '- Grammar: agreement, verb forms and moods, articles, required '
     'prepositions and pronouns, ser/estar/haber, missing words.\n'
-    '- Word meaning: a word used with the wrong meaning, or a verb that '
+    '- Word Choice: a word used with the wrong meaning, or a verb that '
     'does not go with its noun in Spanish.\n'
     '- Natural phrasing: wording a native writer would clearly say '
     'differently, including a subject pronoun repeated for no reason in a '
@@ -197,7 +197,7 @@ const String oneStepLeanPrompt =
     'fixes each point. If there is nothing to report, return an empty '
     'list.\n'
     '\n'
-    'The allowed categories are: Spelling, Grammar, Word meaning, Natural '
+    'The allowed categories are: Spelling, Grammar, Word Choice, Natural '
     'phrasing.\n'
     '\n'
     '$_itemShape'
@@ -491,15 +491,11 @@ class TwoStepResult {
       finalText != fixture.text;
 
   /// True when step 2 changed words that step 1 had already changed.
-  bool get retouchedStepOne => stepTwoRetouchedStepOne(
-        fixture.text,
-        textAfterIssues,
-        suggestionItems,
-      );
+  bool get retouchedStepOne =>
+      stepTwoRetouchedStepOne(fixture.text, textAfterIssues, suggestionItems);
 
   /// True for a sentence that has something to find.
-  bool get hasProblem =>
-      fixture.operationType != TwoPassOperationType.noChange;
+  bool get hasProblem => fixture.operationType != TwoPassOperationType.noChange;
 
   List<SuggestionItem> get allShownItems => [...issueItems, ...suggestionItems];
 
@@ -594,8 +590,10 @@ Future<T> _withRetries<T>(
       if (attempt > callRetries) rethrow;
       final pause = pauseFor(attempt);
       // ignore: avoid_print
-      print('    call failed (${e.message.split('\n').first}); retrying '
-          'in ${pause.inSeconds}s (try ${attempt + 1} of ${callRetries + 1})');
+      print(
+        '    call failed (${e.message.split('\n').first}); retrying '
+        'in ${pause.inSeconds}s (try ${attempt + 1} of ${callRetries + 1})',
+      );
       await Future<void>.delayed(pause);
     }
   }
@@ -753,8 +751,11 @@ String _cost(double? usd) =>
 String _items(List<SuggestionItem> items) => items.isEmpty
     ? '(none)'
     : items
-          .map((i) => '${i.written} -> ${i.suggestion} [${i.category}: '
-              '${i.reason}]')
+          .map(
+            (i) =>
+                '${i.written} -> ${i.suggestion} [${i.category}: '
+                '${i.reason}]',
+          )
           .join('<br>');
 
 String _percent(int part, int whole) =>
@@ -774,9 +775,9 @@ String buildTwoStepReport({
     ..writeln(
       oneStep
           ? 'One-call mode: a single prompt returning all four categories '
-                '(Spelling, Grammar, Word meaning, Natural phrasing) on '
+                '(Spelling, Grammar, Word Choice, Natural phrasing) on '
                 '`$issuesModel`. This report measures; it does not gate.'
-          : 'Step 1 (Issues: Spelling, Grammar, Word meaning) on '
+          : 'Step 1 (Issues: Spelling, Grammar, Word Choice) on '
                 '`$issuesModel`; step 2 (Suggestions: Natural phrasing) on '
                 '`$suggestionsModel`, reading the text after step 1\'s '
                 'suggestions were applied. This report measures; it does '
@@ -866,7 +867,9 @@ String buildTwoStepReport({
   for (final point in points) {
     final rows = results.where((r) => r.fixture.languagePoint == point);
     final ok = rows.where((r) => r.passed).length;
-    b.writeln('| $point | $ok | ${rows.length} | ${_percent(ok, rows.length)} |');
+    b.writeln(
+      '| $point | $ok | ${rows.length} | ${_percent(ok, rows.length)} |',
+    );
   }
   b.writeln();
 
@@ -879,7 +882,9 @@ String buildTwoStepReport({
   b
     ..writeln('## Speed and cost per call')
     ..writeln()
-    ..writeln('| Step | Model | Average time (ms) | Average cost | Total cost |')
+    ..writeln(
+      '| Step | Model | Average time (ms) | Average cost | Total cost |',
+    )
     ..writeln('| --- | --- | --- | --- | --- |');
   if (oneStep) {
     b.writeln(
@@ -1038,13 +1043,14 @@ void main() {
     test('step 1 names only the three Issue categories', () {
       expect(issuesStepPrompt, contains('Spelling'));
       expect(issuesStepPrompt, contains('Grammar'));
-      expect(issuesStepPrompt, contains('Word meaning'));
+      expect(issuesStepPrompt, contains('Word Choice'));
+      expect(issuesStepPrompt, isNot(contains('Word meaning')));
       expect(issuesStepPrompt, isNot(contains('Natural phrasing')));
     });
 
     test('step 2 names only Natural phrasing', () {
       expect(suggestionsStepPrompt, contains('Natural phrasing'));
-      expect(suggestionsStepPrompt, isNot(contains('Word meaning.')));
+      expect(suggestionsStepPrompt, isNot(contains('Word Choice.')));
       expect(
         suggestionsStepPrompt,
         contains('The only allowed category is: Natural phrasing.'),
@@ -1147,8 +1153,8 @@ void main() {
       expect((itemProps['category']! as Map)['enum'], issueCategories);
       expect(
         (suggestionResponseFormat(suggestionCategories)['json_schema']!
-                    as Map)['schema']
-                .toString(),
+                as Map)['schema']
+            .toString(),
         contains('Natural phrasing'),
       );
     });
@@ -1232,10 +1238,9 @@ void main() {
     );
 
     test('finds the words step 1 changed', () {
-      expect(
-        changedRanges('Nosotros vive cerca.', 'Nosotros vivimos cerca.'),
-        [(9, 16)],
-      );
+      expect(changedRanges('Nosotros vive cerca.', 'Nosotros vivimos cerca.'), [
+        (9, 16),
+      ]);
       expect(changedRanges('Igual.', 'Igual.'), isEmpty);
     });
 
@@ -1326,10 +1331,9 @@ void main() {
         category: 'Spelling',
         reason: 'r',
       );
-      final applied = applyItems(
-        'Compre cafe en una cafeteria pequena.',
-        [cafe],
-      );
+      final applied = applyItems('Compre cafe en una cafeteria pequena.', [
+        cafe,
+      ]);
       expect(applied.text, 'Compre café en una cafeteria pequena.');
       expect(applied.notApplied, isEmpty);
     });
@@ -1366,7 +1370,7 @@ void main() {
       const twice = SuggestionItem(
         written: 'casa',
         suggestion: 'hogar',
-        category: 'Word meaning',
+        category: 'Word Choice',
         reason: 'r',
       );
       final applied = applyItems('casa y casa', [twice]);
@@ -1384,7 +1388,7 @@ void main() {
       const second = SuggestionItem(
         written: 'hizo una decisión',
         suggestion: 'tomó una decisión',
-        category: 'Word meaning',
+        category: 'Word Choice',
         reason: 'r',
       );
       final applied = applyItems('Ayer iso una decisión importante.', [
@@ -1487,7 +1491,10 @@ void main() {
       }
       expect(allCategories, hasLength(4));
       expect(oneStepPrompt, contains('report every point you find'));
-      expect(oneStepPrompt, contains('Check every accent mark and every article'));
+      expect(
+        oneStepPrompt,
+        contains('Check every accent mark and every article'),
+      );
       expect(oneStepPrompt, contains('comma before "y"'));
       expect(oneStepPrompt, contains('keep the first'));
       expect(oneStepPrompt, contains('Do not flag regional forms'));
@@ -1500,7 +1507,10 @@ void main() {
       }
       expect(oneStepLeanPrompt, contains('Never add or remove commas'));
       expect(oneStepLeanPrompt, contains('Do not flag regional forms'));
-      expect(oneStepLeanPrompt, contains('Never use the words "wrong", "error"'));
+      expect(
+        oneStepLeanPrompt,
+        contains('Never use the words "wrong", "error"'),
+      );
       expect(oneStepLeanPrompt, contains('keep the first'));
       expect(oneStepLeanPrompt.length, lessThan(oneStepPrompt.length));
     });
@@ -1589,19 +1599,22 @@ void main() {
       expect(calls, callRetries + 1);
     });
 
-    test('a run whose calls all fail is scored as an error, not thrown', () async {
-      final fixture = allTwoPassFixtures.first;
-      final result = await _orErrorResult(
-        fixture,
-        2,
-        () async => throw const ChatCompletionsException('HTTP 503: reset'),
-      );
-      expect(result.score, TwoPassScoreLabel.error);
-      expect(result.passed, isFalse);
-      expect(result.runIndex, 2);
-      expect(result.finalText, fixture.text);
-      expect(result.error, 'HTTP 503: reset');
-    });
+    test(
+      'a run whose calls all fail is scored as an error, not thrown',
+      () async {
+        final fixture = allTwoPassFixtures.first;
+        final result = await _orErrorResult(
+          fixture,
+          2,
+          () async => throw const ChatCompletionsException('HTTP 503: reset'),
+        );
+        expect(result.score, TwoPassScoreLabel.error);
+        expect(result.passed, isFalse);
+        expect(result.runIndex, 2);
+        expect(result.finalText, fixture.text);
+        expect(result.error, 'HTTP 503: reset');
+      },
+    );
   });
 
   group('report', () {
@@ -1729,7 +1742,10 @@ void main() {
       expect(report, contains('| 1 Issues |'));
       expect(report, contains('| 2 Suggestions |'));
       expect(report, contains('| Both | | 4000 |'));
-      expect(report, contains('"wrong", "error", "incorrect" or "mistake": `1`'));
+      expect(
+        report,
+        contains('"wrong", "error", "incorrect" or "mistake": `1`'),
+      );
       expect(report, contains('Unnecessary Extras / Deletions'));
     });
   });
@@ -1741,9 +1757,7 @@ void main() {
       final environment = Platform.environment;
       if (!twoStepLiveOptIn(environment)) {
         // ignore: avoid_print
-        print(
-          'Skipping live two-step run. Set TWO_STEP_LIVE=true to opt in.',
-        );
+        print('Skipping live two-step run. Set TWO_STEP_LIVE=true to opt in.');
         return;
       }
 
@@ -1814,7 +1828,9 @@ void main() {
 
       final report = buildTwoStepReport(
         issuesModel: oneCall
-            ? (onePrompt == oneStepLeanPrompt ? '$oneModel, lean prompt' : oneModel)
+            ? (onePrompt == oneStepLeanPrompt
+                  ? '$oneModel, lean prompt'
+                  : oneModel)
             : issuesModel,
         suggestionsModel: suggestionsModel,
         results: results,

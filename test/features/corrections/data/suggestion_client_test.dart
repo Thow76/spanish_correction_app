@@ -175,7 +175,7 @@ void main() {
       const text = 'Yo trabajo mucho y yo estudio en la librería pública.';
       final (client, _) = _client(
         _reply([
-          _item('librería pública', 'biblioteca pública', 'Word meaning'),
+          _item('librería pública', 'biblioteca pública', 'Word Choice'),
         ]),
         _reply([_item('y yo estudio', 'y estudio', 'Natural phrasing')]),
       );
@@ -242,7 +242,9 @@ void main() {
 
       final result = await client.check('Tomé una decision.');
 
-      expect(result.issues.single.originalPhrase, 'una decision');
+      // The first item is kept, trimmed to the word that changes (2.2b);
+      // the second then overlaps it and is dropped.
+      expect(result.issues.single.originalPhrase, 'decision');
     });
 
     test('positions point at the right words in both texts', () async {
@@ -310,6 +312,69 @@ void main() {
         );
       },
     );
+
+    test('an Issue highlights only the words that change (2.2b)', () async {
+      const text = 'Ayer yo fue al mercado. Estoy muy embarazada hoy.';
+      final (client, _) = _client(
+        _reply([
+          _item('yo fue', 'yo fui', 'Grammar'),
+          _item(
+            'Estoy muy embarazada',
+            'Estoy muy avergonzada',
+            'Word Choice',
+          ),
+        ]),
+        _reply([]),
+      );
+
+      final result = await client.check(text);
+
+      expect(
+        result.suggestedText,
+        'Ayer yo fui al mercado. Estoy muy avergonzada hoy.',
+      );
+      final grammar = result.issues[0];
+      expect(grammar.originalPhrase, 'fue');
+      expect(grammar.correctedPhrase, 'fui');
+      expect(grammar.startIndex, text.indexOf('fue'));
+      expect(grammar.endIndex, text.indexOf('fue') + 3);
+      final wordChoice = result.issues[1];
+      expect(wordChoice.originalPhrase, 'embarazada');
+      expect(wordChoice.correctedPhrase, 'avergonzada');
+      expect(wordChoice.startIndex, text.indexOf('embarazada'));
+    });
+
+    test('a Natural phrasing point is never trimmed', () async {
+      const text = 'Tengo que hacer una decisión.';
+      final (client, _) = _client(
+        _reply([]),
+        _reply([
+          _item('hacer una decisión', 'tomar una decisión', 'Natural phrasing'),
+        ]),
+      );
+
+      final result = await client.check(text);
+
+      expect(result.suggestions.single.originalPhrase, 'hacer una decisión');
+      expect(result.suggestions.single.correctedPhrase, 'tomar una decisión');
+    });
+
+    test('words added or removed keep the quoted span', () async {
+      const text = 'Fui mercado y vi muy muy bueno.';
+      final (client, _) = _client(
+        _reply([
+          _item('Fui mercado', 'Fui al mercado', 'Grammar'),
+          _item('muy muy bueno', 'muy bueno', 'Grammar'),
+        ]),
+        _reply([]),
+      );
+
+      final result = await client.check(text);
+
+      expect(result.issues[0].originalPhrase, 'Fui mercado');
+      expect(result.issues[1].originalPhrase, 'muy muy bueno');
+      expect(result.suggestedText, 'Fui al mercado y vi muy bueno.');
+    });
 
     test('nothing to report leaves the text as it was', () async {
       final (client, _) = _client(_reply([]), _reply([]));
