@@ -55,28 +55,49 @@ void main() {
       expect(result, same(candidate));
     });
 
+    test('trims every category to the words that change (build step 2.2b): '
+        '"yo fue" -> "yo fui" highlights "fue"', () {
+      final candidate = StagedCorrectionCandidate(
+        originalPhrase: 'yo fue',
+        correctedPhrase: 'yo fui',
+        occurrence: 1,
+        category: 'Grammar',
+        verdict: StagedCorrectionVerdict.error,
+        startIndex: 5,
+        endIndex: 11,
+      );
+
+      final result = resolveSpanScopeTrim([candidate]).single;
+
+      expect(result.originalPhrase, 'fue');
+      expect(result.correctedPhrase, 'fui');
+      expect(result.startIndex, 8);
+      expect(result.endIndex, 11);
+    });
+
+    test('trims a Word Choice candidate: "Estoy muy embarazada" highlights '
+        '"embarazada"', () {
+      final candidate = StagedCorrectionCandidate(
+        originalPhrase: 'Estoy muy embarazada',
+        correctedPhrase: 'Estoy muy avergonzada',
+        occurrence: 1,
+        category: 'Word Choice',
+        verdict: StagedCorrectionVerdict.error,
+        startIndex: 0,
+        endIndex: 20,
+      );
+
+      final result = resolveSpanScopeTrim([candidate]).single;
+
+      expect(result.originalPhrase, 'embarazada');
+      expect(result.correctedPhrase, 'avergonzada');
+      expect(result.startIndex, 10);
+      expect(result.endIndex, 20);
+    });
+
     test(
-      'does not trim a non-Natural-Language candidate regardless of span_scope',
-      () {
-        final candidate = StagedCorrectionCandidate(
-          originalPhrase: 'Puedo tener una cerveza',
-          correctedPhrase: 'Me da una cerveza',
-          occurrence: 1,
-          category: 'Grammar',
-          verdict: StagedCorrectionVerdict.error,
-          spanScope: StagedCorrectionSpanScope.exact,
-          startIndex: 10,
-          endIndex: 33,
-        );
-
-        final result = resolveSpanScopeTrim([candidate]).single;
-
-        expect(result, same(candidate));
-      },
-    );
-
-    test(
-      'does not trim a Natural Language candidate with a null span_scope',
+      'trims a Natural Language candidate with a null span_scope, since only '
+      '"full" keeps the whole phrase',
       () {
         final candidate = StagedCorrectionCandidate(
           originalPhrase: 'Puedo tener una cerveza',
@@ -90,7 +111,10 @@ void main() {
 
         final result = resolveSpanScopeTrim([candidate]).single;
 
-        expect(result, same(candidate));
+        expect(result.originalPhrase, 'Puedo tener');
+        expect(result.correctedPhrase, 'Me da');
+        expect(result.startIndex, 10);
+        expect(result.endIndex, 21);
       },
     );
 
