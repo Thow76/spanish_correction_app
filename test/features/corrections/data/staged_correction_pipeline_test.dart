@@ -13,211 +13,195 @@ import 'package:spanish_correction_app/features/corrections/domain/error_categor
 const _submittedText = 'Vi mucho trafico ayer.';
 
 void main() {
-  test(
-    'runs Stage 1 -> Stage 1B -> Stage 2 -> position/insertion/dedup -> '
-    'verdict split -> Stage 3 end to end and assembles a correct '
-    'CorrectionResponse, via the real pipeline function with only the '
-    'network layer faked',
-    () async {
-      final client = _RoutingHttpClient({
-        stage1DetectionDialectSpanish: _arrayEnvelope(['"trafico"']),
-        stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-        stage2CategorizationSpanish: _arrayEnvelope([
-          '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
-              '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
-        ]),
-        stage3FeedbackSpanish: _arrayEnvelope([
-          '{"start_index": 9, "short_explanation": '
-              '"Trafico needs an accent on the a: tráfico."}',
-        ]),
-      });
+  test('runs Stage 1 -> Stage 1B -> Stage 2 -> position/insertion/dedup -> '
+      'verdict split -> Stage 3 end to end and assembles a correct '
+      'CorrectionResponse, via the real pipeline function with only the '
+      'network layer faked', () async {
+    final client = _RoutingHttpClient({
+      stage1DetectionDialectSpanish: _arrayEnvelope(['"trafico"']),
+      stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+      stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+      stage2CategorizationSpanish: _arrayEnvelope([
+        '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
+            '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
+      ]),
+      stage3FeedbackSpanish: _arrayEnvelope([
+        '{"start_index": 9, "short_explanation": '
+            '"Trafico needs an accent on the a: tráfico."}',
+      ]),
+    });
 
-      final response = await runStagedCorrectionPipeline(
-        client: OpenAiChatCompletionsClient(
-          apiKey: 'test-key',
-          httpClient: client,
-        ),
-        model: 'gpt-5.5',
-        submittedText: _submittedText,
-      );
+    final response = await runStagedCorrectionPipeline(
+      client: OpenAiChatCompletionsClient(
+        apiKey: 'test-key',
+        httpClient: client,
+      ),
+      model: 'gpt-5.5',
+      submittedText: _submittedText,
+    );
 
-      expect(response.originalText, _submittedText);
-      expect(response.correctedText, 'Vi mucho tráfico ayer.');
-      expect(response.hasCorrections, isTrue);
-      expect(response.notes, isEmpty);
+    expect(response.originalText, _submittedText);
+    expect(response.correctedText, 'Vi mucho tráfico ayer.');
+    expect(response.hasCorrections, isTrue);
+    expect(response.notes, isEmpty);
 
-      expect(response.corrections, hasLength(1));
-      final correction = response.corrections.single;
-      expect(correction.originalPhrase, 'trafico');
-      expect(correction.correctedPhrase, 'tráfico');
-      expect(correction.category, ErrorCategory.spelling);
-      expect(
-        correction.shortExplanation,
-        'Trafico needs an accent on the a: tráfico.',
-      );
-      expect(correction.startIndex, 9);
-      expect(correction.endIndex, 16);
-      expect(correction.correctedStartIndex, 9);
-      expect(correction.correctedEndIndex, 16);
-    },
-  );
+    expect(response.corrections, hasLength(1));
+    final correction = response.corrections.single;
+    expect(correction.originalPhrase, 'trafico');
+    expect(correction.correctedPhrase, 'tráfico');
+    expect(correction.category, ErrorCategory.spelling);
+    expect(
+      correction.shortExplanation,
+      'Trafico needs an accent on the a: tráfico.',
+    );
+    expect(correction.startIndex, 9);
+    expect(correction.endIndex, 16);
+    expect(correction.correctedStartIndex, 9);
+    expect(correction.correctedEndIndex, 16);
+  });
 
-  test(
-    'returns an unchanged, no-corrections response when Stage 1 and Stage '
-    '1B both flag nothing, without calling Stage 2 or Stage 3',
-    () async {
-      const cleanText = 'Todo está bien.';
-      final client = _RoutingHttpClient({
-        stage1DetectionDialectSpanish: _arrayEnvelope(const []),
-        stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-      });
+  test('returns an unchanged, no-corrections response when Stage 1 and Stage '
+      '1B both flag nothing, without calling Stage 2 or Stage 3', () async {
+    const cleanText = 'Todo está bien.';
+    final client = _RoutingHttpClient({
+      stage1DetectionDialectSpanish: _arrayEnvelope(const []),
+      stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+      stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+    });
 
-      final response = await runStagedCorrectionPipeline(
-        client: OpenAiChatCompletionsClient(
-          apiKey: 'test-key',
-          httpClient: client,
-        ),
-        model: 'gpt-5.5',
-        submittedText: cleanText,
-      );
+    final response = await runStagedCorrectionPipeline(
+      client: OpenAiChatCompletionsClient(
+        apiKey: 'test-key',
+        httpClient: client,
+      ),
+      model: 'gpt-5.5',
+      submittedText: cleanText,
+    );
 
-      expect(response.originalText, cleanText);
-      expect(response.correctedText, cleanText);
-      expect(response.hasCorrections, isFalse);
-      expect(response.notes, isEmpty);
-      expect(response.corrections, isEmpty);
-    },
-  );
+    expect(response.originalText, cleanText);
+    expect(response.correctedText, cleanText);
+    expect(response.hasCorrections, isFalse);
+    expect(response.notes, isEmpty);
+    expect(response.corrections, isEmpty);
+  });
 
-  test(
-    'returns a no-corrections response without calling Stage 3, when Stage '
-    '2 categorizes every flagged phrase as not_an_error',
-    () async {
-      const text = 'Vi el coche ayer.';
-      final client = _RoutingHttpClient({
-        stage1DetectionDialectSpanish: _arrayEnvelope(['"coche"']),
-        stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-        stage2CategorizationSpanish: _arrayEnvelope([
-          '{"original_phrase": "coche", "corrected_phrase": "coche", '
-              '"occurrence": 1, "category": null, "verdict": "not_an_error"}',
-        ]),
-      });
+  test('returns a no-corrections response without calling Stage 3, when Stage '
+      '2 categorizes every flagged phrase as not_an_error', () async {
+    const text = 'Vi el coche ayer.';
+    final client = _RoutingHttpClient({
+      stage1DetectionDialectSpanish: _arrayEnvelope(['"coche"']),
+      stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+      stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+      stage2CategorizationSpanish: _arrayEnvelope([
+        '{"original_phrase": "coche", "corrected_phrase": "coche", '
+            '"occurrence": 1, "category": null, "verdict": "not_an_error"}',
+      ]),
+    });
 
-      final response = await runStagedCorrectionPipeline(
-        client: OpenAiChatCompletionsClient(
-          apiKey: 'test-key',
-          httpClient: client,
-        ),
-        model: 'gpt-5.5',
-        submittedText: text,
-      );
+    final response = await runStagedCorrectionPipeline(
+      client: OpenAiChatCompletionsClient(
+        apiKey: 'test-key',
+        httpClient: client,
+      ),
+      model: 'gpt-5.5',
+      submittedText: text,
+    );
 
-      expect(response.originalText, text);
-      expect(response.correctedText, text);
-      expect(response.hasCorrections, isFalse);
-      expect(response.notes, isEmpty);
-      expect(response.corrections, isEmpty);
-    },
-  );
+    expect(response.originalText, text);
+    expect(response.correctedText, text);
+    expect(response.hasCorrections, isFalse);
+    expect(response.notes, isEmpty);
+    expect(response.corrections, isEmpty);
+  });
 
-  test(
-    'routes error, dialectal, and not_an_error verdicts from one Stage 2 '
-    'response to their correct final destinations, through the real '
-    'assembled pipeline end to end — the invariant step 7\'s unit test '
-    'already proves, exercised here at the integration level instead of '
-    'via a hand-called splitter',
-    () async {
-      const combinedText =
-          'Vi mucho trafico y el autobús pasó. Tengo un coche.';
-      final traficoIndex = combinedText.indexOf('trafico');
-      final autobusIndex = combinedText.indexOf('autobús');
+  test('routes error, dialectal, and not_an_error verdicts from one Stage 2 '
+      'response to their correct final destinations, through the real '
+      'assembled pipeline end to end — the invariant step 7\'s unit test '
+      'already proves, exercised here at the integration level instead of '
+      'via a hand-called splitter', () async {
+    const combinedText = 'Vi mucho trafico y el autobús pasó. Tengo un coche.';
+    final traficoIndex = combinedText.indexOf('trafico');
+    final autobusIndex = combinedText.indexOf('autobús');
 
-      final client = _RoutingHttpClient({
-        stage1DetectionDialectSpanish: _arrayEnvelope([
-          '"trafico"',
-          '"autobús"',
-          '"coche"',
-        ]),
-        stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-        stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-        stage2CategorizationSpanish: _arrayEnvelope([
-          '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
-              '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
-          '{"original_phrase": "autobús", "corrected_phrase": "autobús", '
-              '"occurrence": 1, "category": "Other", "verdict": "dialectal"}',
-          '{"original_phrase": "coche", "corrected_phrase": "coche", '
-              '"occurrence": 1, "category": null, "verdict": "not_an_error"}',
-        ]),
-        stage3FeedbackSpanish: _arrayEnvelope([
-          '{"start_index": $traficoIndex, "short_explanation": '
-              '"Trafico needs an accent on the a: tráfico."}',
-          '{"start_index": $autobusIndex, "short_explanation": '
-              '"Standard in Spain; called camión or guagua in parts of '
-              'Latin America."}',
-        ]),
-      });
+    final client = _RoutingHttpClient({
+      stage1DetectionDialectSpanish: _arrayEnvelope([
+        '"trafico"',
+        '"autobús"',
+        '"coche"',
+      ]),
+      stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+      stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+      stage2CategorizationSpanish: _arrayEnvelope([
+        '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
+            '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
+        '{"original_phrase": "autobús", "corrected_phrase": "autobús", '
+            '"occurrence": 1, "category": "Other", "verdict": "dialectal"}',
+        '{"original_phrase": "coche", "corrected_phrase": "coche", '
+            '"occurrence": 1, "category": null, "verdict": "not_an_error"}',
+      ]),
+      stage3FeedbackSpanish: _arrayEnvelope([
+        '{"start_index": $traficoIndex, "short_explanation": '
+            '"Trafico needs an accent on the a: tráfico."}',
+        '{"start_index": $autobusIndex, "short_explanation": '
+            '"Standard in Spain; called camión or guagua in parts of '
+            'Latin America."}',
+      ]),
+    });
 
-      final response = await runStagedCorrectionPipeline(
-        client: OpenAiChatCompletionsClient(
-          apiKey: 'test-key',
-          httpClient: client,
-        ),
-        model: 'gpt-5.5',
-        submittedText: combinedText,
-      );
+    final response = await runStagedCorrectionPipeline(
+      client: OpenAiChatCompletionsClient(
+        apiKey: 'test-key',
+        httpClient: client,
+      ),
+      model: 'gpt-5.5',
+      submittedText: combinedText,
+    );
 
-      // Exactly the expected counts — nothing extra leaked through from the
-      // not_an_error verdict, or from any mis-routing between corrections
-      // and notes.
-      expect(response.corrections, hasLength(1));
-      expect(response.notes, hasLength(1));
+    // Exactly the expected counts — nothing extra leaked through from the
+    // not_an_error verdict, or from any mis-routing between corrections
+    // and notes.
+    expect(response.corrections, hasLength(1));
+    expect(response.notes, hasLength(1));
 
-      // error -> a real correction, positioned correctly, with its Stage 3
-      // explanation attached.
-      final correction = response.corrections.single;
-      expect(correction.originalPhrase, 'trafico');
-      expect(correction.correctedPhrase, 'tráfico');
-      expect(correction.category, ErrorCategory.spelling);
-      expect(
-        correction.shortExplanation,
-        'Trafico needs an accent on the a: tráfico.',
-      );
-      expect(correction.startIndex, traficoIndex);
-      expect(correction.endIndex, traficoIndex + 'trafico'.length);
+    // error -> a real correction, positioned correctly, with its Stage 3
+    // explanation attached.
+    final correction = response.corrections.single;
+    expect(correction.originalPhrase, 'trafico');
+    expect(correction.correctedPhrase, 'tráfico');
+    expect(correction.category, ErrorCategory.spelling);
+    expect(
+      correction.shortExplanation,
+      'Trafico needs an accent on the a: tráfico.',
+    );
+    expect(correction.startIndex, traficoIndex);
+    expect(correction.endIndex, traficoIndex + 'trafico'.length);
 
-      // dialectal -> a note, never a correction, with its Stage 3
-      // explanation as note text.
-      final note = response.notes.single;
-      expect(note.phrase, 'autobús');
-      expect(
-        note.note,
-        'Standard in Spain; called camión or guagua in parts of Latin '
-        'America.',
-      );
+    // dialectal -> a note, never a correction, with its Stage 3
+    // explanation as note text.
+    final note = response.notes.single;
+    expect(note.phrase, 'autobús');
+    expect(
+      note.note,
+      'Standard in Spain; called camión or guagua in parts of Latin '
+      'America.',
+    );
 
-      // not_an_error ("coche") must not appear anywhere in the final
-      // result — not as a correction, not as a note.
-      expect(
-        response.corrections.any((item) => item.originalPhrase == 'coche'),
-        isFalse,
-      );
-      expect(
-        response.notes.any((n) => n.phrase == 'coche'),
-        isFalse,
-      );
+    // not_an_error ("coche") must not appear anywhere in the final
+    // result — not as a correction, not as a note.
+    expect(
+      response.corrections.any((item) => item.originalPhrase == 'coche'),
+      isFalse,
+    );
+    expect(response.notes.any((n) => n.phrase == 'coche'), isFalse);
 
-      // correctedText reflects only the error correction — dialectal and
-      // not_an_error never touch the text.
-      expect(
-        response.correctedText,
-        'Vi mucho tráfico y el autobús pasó. Tengo un coche.',
-      );
-      expect(response.hasCorrections, isTrue);
-    },
-  );
+    // correctedText reflects only the error correction — dialectal and
+    // not_an_error never touch the text.
+    expect(
+      response.correctedText,
+      'Vi mucho tráfico y el autobús pasó. Tengo un coche.',
+    );
+    expect(response.hasCorrections, isTrue);
+  });
 
   test(
     'trims a Natural Language + span_scope exact correction down to its '
@@ -267,150 +251,126 @@ void main() {
     },
   );
 
-  group(
-    'pure-deletion corrections (empty corrected_phrase) do not leave a '
-    'double space behind',
-    () {
-      test(
-        'the live-observed bug: two redundant "yo"s removed from a '
-        'sentence leave no double spaces',
-        () async {
-          const text = 'Yo fui a casa, yo estudié, y yo hice la cena.';
-          final client = _RoutingHttpClient(
-            _redundantPronounDeletionReplies(
-              text: text,
-              deletedPhrases: const ['yo', 'yo'],
-              occurrences: const [1, 2],
-            ),
-          );
-
-          final response = await runStagedCorrectionPipeline(
-            client: OpenAiChatCompletionsClient(
-              apiKey: 'test-key',
-              httpClient: client,
-            ),
-            model: 'gpt-5.5',
-            submittedText: text,
-          );
-
-          expect(
-            response.correctedText,
-            'Yo fui a casa, estudié, y hice la cena.',
-          );
-          expect(response.corrections, hasLength(2));
-        },
+  group('pure-deletion corrections (empty corrected_phrase) do not leave a '
+      'double space behind', () {
+    test('the live-observed bug: two redundant "yo"s removed from a '
+        'sentence leave no double spaces', () async {
+      const text = 'Yo fui a casa, yo estudié, y yo hice la cena.';
+      final client = _RoutingHttpClient(
+        _redundantPronounDeletionReplies(
+          text: text,
+          deletedPhrases: const ['yo', 'yo'],
+          occurrences: const [1, 2],
+        ),
       );
 
-      test(
-        'a deletion at the very start of the text absorbs the trailing '
-        'space, leaving no leading stray space',
-        () async {
-          const text = 'Yo fui a casa.';
-          final client = _RoutingHttpClient(
-            _redundantPronounDeletionReplies(
-              text: text,
-              deletedPhrases: const ['Yo'],
-              occurrences: const [1],
-            ),
-          );
-
-          final response = await runStagedCorrectionPipeline(
-            client: OpenAiChatCompletionsClient(
-              apiKey: 'test-key',
-              httpClient: client,
-            ),
-            model: 'gpt-5.5',
-            submittedText: text,
-          );
-
-          expect(response.correctedText, 'fui a casa.');
-        },
+      final response = await runStagedCorrectionPipeline(
+        client: OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+        ),
+        model: 'gpt-5.5',
+        submittedText: text,
       );
 
-      test(
-        'a deletion at the very end of the text (nothing trailing) falls '
-        'back to absorbing the leading space',
-        () async {
-          const text = 'Estudié mucho yo';
-          final client = _RoutingHttpClient(
-            _redundantPronounDeletionReplies(
-              text: text,
-              deletedPhrases: const ['yo'],
-              occurrences: const [1],
-            ),
-          );
+      expect(response.correctedText, 'Yo fui a casa, estudié, y hice la cena.');
+      expect(response.corrections, hasLength(2));
+    });
 
-          final response = await runStagedCorrectionPipeline(
-            client: OpenAiChatCompletionsClient(
-              apiKey: 'test-key',
-              httpClient: client,
-            ),
-            model: 'gpt-5.5',
-            submittedText: text,
-          );
-
-          expect(response.correctedText, 'Estudié mucho');
-        },
+    test('a deletion at the very start of the text absorbs the trailing '
+        'space, leaving no leading stray space', () async {
+      const text = 'Yo fui a casa.';
+      final client = _RoutingHttpClient(
+        _redundantPronounDeletionReplies(
+          text: text,
+          deletedPhrases: const ['Yo'],
+          occurrences: const [1],
+        ),
       );
 
-      test(
-        'a deletion directly followed by punctuation (no trailing space) '
+      final response = await runStagedCorrectionPipeline(
+        client: OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+        ),
+        model: 'gpt-5.5',
+        submittedText: text,
+      );
+
+      expect(response.correctedText, 'fui a casa.');
+    });
+
+    test('a deletion at the very end of the text (nothing trailing) falls '
+        'back to absorbing the leading space', () async {
+      const text = 'Estudié mucho yo';
+      final client = _RoutingHttpClient(
+        _redundantPronounDeletionReplies(
+          text: text,
+          deletedPhrases: const ['yo'],
+          occurrences: const [1],
+        ),
+      );
+
+      final response = await runStagedCorrectionPipeline(
+        client: OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+        ),
+        model: 'gpt-5.5',
+        submittedText: text,
+      );
+
+      expect(response.correctedText, 'Estudié mucho');
+    });
+
+    test('a deletion directly followed by punctuation (no trailing space) '
         'absorbs the leading space instead, avoiding a space-then-comma '
-        'artifact',
-        () async {
-          const text = 'Estudié yo, y comí.';
-          final client = _RoutingHttpClient(
-            _redundantPronounDeletionReplies(
-              text: text,
-              deletedPhrases: const ['yo'],
-              occurrences: const [1],
-            ),
-          );
-
-          final response = await runStagedCorrectionPipeline(
-            client: OpenAiChatCompletionsClient(
-              apiKey: 'test-key',
-              httpClient: client,
-            ),
-            model: 'gpt-5.5',
-            submittedText: text,
-          );
-
-          expect(response.correctedText, 'Estudié, y comí.');
-        },
+        'artifact', () async {
+      const text = 'Estudié yo, y comí.';
+      final client = _RoutingHttpClient(
+        _redundantPronounDeletionReplies(
+          text: text,
+          deletedPhrases: const ['yo'],
+          occurrences: const [1],
+        ),
       );
 
-      test(
-        'three separate deletions in one sentence each resolve '
-        'independently, none leaking a double space',
-        () async {
-          const text = 'yo fui a casa, yo estudié, y yo hice la cena.';
-          final client = _RoutingHttpClient(
-            _redundantPronounDeletionReplies(
-              text: text,
-              deletedPhrases: const ['yo', 'yo', 'yo'],
-              occurrences: const [1, 2, 3],
-            ),
-          );
-
-          final response = await runStagedCorrectionPipeline(
-            client: OpenAiChatCompletionsClient(
-              apiKey: 'test-key',
-              httpClient: client,
-            ),
-            model: 'gpt-5.5',
-            submittedText: text,
-          );
-
-          expect(
-            response.correctedText,
-            'fui a casa, estudié, y hice la cena.',
-          );
-          expect(response.corrections, hasLength(3));
-        },
+      final response = await runStagedCorrectionPipeline(
+        client: OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+        ),
+        model: 'gpt-5.5',
+        submittedText: text,
       );
-    },
-  );
+
+      expect(response.correctedText, 'Estudié, y comí.');
+    });
+
+    test('three separate deletions in one sentence each resolve '
+        'independently, none leaking a double space', () async {
+      const text = 'yo fui a casa, yo estudié, y yo hice la cena.';
+      final client = _RoutingHttpClient(
+        _redundantPronounDeletionReplies(
+          text: text,
+          deletedPhrases: const ['yo', 'yo', 'yo'],
+          occurrences: const [1, 2, 3],
+        ),
+      );
+
+      final response = await runStagedCorrectionPipeline(
+        client: OpenAiChatCompletionsClient(
+          apiKey: 'test-key',
+          httpClient: client,
+        ),
+        model: 'gpt-5.5',
+        submittedText: text,
+      );
+
+      expect(response.correctedText, 'fui a casa, estudié, y hice la cena.');
+      expect(response.corrections, hasLength(3));
+    });
+  });
 }
 
 /// Builds `_RoutingHttpClient` replies for a Stage 1B redundant-pronoun
@@ -457,6 +417,67 @@ Map<String, String> _redundantPronounDeletionReplies({
     stage2CategorizationSpanish: _arrayEnvelope(stage2Entries),
     stage3FeedbackSpanish: _arrayEnvelope(stage3Entries),
   };
+
+  test('build step 2.2b: a Grammar and a Word Choice point are highlighted on '
+      'the words that change, a full Natural Language point stays whole, '
+      'and Stage 3 matches on the trimmed positions', () async {
+    const text =
+        'Ayer yo fue al mercado. Estoy muy embarazada. '
+        'Tuvimos un buen tiempo.';
+    final client = _RoutingHttpClient({
+      stage1DetectionDialectSpanish: _arrayEnvelope([
+        '"yo fue"',
+        '"Estoy muy embarazada"',
+        '"Tuvimos un buen tiempo"',
+      ]),
+      stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+      stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+      stage2CategorizationSpanish: _arrayEnvelope([
+        '{"original_phrase": "yo fue", "corrected_phrase": "yo fui", '
+            '"occurrence": 1, "category": "Grammar", "verdict": "error"}',
+        '{"original_phrase": "Estoy muy embarazada", '
+            '"corrected_phrase": "Estoy muy avergonzada", "occurrence": 1, '
+            '"category": "Word Choice", "verdict": "error"}',
+        '{"original_phrase": "Tuvimos un buen tiempo", '
+            '"corrected_phrase": "Lo pasamos bien", "occurrence": 1, '
+            '"category": "Natural Language", "verdict": "error", '
+            '"span_scope": "full"}',
+      ]),
+      stage3FeedbackSpanish: _arrayEnvelope([
+        '{"start_index": 8, "short_explanation": "First person: fui."}',
+        '{"start_index": 34, "short_explanation": "False friend."}',
+        '{"start_index": 46, "short_explanation": "Calque."}',
+      ]),
+    });
+
+    final response = await runStagedCorrectionPipeline(
+      client: OpenAiChatCompletionsClient(
+        apiKey: 'test-key',
+        httpClient: client,
+      ),
+      model: 'gpt-5.5',
+      submittedText: text,
+    );
+
+    expect(
+      response.correctedText,
+      'Ayer yo fui al mercado. Estoy muy avergonzada. Lo pasamos bien.',
+    );
+    expect(response.corrections, hasLength(3));
+    final [grammar, wordChoice, natural] = response.corrections;
+    expect(grammar.originalPhrase, 'fue');
+    expect(grammar.correctedPhrase, 'fui');
+    expect(grammar.startIndex, 8);
+    expect(grammar.endIndex, 11);
+    expect(grammar.shortExplanation, 'First person: fui.');
+    expect(wordChoice.originalPhrase, 'embarazada');
+    expect(wordChoice.correctedPhrase, 'avergonzada');
+    expect(wordChoice.startIndex, 34);
+    expect(wordChoice.endIndex, 44);
+    expect(natural.originalPhrase, 'Tuvimos un buen tiempo');
+    expect(natural.startIndex, 46);
+    expect(natural.endIndex, 68);
+  });
 }
 
 /// Wraps a hand-written list of already-JSON-encoded array element strings
@@ -465,10 +486,7 @@ Map<String, String> _redundantPronounDeletionReplies({
 String _arrayEnvelope(List<String> elements) => jsonEncode({
   'choices': [
     {
-      'message': {
-        'role': 'assistant',
-        'content': '[${elements.join(', ')}]',
-      },
+      'message': {'role': 'assistant', 'content': '[${elements.join(', ')}]'},
     },
   ],
 });
@@ -539,7 +557,8 @@ class _FakeHttpHeaders implements HttpHeaders {
 
 class _FakeHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
-  _FakeHttpClientResponse({required String responseBody}) : _body = responseBody;
+  _FakeHttpClientResponse({required String responseBody})
+    : _body = responseBody;
 
   final String _body;
 

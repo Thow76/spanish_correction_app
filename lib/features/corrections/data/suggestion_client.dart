@@ -4,6 +4,7 @@ import 'package:characters/characters.dart';
 
 import '../../../core/services/prompts/correction_prompt.dart';
 import '../domain/correction_item.dart';
+import '../domain/correction_span_trim_calculator.dart';
 import '../domain/correction_response.dart';
 import '../domain/error_category.dart';
 import 'openai_chat_completions_client.dart';
@@ -261,23 +262,65 @@ List<PlacedSuggestionEdit> placeSuggestionEdits(
     if (item.written == item.suggestion) continue;
     final matches = wholeWordMatches(text, item.written);
     if (matches.length != 1) continue;
-    final start = matches.single;
-    final end = start + item.written.length;
-    if (kept.any((k) => _rangesOverlap(start, end, k.start, k.end))) continue;
-    kept.add(
-      PlacedSuggestionEdit(
-        item: item,
-        category: category,
-        start: start,
-        end: end,
-      ),
+    final edit = _trimToChangedWords(
+      item: item,
+      category: category,
+      start: matches.single,
     );
+    if (kept.any((k) => _rangesOverlap(edit.start, edit.end, k.start, k.end))) {
+      continue;
+    }
+    kept.add(edit);
   }
   kept.sort((a, b) => a.start.compareTo(b.start));
   return kept;
 }
 
 /// [text] with every edit in [sortedEdits] put in place.
+/// Build step 2.2b: an Issue's highlight covers only the words that change.
+/// Unchanged words the model quoted at either end ("yo" in "yo fue" -> "yo
+/// fui") are trimmed off, whole words only, with the positions moved to
+/// match. A Natural phrasing point is never trimmed: the two-step prompt has
+/// no "full" marker, and a phrase-level suggestion ("hacer una decisión" ->
+/// "tomar una decisión") is meant to be read as a whole. When trimming would
+/// leave either side empty (words added or removed, rather than changed) the
+/// quoted span is kept as it is.
+PlacedSuggestionEdit _trimToChangedWords({
+  required SuggestionStepItem item,
+  required ErrorCategory category,
+  required int start,
+}) {
+  final end = start + item.written.length;
+  final untrimmed = PlacedSuggestionEdit(
+    item: item,
+    category: category,
+    start: start,
+    end: end,
+  );
+  if (category == ErrorCategory.naturalPhrasing) return untrimmed;
+
+  final trim = calculateSharedAffixTrim(
+    originalPhrase: item.written,
+    correctedPhrase: item.suggestion,
+  );
+  if (trim.prefixLength == 0 && trim.suffixLength == 0) return untrimmed;
+  if (trim.trimmedOriginalPhrase.isEmpty ||
+      trim.trimmedCorrectedPhrase.isEmpty) {
+    return untrimmed;
+  }
+  return PlacedSuggestionEdit(
+    item: SuggestionStepItem(
+      written: trim.trimmedOriginalPhrase,
+      suggestion: trim.trimmedCorrectedPhrase,
+      category: item.category,
+      reason: item.reason,
+    ),
+    category: category,
+    start: start + trim.prefixLength,
+    end: end - trim.suffixLength,
+  );
+}
+
 String applySuggestionEdits(
   String text,
   List<PlacedSuggestionEdit> sortedEdits,
