@@ -132,7 +132,7 @@ const List<_Case> _battery = [
     englishSource: 'I realised I forgot my keys',
     attempt: 'Realicé que olvidé mis llaves',
     expectedAnswer: 'Me di cuenta de que olvidé mis llaves.',
-    savedCategory: ErrorCategory.wordChoice,
+    savedCategory: ErrorCategory.wordMeaning,
     expectedTier: RetranslationTier.siguePracticando,
     note:
         '"Realicé" as a calque of "realised" is a word-choice error '
@@ -182,7 +182,7 @@ const List<_Case> _battery = [
     englishSource: 'It is raining a lot today',
     attempt: 'Está fazendo muita chuva hoje',
     expectedAnswer: 'Está chovendo muito hoje.',
-    savedCategory: ErrorCategory.naturalLanguage,
+    savedCategory: ErrorCategory.naturalPhrasing,
     expectedTier: RetranslationTier.siguePracticando,
     note:
         '"fazendo chuva" is unnatural (native: "chovendo muito"); expect '

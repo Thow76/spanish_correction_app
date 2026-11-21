@@ -132,7 +132,7 @@ class OpenAiCorrectionService implements CorrectionService {
           '''
 Original phrase: ${correction.originalPhrase}
 Corrected phrase: ${correction.correctedPhrase}
-Category: ${correction.category.label}
+Category: ${correction.category.legacyPromptLabel}
 Short explanation: ${correction.shortExplanation}
 ''',
       stageLabel: 'long_explanation',
@@ -154,7 +154,7 @@ Short explanation: ${correction.shortExplanation}
           '''
 Original phrase: ${correction.originalPhrase}
 Corrected phrase: ${correction.correctedPhrase}
-Category: ${correction.category.label}
+Category: ${correction.category.legacyPromptLabel}
 Short explanation: ${correction.shortExplanation}
 ''',
       textFormat: _structuredExplanationResponseFormat,

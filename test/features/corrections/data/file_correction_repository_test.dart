@@ -42,6 +42,95 @@ void main() {
     expect(submissions.last.id, 'submission-2');
   });
 
+  group('one-time rename of the categories (build step 2.2)', () {
+    Map<String, Object?> savedJson(String id, String category) => {
+      'id': id,
+      'category': category,
+      'short_explanation': 'reason',
+      'original_sentence': 'Hice una decisión.',
+      'saved_at': '2026-11-01T10:00:00.000',
+      'corrected_phrase': 'tomé',
+      'original_phrase': 'hice',
+      'corrected_sentence': 'Tomé una decisión.',
+      'prompt_phrase': 'I made a decision.',
+      'language': 'spanish',
+    };
+
+    Map<String, Object?> submissionJson(String category) => {
+      'id': 'submission-old',
+      'language': 'spanish',
+      'created_at': '2026-11-01T10:00:00.000',
+      'response': {
+        'original_text': 'Hice una decisión.',
+        'corrected_text': 'Tomé una decisión.',
+        'corrections': [
+          {
+            'original_phrase': 'Hice',
+            'start_index': 0,
+            'end_index': 4,
+            'corrected_phrase': 'Tomé',
+            'category': category,
+            'short_explanation': 'reason',
+          },
+        ],
+      },
+    };
+
+    test('renames old saved and History items and rewrites the file once',
+        () async {
+      final file = File('${tempDirectory.path}/store.json');
+      await file.writeAsString(
+        jsonEncode({
+          'recent_submissions': [submissionJson('Word Choice')],
+          'saved_corrections': [
+            savedJson('a', 'Word Choice'),
+            savedJson('b', 'Natural Language'),
+            savedJson('c', 'Other'),
+            savedJson('d', 'Grammar'),
+          ],
+          'walkthrough_activities': [],
+        }),
+      );
+
+      final saved = await repository.getSavedCorrections();
+      expect(saved.map((c) => c.category), [
+        ErrorCategory.wordMeaning,
+        ErrorCategory.naturalPhrasing,
+        ErrorCategory.naturalPhrasing,
+        ErrorCategory.grammar,
+      ]);
+
+      // Reading was enough: the file itself now holds only the new names.
+      final content = await file.readAsString();
+      expect(content, isNot(contains('Word Choice')));
+      expect(content, isNot(contains('Natural Language')));
+      expect(content, isNot(contains('"Other"')));
+      expect(content, contains('"Word meaning"'));
+      expect(content, contains('"Natural phrasing"'));
+
+      final history = await repository.getRecentSubmissions();
+      expect(
+        history.single.response.corrections.single.category,
+        ErrorCategory.wordMeaning,
+      );
+      expect(saved.map((c) => c.id), ['a', 'b', 'c', 'd']);
+    });
+
+    test('leaves a file with only new names untouched', () async {
+      final file = File('${tempDirectory.path}/store.json');
+      final original = jsonEncode({
+        'recent_submissions': [],
+        'saved_corrections': [savedJson('a', 'Word meaning')],
+        'walkthrough_activities': [],
+      });
+      await file.writeAsString(original);
+
+      await repository.getSavedCorrections();
+
+      expect(await file.readAsString(), original);
+    });
+  });
+
   test('persists saved corrections', () async {
     final savedCorrection = SavedCorrection(
       id: 'saved-1',

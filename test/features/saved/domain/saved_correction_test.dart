@@ -20,7 +20,7 @@ void main() {
       },
     });
 
-    expect(correction.category, ErrorCategory.naturalLanguage);
+    expect(correction.category, ErrorCategory.naturalPhrasing);
     expect(
       correction.explanation.whyItsWrong,
       'The original expression is a literal calque.',

@@ -1050,7 +1050,7 @@ class _CurrentAnswerBlock extends StatelessWidget {
               children: buildHighlightedSpans(
                 text: answer.isEmpty ? '...' : answer,
                 corrections: corrections,
-                color: AppColors.naturalLanguage,
+                color: AppColors.naturalPhrasing,
                 fontWeight: FontWeight.w400,
                 decoration: TextDecoration.underline,
               ),

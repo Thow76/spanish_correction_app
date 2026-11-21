@@ -813,13 +813,12 @@ class _WalkthroughState extends State<_Walkthrough> {
           runSpacing: AppSpacing.sm,
           children: [
             for (final category in ErrorCategory.values)
-              if (category != ErrorCategory.other)
-                IntrinsicWidth(
-                  child: CategoryPill(
-                    label: category.label,
-                    color: category.color,
-                  ),
+              IntrinsicWidth(
+                child: CategoryPill(
+                  label: category.label,
+                  color: category.color,
                 ),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.lg),

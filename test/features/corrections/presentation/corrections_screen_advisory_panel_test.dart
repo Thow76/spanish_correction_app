@@ -30,7 +30,7 @@ void main() {
           CorrectionItem(
             originalPhrase: 'bien',
             correctedPhrase: 'bueno',
-            category: ErrorCategory.wordChoice,
+            category: ErrorCategory.wordMeaning,
             shortExplanation: 'Bueno fits the noun being described.',
             startIndex: 5,
             endIndex: 9,

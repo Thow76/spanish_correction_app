@@ -93,8 +93,6 @@ List<SuggestionStepItem> parseSuggestionStepReply(String replyText) {
 
 /// The app's category for a category name the two steps use.
 ///
-/// Until build step 2.2 renames the categories, Word meaning is shown as
-/// today's Word Choice and Natural phrasing as today's Natural Language.
 /// Returns null for any other name, and the item is then left out.
 ErrorCategory? suggestionCategoryFor(String name) {
   switch (name.trim()) {
@@ -103,9 +101,9 @@ ErrorCategory? suggestionCategoryFor(String name) {
     case 'Grammar':
       return ErrorCategory.grammar;
     case 'Word meaning':
-      return ErrorCategory.wordChoice;
+      return ErrorCategory.wordMeaning;
     case 'Natural phrasing':
-      return ErrorCategory.naturalLanguage;
+      return ErrorCategory.naturalPhrasing;
   }
   return null;
 }

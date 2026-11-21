@@ -206,7 +206,7 @@ void main() {
       final unranged = CorrectionItem(
         originalPhrase: 'a',
         correctedPhrase: 'A',
-        category: ErrorCategory.other,
+        category: ErrorCategory.grammar,
         shortExplanation: 'no range',
       );
 
@@ -225,7 +225,7 @@ void main() {
       final unranged = CorrectionItem(
         originalPhrase: 'b',
         correctedPhrase: 'B',
-        category: ErrorCategory.other,
+        category: ErrorCategory.grammar,
         shortExplanation: 'no range',
       );
 

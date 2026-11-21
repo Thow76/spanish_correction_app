@@ -546,7 +546,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'excitado',
           correctedPhrase: 'emocionado',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               'In Spanish "excitado" usually means physically aroused; the '
               'word for excited about something is "emocionado".',
@@ -554,7 +554,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'hacer una decisión',
           correctedPhrase: 'tomar una decisión',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               'Spanish takes decisions rather than making them: "tomar una '
               'decisión".',
@@ -598,7 +598,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'no realizaba que',
           correctedPhrase: 'no me daba cuenta de que',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               '"Realizar" means to carry out; for noticing something Spanish '
               'uses "darse cuenta de".',
@@ -614,7 +614,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'es un pedazo de pastel',
           correctedPhrase: 'es pan comido',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"A piece of cake" does not carry over word for word; Spanish '
               'says "es pan comido".',
@@ -651,7 +651,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'atender a un concierto',
           correctedPhrase: 'asistir a un concierto',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               '"Atender" means to attend to or serve someone; to go to a '
               'concert Spanish says "asistir a".',
@@ -659,7 +659,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'tengo un buen tiempo',
           correctedPhrase: 'lo paso bien',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"Have a good time" does not carry over word for word; Spanish '
               'says "pasarlo bien".',
@@ -694,7 +694,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'eventualmente',
           correctedPhrase: 'al final',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               '"Eventualmente" means possibly or now and then; for "in the '
               'end" Spanish says "al final".',
@@ -702,7 +702,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'no hizo sentido',
           correctedPhrase: 'no tuvo sentido',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               'In Spanish something "tiene sentido"; "hacer sentido" copies '
               'the English "make sense".',
@@ -722,7 +722,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'la librería de mi barrio',
           correctedPhrase: 'la biblioteca de mi barrio',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               'A "librería" sells books; the place you borrow them from is a '
               '"biblioteca".',
@@ -738,7 +738,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'no puedo ponerlo abajo',
           correctedPhrase: 'no puedo dejarlo',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"Put it down" does not carry over word for word; Spanish says '
               '"no puedo dejarlo".',
@@ -774,7 +774,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'tenemos una explosión',
           correctedPhrase: 'lo pasamos genial',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"Have a blast" does not carry over word for word; Spanish says '
               '"lo pasamos genial".',
@@ -782,7 +782,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'Soporto al Betis',
           correctedPhrase: 'Soy del Betis',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               '"Soportar" means to put up with; to support a team Spanish '
               'says "ser de" or "apoyar".',
@@ -809,7 +809,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'una pequeña villa',
           correctedPhrase: 'un pequeño pueblo',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               'A "villa" is a large country house; a village is a "pueblo".',
         ),
@@ -824,7 +824,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'tomar un paseo',
           correctedPhrase: 'dar un paseo',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               'Spanish gives a walk rather than taking one: "dar un paseo".',
         ),
@@ -851,7 +851,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'en una base diaria',
           correctedPhrase: 'a diario',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"On a daily basis" does not carry over word for word; Spanish '
               'says "a diario".',
@@ -867,7 +867,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'recuerdo vídeos',
           correctedPhrase: 'grabo vídeos',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               '"Recordar" means to remember; to record a video Spanish says '
               '"grabar".',
@@ -896,7 +896,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'muy educados',
           correctedPhrase: 'muy cultos',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation:
               '"Educado" usually means polite; for learned or cultured '
               'Spanish says "culto".',
@@ -919,7 +919,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'se repite a sí misma',
           correctedPhrase: 'se repite',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               'Spanish says "la historia se repite"; "a sí misma" copies the '
               'English "itself" and is not needed.',
@@ -940,7 +940,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'me sopló la mente',
           correctedPhrase: 'me dejó alucinado',
-          category: ErrorCategory.naturalLanguage,
+          category: ErrorCategory.naturalPhrasing,
           shortExplanation:
               '"Blew my mind" does not carry over word for word; Spanish says '
               '"me dejó alucinado".',
@@ -964,7 +964,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'un gran suceso',
           correctedPhrase: 'un gran éxito',
-          category: ErrorCategory.wordChoice,
+          category: ErrorCategory.wordMeaning,
           shortExplanation: '"Suceso" means an event; success is "éxito".',
         ),
       ],

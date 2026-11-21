@@ -254,9 +254,9 @@ void main() {
           expect(demo.points.length, 4, reason: demo.id);
           expect(demo.points.map((point) => point.category).toSet(), {
             ErrorCategory.grammar,
-            ErrorCategory.naturalLanguage,
+            ErrorCategory.naturalPhrasing,
             ErrorCategory.spelling,
-            ErrorCategory.wordChoice,
+            ErrorCategory.wordMeaning,
           }, reason: '${demo.id}: one point in each of the four categories');
           for (final point in demo.points) {
             final first = demo.sampleAnswer.indexOf(point.originalPhrase);
@@ -347,8 +347,8 @@ void main() {
       final response = demo.toCorrectionResponse();
 
       expect(response.corrections.map((c) => c.category), [
-        ErrorCategory.wordChoice,
-        ErrorCategory.naturalLanguage,
+        ErrorCategory.wordMeaning,
+        ErrorCategory.naturalPhrasing,
         ErrorCategory.spelling,
         ErrorCategory.grammar,
       ]);

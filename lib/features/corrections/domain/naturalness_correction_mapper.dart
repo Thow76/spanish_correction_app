@@ -25,8 +25,8 @@ import 'naturalness_merge.dart';
 /// never the correctness of the text itself.
 ///
 /// Each applied naturalness edit becomes a [CorrectionItem]:
-/// - `category` is [ErrorCategory.naturalLanguage], not
-///   [ErrorCategory.wordChoice] — despite issue #36's own tentative
+/// - `category` is [ErrorCategory.naturalPhrasing], not
+///   [ErrorCategory.wordMeaning] — despite issue #36's own tentative
 ///   suggestion of Word Choice, the *existing* categorization model that
 ///   issue asks to defer to (`stage2CategorizationSpanish` in
 ///   `correction_prompt.dart`) draws exactly this line: Word Choice is "a
@@ -143,7 +143,7 @@ CorrectionItem _naturalnessEditToCorrectionItem(
   return CorrectionItem(
     originalPhrase: edit.issue.span,
     correctedPhrase: edit.issue.naturalReplacement,
-    category: ErrorCategory.naturalLanguage,
+    category: ErrorCategory.naturalPhrasing,
     shortExplanation: edit.issue.explanation,
     startIndex: range?.$1,
     endIndex: range?.$2,

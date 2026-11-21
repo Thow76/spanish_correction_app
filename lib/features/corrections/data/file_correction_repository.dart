@@ -9,6 +9,7 @@ import '../../../core/models/walkthrough_activity.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/domain/saved_correction.dart';
 import '../application/correction_repository.dart';
+import '../domain/error_category.dart';
 
 class FileCorrectionRepository implements CorrectionRepository {
   FileCorrectionRepository({File? file}) : _file = file;
@@ -153,7 +154,42 @@ class FileCorrectionRepository implements CorrectionRepository {
       return const _CorrectionStoreState.empty();
     }
 
-    return _CorrectionStoreState.fromJson(decoded);
+    final state = _CorrectionStoreState.fromJson(decoded);
+
+    // One-time rename of the categories (decision C3, build step 2.2): a file
+    // written by an earlier version may still hold "Word Choice", "Natural
+    // Language" or "Other". Reading already files them under the new names;
+    // writing the file back straight away makes the rename permanent, so
+    // this happens once and the file never holds the old names again.
+    if (_holdsLegacyCategory(decoded)) {
+      await _writeState(state);
+    }
+
+    return state;
+  }
+
+  /// True when any "category" value anywhere in [json] is an old name.
+  static bool _holdsLegacyCategory(Object? json) {
+    if (json is Map) {
+      for (final entry in json.entries) {
+        final value = entry.value;
+        if (entry.key == 'category' &&
+            value is String &&
+            ErrorCategory.isLegacyLabel(value)) {
+          return true;
+        }
+        if (_holdsLegacyCategory(value)) {
+          return true;
+        }
+      }
+    } else if (json is List) {
+      for (final value in json) {
+        if (_holdsLegacyCategory(value)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   Future<void> _writeState(_CorrectionStoreState state) async {
