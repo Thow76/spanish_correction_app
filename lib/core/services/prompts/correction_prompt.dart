@@ -538,8 +538,10 @@ const Map<String, Object?> firstPassCorrectionResponseFormat = {
 // ── Two-step check (decision P4, build step 2.1) ────────────────────────────
 //
 // The app's Spanish check: step 1 on GPT-6 Luna reports Issues (Spelling,
-// Grammar, Word meaning); step 2 on GPT-6 Sol reports Suggestions (Natural
-// phrasing). Wording moved here unchanged from the E.3 test program
+// Grammar, Word Choice); step 2 on GPT-6 Sol reports Suggestions (Natural
+// phrasing). Build step 2.2c (21 Nov 2026) renamed Word meaning back to Word
+// Choice and narrowed its definition to false friends and confused pairs,
+// judged by context; collocations belong to step 2. Wording moved here unchanged from the E.3 test program
 // (`test/two_step_suggestions_prompt_harness.dart`), which now uses these
 // same constants, so the measured prompts and the app's prompts cannot drift
 // apart. Used by `features/corrections/data/suggestion_client.dart`.
@@ -554,7 +556,7 @@ const Map<String, Object?> firstPassCorrectionResponseFormat = {
 const List<String> twoStepIssueCategories = [
   'Spelling',
   'Grammar',
-  'Word meaning',
+  'Word Choice',
 ];
 
 /// The only category step 2 may return (Suggestions).
@@ -597,9 +599,15 @@ const String twoStepIssuesPromptSpanish =
     'tenses, mood (including the subjunctive), articles, required '
     'prepositions, the personal "a", required pronouns such as "le" or '
     '"se", ser/estar/haber, and missing words that Spanish grammar needs.\n'
-    '- Word meaning: a real Spanish word used with the wrong meaning, such '
-    'as a false friend, or a word or verb that does not combine with its '
-    'noun the way Spanish does.\n'
+    '- Word Choice: a real Spanish word used with a meaning it does not '
+    'have in this context. This is a false friend ("embarazada" for '
+    'embarrassed, "estoy excitado" for excited, "librería" for library, '
+    '"realizar" for realise) or a confused pair ("saber" and "conocer", '
+    '"pedir" and "preguntar"). Judge by the context: flag the word only '
+    'when it clearly says something other than what the learner meant, '
+    'and leave it alone when its meaning fits ("una película excitante" '
+    'can be a thrilling film). Do not report collocations or word '
+    'combinations ("hacer una decisión"); another step handles those.\n'
     '\n'
     'Do not report anything else. In particular do not suggest more '
     'natural, more idiomatic or more fluent wording, and do not remove '
@@ -614,7 +622,7 @@ const String twoStepIssuesPromptSpanish =
     'nothing to report, return an empty list. If a sentence has several '
     'separate issues, report each one as its own item.\n'
     '\n'
-    'The allowed categories are: Spelling, Grammar, Word meaning.\n'
+    'The allowed categories are: Spelling, Grammar, Word Choice.\n'
     '\n'
     '$twoStepItemShape'
     '\n'
@@ -626,12 +634,12 @@ const String twoStepIssuesPromptSpanish =
 /// unnecessary-pronoun line.
 const String twoStepSuggestionsPromptSpanish =
     'You are a Spanish tutor reading a learner\'s writing that has '
-    'already been checked for spelling, grammar and word meaning. Your '
+    'already been checked for spelling, grammar and word choice. Your '
     'job is to suggest more natural phrasing where a native writer would '
     'clearly say it differently.\n'
     '\n'
     'Report only one category: Natural phrasing. Do not report spelling, '
-    'grammar or word meaning; leave those alone even if you notice them.\n'
+    'grammar or word choice; leave those alone even if you notice them.\n'
     '\n'
     'Things to look for:\n'
     '- Unnecessary subject pronouns, but only when the same pronoun is '

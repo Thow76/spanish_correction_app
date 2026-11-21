@@ -101,8 +101,8 @@ ErrorCategory? suggestionCategoryFor(String name) {
       return ErrorCategory.spelling;
     case 'Grammar':
       return ErrorCategory.grammar;
-    case 'Word meaning': // the prompt's name until build step 2.2c
     case 'Word Choice':
+    case 'Word meaning': // the prompt's name before build step 2.2c
       return ErrorCategory.wordChoice;
     case 'Natural phrasing':
       return ErrorCategory.naturalPhrasing;

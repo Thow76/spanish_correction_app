@@ -175,7 +175,7 @@ void main() {
       const text = 'Yo trabajo mucho y yo estudio en la librería pública.';
       final (client, _) = _client(
         _reply([
-          _item('librería pública', 'biblioteca pública', 'Word meaning'),
+          _item('librería pública', 'biblioteca pública', 'Word Choice'),
         ]),
         _reply([_item('y yo estudio', 'y estudio', 'Natural phrasing')]),
       );
@@ -321,7 +321,7 @@ void main() {
           _item(
             'Estoy muy embarazada',
             'Estoy muy avergonzada',
-            'Word meaning',
+            'Word Choice',
           ),
         ]),
         _reply([]),
