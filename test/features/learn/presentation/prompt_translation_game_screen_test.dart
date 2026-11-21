@@ -86,15 +86,19 @@ CorrectionItem _grammarError() => const CorrectionItem(
 /// Returns a CorrectionService whose grade keeps a grammar error present, so a
 /// grammar-category saved correction grades KEEP PRACTICING.
 class _FakeCorrectionService implements CorrectionService {
-  _FakeCorrectionService({List<CorrectionItem>? corrections, this.isRelated = true})
-    : _corrections = corrections ?? [_grammarError()];
+  _FakeCorrectionService({
+    List<CorrectionItem>? corrections,
+    this.isRelated = true,
+  }) : _corrections = corrections ?? [_grammarError()];
 
   final List<CorrectionItem> _corrections;
   final bool isRelated;
 
   @override
-  Future<CorrectionResponse> correctText(String text, Language language) async =>
-      throw UnimplementedError();
+  Future<CorrectionResponse> correctText(
+    String text,
+    Language language,
+  ) async => throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(
@@ -155,8 +159,10 @@ class _FakeWalkthroughService extends WalkthroughService {
 /// null-grade scoring fallback (counts as a miss, no walkthrough).
 class _ThrowingCorrectionService implements CorrectionService {
   @override
-  Future<CorrectionResponse> correctText(String text, Language language) async =>
-      throw UnimplementedError();
+  Future<CorrectionResponse> correctText(
+    String text,
+    Language language,
+  ) async => throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(
@@ -198,8 +204,9 @@ class _FakeCorrectionRepository implements CorrectionRepository {
   final List<SavedCorrection> _saved;
 
   @override
-  Future<List<SavedCorrection>> getSavedCorrections({Language? language}) async =>
-      _saved;
+  Future<List<SavedCorrection>> getSavedCorrections({
+    Language? language,
+  }) async => _saved;
 
   @override
   Future<List<CorrectionSubmission>> getRecentSubmissions({
@@ -260,7 +267,8 @@ Future<void> pumpGame(
         repositoryController: controller,
         transcriptionService: _FakeTranscriptionService(),
         correctionService:
-            correctionService ?? _FakeCorrectionService(corrections: corrections),
+            correctionService ??
+            _FakeCorrectionService(corrections: corrections),
         walkthroughService: _FakeWalkthroughService(
           questions: walkthroughQuestions,
         ),
@@ -366,13 +374,13 @@ void main() {
       await pumpGame(
         tester,
         savedCorrections: [
-          buildSavedCorrection(category: ErrorCategory.wordMeaning),
+          buildSavedCorrection(category: ErrorCategory.wordChoice),
         ],
       );
 
       // Dynamic category label.
       expect(
-        find.textContaining('Word meaning', findRichText: true),
+        find.textContaining('Word Choice', findRichText: true),
         findsOneWidget,
       );
       // The ORIGINAL (wrong) phrase is shown...
@@ -399,7 +407,10 @@ void main() {
         ],
       );
 
-      expect(_styledPhrases(tester, color: AppColors.grammar), contains('went'));
+      expect(
+        _styledPhrases(tester, color: AppColors.grammar),
+        contains('went'),
+      );
       // The surrounding text still renders — only the flagged span is split
       // off into its own styled run.
       expect(
@@ -446,18 +457,19 @@ void main() {
     expect(find.textContaining('Repaso preparado'), findsNothing);
   });
 
-  testWidgets('completing the walkthrough shows the result view with the score', (
-    tester,
-  ) async {
-    await pumpGame(tester);
-    await driveToWalkthroughQuestions(tester);
-    await answerAllWalkthroughCorrectly(tester);
+  testWidgets(
+    'completing the walkthrough shows the result view with the score',
+    (tester) async {
+      await pumpGame(tester);
+      await driveToWalkthroughQuestions(tester);
+      await answerAllWalkthroughCorrectly(tester);
 
-    // onCompleted fired -> the real result view renders the 3/3 = 100% score.
-    expect(find.byType(WalkthroughResultView), findsOneWidget);
-    expect(find.text('100%'), findsOneWidget);
-    expect(find.byType(WalkthroughQuestionView), findsNothing);
-  });
+      // onCompleted fired -> the real result view renders the 3/3 = 100% score.
+      expect(find.byType(WalkthroughResultView), findsOneWidget);
+      expect(find.text('100%'), findsOneWidget);
+      expect(find.byType(WalkthroughQuestionView), findsNothing);
+    },
+  );
 
   testWidgets('Continue from the result advances the game (to summary)', (
     tester,
@@ -473,29 +485,30 @@ void main() {
     expect(find.text('Resultado'), findsOneWidget);
   });
 
-  testWidgets('See Answer opens the answer screen from the walkthrough result', (
-    tester,
-  ) async {
-    await pumpGame(tester);
-    await driveToWalkthroughQuestions(tester);
-    await answerAllWalkthroughWrongly(tester);
+  testWidgets(
+    'See Answer opens the answer screen from the walkthrough result',
+    (tester) async {
+      await pumpGame(tester);
+      await driveToWalkthroughQuestions(tester);
+      await answerAllWalkthroughWrongly(tester);
 
-    // Poor tier (0/3) surfaces "Ver respuesta".
-    expect(find.text('0%'), findsOneWidget);
-    await _tap(tester, find.text('Ver respuesta'));
+      // Poor tier (0/3) surfaces "Ver respuesta".
+      expect(find.text('0%'), findsOneWidget);
+      await _tap(tester, find.text('Ver respuesta'));
 
-    // Navigates to the answer screen; the result view is gone. The score was
-    // already recorded at walkthrough entry, so this is the last (single)
-    // question -> "Terminar" forward.
-    expect(find.byType(AnswerView), findsOneWidget);
-    expect(find.byType(WalkthroughResultView), findsNothing);
-    expect(find.text('Terminar'), findsOneWidget);
+      // Navigates to the answer screen; the result view is gone. The score was
+      // already recorded at walkthrough entry, so this is the last (single)
+      // question -> "Terminar" forward.
+      expect(find.byType(AnswerView), findsOneWidget);
+      expect(find.byType(WalkthroughResultView), findsNothing);
+      expect(find.text('Terminar'), findsOneWidget);
 
-    // Forward advances to the summary WITHOUT re-recording (still 0 / 2).
-    await _tap(tester, find.byKey(const Key('answer-forward')));
-    expect(find.text('Resultado'), findsOneWidget);
-    expect(find.text('0 / 2'), findsOneWidget);
-  });
+      // Forward advances to the summary WITHOUT re-recording (still 0 / 2).
+      await _tap(tester, find.byKey(const Key('answer-forward')));
+      expect(find.text('Resultado'), findsOneWidget);
+      expect(find.text('0 / 2'), findsOneWidget);
+    },
+  );
 
   testWidgets('Try again returns to the SAME phrase as a fresh prompt', (
     tester,
@@ -511,7 +524,10 @@ void main() {
     expect(find.text('Yesterday there was a lot of traffic'), findsOneWidget);
 
     // Fresh attempt: empty input, and no walkthrough/result widgets linger.
-    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '',
+    );
     expect(find.byType(WalkthroughResultView), findsNothing);
     expect(find.byType(WalkthroughQuestionView), findsNothing);
   });
@@ -526,7 +542,10 @@ void main() {
     await _tap(tester, find.text('Intentar la traducción completa otra vez'));
 
     // Clean prompt: empty input, and NONE of the prior-attempt state lingers.
-    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '',
+    );
     // No reveal/grade ghosts.
     expect(find.text('Sigue practicando'), findsNothing);
     expect(find.text('Respuesta esperada'), findsNothing);
@@ -570,22 +589,19 @@ void main() {
   });
 
   group('AI-tier scoring (X/Y sourced from grade.tier)', () {
-    testWidgets(
-      'excelente scores 2: a clean attempt advances straight to a 2/2 '
-      'summary with no walkthrough',
-      (tester) async {
-        // No corrections at all -> target fixed AND sentence clean -> excelente.
-        await pumpGame(tester, corrections: const []);
+    testWidgets('excelente scores 2: a clean attempt advances straight to a 2/2 '
+        'summary with no walkthrough', (tester) async {
+      // No corrections at all -> target fixed AND sentence clean -> excelente.
+      await pumpGame(tester, corrections: const []);
 
-        await _answerAndAdvance(tester);
+      await _answerAndAdvance(tester);
 
-        // A well-done tier never offers the walkthrough; the single-phrase
-        // session is complete -> summary, scored at the top weight (2 of 2).
-        expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
-        expect(find.text('Resultado'), findsOneWidget);
-        expect(find.text('2 / 2'), findsOneWidget);
-      },
-    );
+      // A well-done tier never offers the walkthrough; the single-phrase
+      // session is complete -> summary, scored at the top weight (2 of 2).
+      expect(find.text('¿Lo trabajamos paso a paso?'), findsNothing);
+      expect(find.text('Resultado'), findsOneWidget);
+      expect(find.text('2 / 2'), findsOneWidget);
+    });
 
     testWidgets(
       'bienHecho scores 1 (distinct from excelente): target fixed but an '
@@ -613,23 +629,20 @@ void main() {
       },
     );
 
-    testWidgets(
-      'siguePracticando scores 0: 0/2 summary after declining the '
-      'walkthrough',
-      (tester) async {
-        // The default fake keeps a grammar error -> siguePracticando (miss).
-        await pumpGame(tester);
+    testWidgets('siguePracticando scores 0: 0/2 summary after declining the '
+        'walkthrough', (tester) async {
+      // The default fake keeps a grammar error -> siguePracticando (miss).
+      await pumpGame(tester);
 
-        await _answerAndAdvance(tester);
+      await _answerAndAdvance(tester);
 
-        // The miss tier offers the walkthrough; decline it to reach the summary.
-        expect(find.text('¿Lo trabajamos paso a paso?'), findsOneWidget);
-        await _tap(tester, find.text('Ahora no'));
+      // The miss tier offers the walkthrough; decline it to reach the summary.
+      expect(find.text('¿Lo trabajamos paso a paso?'), findsOneWidget);
+      await _tap(tester, find.text('Ahora no'));
 
-        expect(find.text('Resultado'), findsOneWidget);
-        expect(find.text('0 / 2'), findsOneWidget);
-      },
-    );
+      expect(find.text('Resultado'), findsOneWidget);
+      expect(find.text('0 / 2'), findsOneWidget);
+    });
 
     testWidgets(
       'an unavailable grade scores 0: 0/2 summary and no walkthrough',
@@ -728,7 +741,10 @@ void main() {
           findsOneWidget,
         );
         // The normal "target category not fixed" reasoning must not appear.
-        expect(find.textContaining('La IA marcó en tu categoría'), findsNothing);
+        expect(
+          find.textContaining('La IA marcó en tu categoría'),
+          findsNothing,
+        );
       },
     );
   });
@@ -765,19 +781,18 @@ void main() {
       expect(find.byKey(const Key('reveal-see-answer')), findsNothing);
     });
 
-    testWidgets(
-      'siguePracticando -> walkthrough + see answer, no continue',
-      (tester) async {
-        // The default fake keeps a grammar error -> siguePracticando.
-        await pumpGame(tester);
-        await _answerToReveal(tester);
+    testWidgets('siguePracticando -> walkthrough + see answer, no continue', (
+      tester,
+    ) async {
+      // The default fake keeps a grammar error -> siguePracticando.
+      await pumpGame(tester);
+      await _answerToReveal(tester);
 
-        expect(find.byKey(const Key('reveal-walkthrough')), findsOneWidget);
-        expect(find.byKey(const Key('reveal-see-answer')), findsOneWidget);
-        expect(find.byKey(const Key('reveal-continue')), findsNothing);
-        expect(find.byKey(const Key('reveal-try-again')), findsNothing);
-      },
-    );
+      expect(find.byKey(const Key('reveal-walkthrough')), findsOneWidget);
+      expect(find.byKey(const Key('reveal-see-answer')), findsOneWidget);
+      expect(find.byKey(const Key('reveal-continue')), findsNothing);
+      expect(find.byKey(const Key('reveal-try-again')), findsNothing);
+    });
 
     testWidgets(
       'Bien hecho "Intentar de nuevo" returns to the same phrase fresh',
@@ -790,7 +805,10 @@ void main() {
         // Back on the SAME phrase as a clean prompt, score dropped (not a skip
         // to the summary), exercising the all-tier snapshot.
         expect(find.text('Pregunta 1 de 1'), findsOneWidget);
-        expect(find.text('Yesterday there was a lot of traffic'), findsOneWidget);
+        expect(
+          find.text('Yesterday there was a lot of traffic'),
+          findsOneWidget,
+        );
         expect(find.text('Resultado'), findsNothing);
         expect(
           tester.widget<TextField>(find.byType(TextField)).controller!.text,

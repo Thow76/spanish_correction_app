@@ -76,51 +76,52 @@ void main() {
       },
     };
 
-    test('renames old saved and History items and rewrites the file once',
-        () async {
-      final file = File('${tempDirectory.path}/store.json');
-      await file.writeAsString(
-        jsonEncode({
-          'recent_submissions': [submissionJson('Word Choice')],
-          'saved_corrections': [
-            savedJson('a', 'Word Choice'),
-            savedJson('b', 'Natural Language'),
-            savedJson('c', 'Other'),
-            savedJson('d', 'Grammar'),
-          ],
-          'walkthrough_activities': [],
-        }),
-      );
+    test(
+      'renames old saved and History items and rewrites the file once',
+      () async {
+        final file = File('${tempDirectory.path}/store.json');
+        await file.writeAsString(
+          jsonEncode({
+            'recent_submissions': [submissionJson('Word Choice')],
+            'saved_corrections': [
+              savedJson('a', 'Word Choice'),
+              savedJson('b', 'Natural Language'),
+              savedJson('c', 'Other'),
+              savedJson('d', 'Grammar'),
+            ],
+            'walkthrough_activities': [],
+          }),
+        );
 
-      final saved = await repository.getSavedCorrections();
-      expect(saved.map((c) => c.category), [
-        ErrorCategory.wordMeaning,
-        ErrorCategory.naturalPhrasing,
-        ErrorCategory.naturalPhrasing,
-        ErrorCategory.grammar,
-      ]);
+        final saved = await repository.getSavedCorrections();
+        expect(saved.map((c) => c.category), [
+          ErrorCategory.wordChoice,
+          ErrorCategory.naturalPhrasing,
+          ErrorCategory.naturalPhrasing,
+          ErrorCategory.grammar,
+        ]);
 
-      // Reading was enough: the file itself now holds only the new names.
-      final content = await file.readAsString();
-      expect(content, isNot(contains('Word Choice')));
-      expect(content, isNot(contains('Natural Language')));
-      expect(content, isNot(contains('"Other"')));
-      expect(content, contains('"Word meaning"'));
-      expect(content, contains('"Natural phrasing"'));
+        // Reading was enough: the file itself now holds only the new names.
+        final content = await file.readAsString();
+        expect(content, isNot(contains('Natural Language')));
+        expect(content, isNot(contains('"Other"')));
+        expect(content, contains('"Word Choice"'));
+        expect(content, contains('"Natural phrasing"'));
 
-      final history = await repository.getRecentSubmissions();
-      expect(
-        history.single.response.corrections.single.category,
-        ErrorCategory.wordMeaning,
-      );
-      expect(saved.map((c) => c.id), ['a', 'b', 'c', 'd']);
-    });
+        final history = await repository.getRecentSubmissions();
+        expect(
+          history.single.response.corrections.single.category,
+          ErrorCategory.wordChoice,
+        );
+        expect(saved.map((c) => c.id), ['a', 'b', 'c', 'd']);
+      },
+    );
 
     test('leaves a file with only new names untouched', () async {
       final file = File('${tempDirectory.path}/store.json');
       final original = jsonEncode({
         'recent_submissions': [],
-        'saved_corrections': [savedJson('a', 'Word meaning')],
+        'saved_corrections': [savedJson('a', 'Word Choice')],
         'walkthrough_activities': [],
       });
       await file.writeAsString(original);
@@ -223,38 +224,35 @@ void main() {
     },
   );
 
-  test(
-    'a leftover queued_submissions key from before the queueing feature was '
-    'removed is dropped from the store file on the next write, with no '
-    'explicit migration step',
-    () async {
-      final storeFile = File('${tempDirectory.path}/store.json');
-      await storeFile.writeAsString(
-        jsonEncode({
-          'recent_submissions': <Object?>[],
-          'saved_corrections': <Object?>[],
-          'queued_submissions': [
-            {
-              'id': 'queued-1',
-              'text': 'Ayer yo fue al mercado.',
-              'created_at': DateTime(2026, 5, 24, 10).toIso8601String(),
-              'language': 'spanish',
-            },
-          ],
-          'walkthrough_activities': <Object?>[],
-        }),
-      );
+  test('a leftover queued_submissions key from before the queueing feature was '
+      'removed is dropped from the store file on the next write, with no '
+      'explicit migration step', () async {
+    final storeFile = File('${tempDirectory.path}/store.json');
+    await storeFile.writeAsString(
+      jsonEncode({
+        'recent_submissions': <Object?>[],
+        'saved_corrections': <Object?>[],
+        'queued_submissions': [
+          {
+            'id': 'queued-1',
+            'text': 'Ayer yo fue al mercado.',
+            'created_at': DateTime(2026, 5, 24, 10).toIso8601String(),
+            'language': 'spanish',
+          },
+        ],
+        'walkthrough_activities': <Object?>[],
+      }),
+    );
 
-      // Any write at all rewrites the whole store — here, adding a new
-      // submission.
-      await repository.addSubmission(_submission(0));
+    // Any write at all rewrites the whole store — here, adding a new
+    // submission.
+    await repository.addSubmission(_submission(0));
 
-      final rewritten =
-          jsonDecode(await storeFile.readAsString()) as Map<String, Object?>;
-      expect(rewritten.containsKey('queued_submissions'), isFalse);
-      expect(rewritten['recent_submissions'], hasLength(1));
-    },
-  );
+    final rewritten =
+        jsonDecode(await storeFile.readAsString()) as Map<String, Object?>;
+    expect(rewritten.containsKey('queued_submissions'), isFalse);
+    expect(rewritten['recent_submissions'], hasLength(1));
+  });
 }
 
 SavedCorrection _savedCorrection() {

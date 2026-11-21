@@ -12,7 +12,10 @@ import 'package:spanish_correction_app/features/corrections/presentation/correct
 /// combined "no corrections AND has notes" state is covered separately in
 /// step 5.
 void main() {
-  Future<void> pumpScreen(WidgetTester tester, CorrectionResponse response) async {
+  Future<void> pumpScreen(
+    WidgetTester tester,
+    CorrectionResponse response,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(390, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
@@ -26,7 +29,7 @@ void main() {
   const correction = CorrectionItem(
     originalPhrase: 'bien',
     correctedPhrase: 'bueno',
-    category: ErrorCategory.wordMeaning,
+    category: ErrorCategory.wordChoice,
     shortExplanation: 'Bueno fits the noun being described.',
     startIndex: 5,
     endIndex: 9,

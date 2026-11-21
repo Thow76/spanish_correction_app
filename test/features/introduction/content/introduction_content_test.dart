@@ -256,7 +256,7 @@ void main() {
             ErrorCategory.grammar,
             ErrorCategory.naturalPhrasing,
             ErrorCategory.spelling,
-            ErrorCategory.wordMeaning,
+            ErrorCategory.wordChoice,
           }, reason: '${demo.id}: one point in each of the four categories');
           for (final point in demo.points) {
             final first = demo.sampleAnswer.indexOf(point.originalPhrase);
@@ -347,7 +347,7 @@ void main() {
       final response = demo.toCorrectionResponse();
 
       expect(response.corrections.map((c) => c.category), [
-        ErrorCategory.wordMeaning,
+        ErrorCategory.wordChoice,
         ErrorCategory.naturalPhrasing,
         ErrorCategory.spelling,
         ErrorCategory.grammar,

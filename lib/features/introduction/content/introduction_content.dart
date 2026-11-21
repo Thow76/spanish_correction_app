@@ -546,7 +546,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'excitado',
           correctedPhrase: 'emocionado',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               'In Spanish "excitado" usually means physically aroused; the '
               'word for excited about something is "emocionado".',
@@ -598,7 +598,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'no realizaba que',
           correctedPhrase: 'no me daba cuenta de que',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               '"Realizar" means to carry out; for noticing something Spanish '
               'uses "darse cuenta de".',
@@ -651,7 +651,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'atender a un concierto',
           correctedPhrase: 'asistir a un concierto',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               '"Atender" means to attend to or serve someone; to go to a '
               'concert Spanish says "asistir a".',
@@ -694,7 +694,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'eventualmente',
           correctedPhrase: 'al final',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               '"Eventualmente" means possibly or now and then; for "in the '
               'end" Spanish says "al final".',
@@ -722,7 +722,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'la librería de mi barrio',
           correctedPhrase: 'la biblioteca de mi barrio',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               'A "librería" sells books; the place you borrow them from is a '
               '"biblioteca".',
@@ -782,7 +782,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'Soporto al Betis',
           correctedPhrase: 'Soy del Betis',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               '"Soportar" means to put up with; to support a team Spanish '
               'says "ser de" or "apoyar".',
@@ -809,7 +809,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'una pequeña villa',
           correctedPhrase: 'un pequeño pueblo',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               'A "villa" is a large country house; a village is a "pueblo".',
         ),
@@ -867,7 +867,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'recuerdo vídeos',
           correctedPhrase: 'grabo vídeos',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               '"Recordar" means to remember; to record a video Spanish says '
               '"grabar".',
@@ -896,7 +896,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'muy educados',
           correctedPhrase: 'muy cultos',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation:
               '"Educado" usually means polite; for learned or cultured '
               'Spanish says "culto".',
@@ -964,7 +964,7 @@ class IntroductionContent {
         DemoFeedbackPoint(
           originalPhrase: 'un gran suceso',
           correctedPhrase: 'un gran éxito',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation: '"Suceso" means an event; success is "éxito".',
         ),
       ],

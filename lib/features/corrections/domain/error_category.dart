@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/design/app_colors.dart';
 
-/// The four kinds of feedback point (decision C3).
+/// The four kinds of feedback point (decision C3, revised 21 Nov 2026).
 ///
-/// Spelling, Grammar and Word meaning are Issues (the first step of the
+/// Spelling, Grammar and Word Choice are Issues (the first step of the
 /// check); Natural phrasing is the one Suggestion category (the second step).
 /// The order here is the order the filters in Saved and the game show them.
 enum ErrorCategory {
   spelling('Spelling', AppColors.spelling, legacyPromptLabel: 'Spelling'),
   grammar('Grammar', AppColors.grammar, legacyPromptLabel: 'Grammar'),
-  wordMeaning(
-    'Word meaning',
-    AppColors.wordMeaning,
+  wordChoice(
+    'Word Choice',
+    AppColors.wordChoice,
     legacyPromptLabel: 'Word Choice',
   ),
   naturalPhrasing(
@@ -37,16 +37,18 @@ enum ErrorCategory {
   /// [fromApiLabel], which understands both the old and the new names.
   final String legacyPromptLabel;
 
-  /// Old names, kept on the phone by earlier versions or returned by the
-  /// older prompts, and the category each now belongs to.
+  /// Other names for these categories, and the category each belongs to:
+  /// names kept on the phone by earlier versions, names the older prompts
+  /// still return, and the name the two-step check's prompt uses for Word
+  /// Choice until build step 2.2c brings it into line.
   ///
   /// "Other" is gone as a category (C3). A point that was filed under it is
   /// kept and filed under Natural phrasing, the Suggestions group, since it
   /// was a point the older check could not place as a clear mistake.
-  static const Map<String, ErrorCategory> legacyLabels = {
-    'Word Choice': ErrorCategory.wordMeaning,
+  static const Map<String, ErrorCategory> renamedLabels = {
     'Natural Language': ErrorCategory.naturalPhrasing,
     'Other': ErrorCategory.naturalPhrasing,
+    'Word meaning': ErrorCategory.wordChoice,
   };
 
   /// Reads a category kept on the phone. Never fails: old names are renamed,
@@ -58,9 +60,9 @@ enum ErrorCategory {
       return ErrorCategory.grammar;
     }
 
-    final legacy = legacyLabels[normalizedValue];
-    if (legacy != null) {
-      return legacy;
+    final renamed = renamedLabels[normalizedValue];
+    if (renamed != null) {
+      return renamed;
     }
 
     return ErrorCategory.values.firstWhere(
@@ -70,7 +72,7 @@ enum ErrorCategory {
   }
 
   /// Reads a category returned by an AI call. Accepts the four names and the
-  /// old names the older prompts still ask for; anything else is refused.
+  /// other names in [renamedLabels]; anything else is refused.
   static ErrorCategory fromApiLabel(String value) {
     final normalizedValue = value.trim();
 
@@ -80,9 +82,9 @@ enum ErrorCategory {
       }
     }
 
-    final legacy = legacyLabels[normalizedValue];
-    if (legacy != null) {
-      return legacy;
+    final renamed = renamedLabels[normalizedValue];
+    if (renamed != null) {
+      return renamed;
     }
 
     throw FormatException('Unsupported correction category "$value".');
@@ -91,5 +93,5 @@ enum ErrorCategory {
   /// True when [value] is one of the old names that the one-time rename on
   /// the phone replaces.
   static bool isLegacyLabel(String value) =>
-      legacyLabels.containsKey(value.trim());
+      renamedLabels.containsKey(value.trim());
 }

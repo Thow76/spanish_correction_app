@@ -22,9 +22,6 @@ class AppColors {
 
   static const grammar = Color(0xFF5B8DEF);
   static const spelling = Color(0xFFEF5B5B);
-
-  /// Word meaning (decision C3): a violet of its own, so it is not confused
-  /// with Grammar's blue or the green used for correct answers.
-  static const wordMeaning = Color(0xFFB45BEF);
+  static const wordChoice = Color(0xFF5BEF8D);
   static const naturalPhrasing = Color(0xFFEFDC5B);
 }

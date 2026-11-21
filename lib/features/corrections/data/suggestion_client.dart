@@ -100,8 +100,9 @@ ErrorCategory? suggestionCategoryFor(String name) {
       return ErrorCategory.spelling;
     case 'Grammar':
       return ErrorCategory.grammar;
-    case 'Word meaning':
-      return ErrorCategory.wordMeaning;
+    case 'Word meaning': // the prompt's name until build step 2.2c
+    case 'Word Choice':
+      return ErrorCategory.wordChoice;
     case 'Natural phrasing':
       return ErrorCategory.naturalPhrasing;
   }
@@ -127,7 +128,7 @@ class SuggestionCheckResult {
   /// The text with every Issue and Suggestion applied.
   final String suggestedText;
 
-  /// Points found by step 1 (Spelling, Grammar, Word meaning).
+  /// Points found by step 1 (Spelling, Grammar, Word Choice).
   final List<CorrectionItem> issues;
 
   /// Points found by step 2 (Natural phrasing).

@@ -47,7 +47,7 @@ void main() {
       ErrorCategory.grammar,
       ErrorCategory.naturalPhrasing,
       ErrorCategory.spelling,
-      ErrorCategory.wordMeaning,
+      ErrorCategory.wordChoice,
       ErrorCategory.naturalPhrasing,
     ]);
   });
@@ -786,7 +786,7 @@ void main() {
         CorrectionItem(
           originalPhrase: 'bien',
           correctedPhrase: 'bueno',
-          category: ErrorCategory.wordMeaning,
+          category: ErrorCategory.wordChoice,
           shortExplanation: 'Bueno fits the noun being described.',
         ),
       ],

@@ -3,26 +3,24 @@ import 'package:spanish_correction_app/features/corrections/domain/error_categor
 import 'package:spanish_correction_app/shared/design/app_colors.dart';
 
 void main() {
-  test('the four categories of decision C3, Issues first', () {
+  test('the four categories of decision C3 as revised, Issues first', () {
     expect(ErrorCategory.values, [
       ErrorCategory.spelling,
       ErrorCategory.grammar,
-      ErrorCategory.wordMeaning,
+      ErrorCategory.wordChoice,
       ErrorCategory.naturalPhrasing,
     ]);
     expect(ErrorCategory.values.map((category) => category.label), [
       'Spelling',
       'Grammar',
-      'Word meaning',
+      'Word Choice',
       'Natural phrasing',
     ]);
   });
 
-  test('Word meaning has a colour of its own', () {
-    expect(ErrorCategory.wordMeaning.color, AppColors.wordMeaning);
-    final colours = ErrorCategory.values.map((c) => c.color).toSet();
-    expect(colours, hasLength(4));
-    expect(colours, isNot(contains(AppColors.success)));
+  test('Word Choice keeps its green', () {
+    expect(ErrorCategory.wordChoice.color, AppColors.wordChoice);
+    expect(ErrorCategory.values.map((c) => c.color).toSet(), hasLength(4));
   });
 
   test('maps legacy punctuation and preposition categories to grammar', () {
@@ -33,7 +31,7 @@ void main() {
   test('parses the four category labels', () {
     expect(ErrorCategory.fromLabel('Grammar'), ErrorCategory.grammar);
     expect(ErrorCategory.fromLabel('Spelling'), ErrorCategory.spelling);
-    expect(ErrorCategory.fromLabel('Word meaning'), ErrorCategory.wordMeaning);
+    expect(ErrorCategory.fromLabel('Word Choice'), ErrorCategory.wordChoice);
     expect(
       ErrorCategory.fromLabel('Natural phrasing'),
       ErrorCategory.naturalPhrasing,
@@ -41,12 +39,12 @@ void main() {
   });
 
   test('renames the old labels kept on the phone', () {
-    expect(ErrorCategory.fromLabel('Word Choice'), ErrorCategory.wordMeaning);
     expect(
       ErrorCategory.fromLabel('Natural Language'),
       ErrorCategory.naturalPhrasing,
     );
     expect(ErrorCategory.fromLabel('Other'), ErrorCategory.naturalPhrasing);
+    expect(ErrorCategory.fromLabel('Word meaning'), ErrorCategory.wordChoice);
   });
 
   test('files unknown labels under Natural phrasing', () {
@@ -56,30 +54,23 @@ void main() {
   test('the older prompts are sent the old names', () {
     expect(ErrorCategory.spelling.legacyPromptLabel, 'Spelling');
     expect(ErrorCategory.grammar.legacyPromptLabel, 'Grammar');
-    expect(ErrorCategory.wordMeaning.legacyPromptLabel, 'Word Choice');
-    expect(
-      ErrorCategory.naturalPhrasing.legacyPromptLabel,
-      'Natural Language',
-    );
+    expect(ErrorCategory.wordChoice.legacyPromptLabel, 'Word Choice');
+    expect(ErrorCategory.naturalPhrasing.legacyPromptLabel, 'Natural Language');
   });
 
-  test('isLegacyLabel spots only the old names', () {
-    expect(ErrorCategory.isLegacyLabel('Word Choice'), isTrue);
+  test('isLegacyLabel spots only the names the one-time rename replaces', () {
     expect(ErrorCategory.isLegacyLabel('Natural Language'), isTrue);
     expect(ErrorCategory.isLegacyLabel('Other'), isTrue);
-    expect(ErrorCategory.isLegacyLabel('Word meaning'), isFalse);
+    expect(ErrorCategory.isLegacyLabel('Word Choice'), isFalse);
     expect(ErrorCategory.isLegacyLabel('Grammar'), isFalse);
   });
 
   test('strict API parser accepts new and old names, rejects others', () {
     expect(ErrorCategory.fromApiLabel('Grammar'), ErrorCategory.grammar);
+    expect(ErrorCategory.fromApiLabel('Word Choice'), ErrorCategory.wordChoice);
     expect(
       ErrorCategory.fromApiLabel('Word meaning'),
-      ErrorCategory.wordMeaning,
-    );
-    expect(
-      ErrorCategory.fromApiLabel('Word Choice'),
-      ErrorCategory.wordMeaning,
+      ErrorCategory.wordChoice,
     );
     expect(
       ErrorCategory.fromApiLabel('Natural Language'),
@@ -88,10 +79,6 @@ void main() {
     expect(ErrorCategory.fromApiLabel('Other'), ErrorCategory.naturalPhrasing);
     expect(
       () => ErrorCategory.fromApiLabel('Punctuation'),
-      throwsFormatException,
-    );
-    expect(
-      () => ErrorCategory.fromApiLabel('Preposition'),
       throwsFormatException,
     );
     expect(() => ErrorCategory.fromApiLabel('Style'), throwsFormatException);

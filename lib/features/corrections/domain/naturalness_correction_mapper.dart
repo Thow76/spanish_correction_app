@@ -26,7 +26,7 @@ import 'naturalness_merge.dart';
 ///
 /// Each applied naturalness edit becomes a [CorrectionItem]:
 /// - `category` is [ErrorCategory.naturalPhrasing], not
-///   [ErrorCategory.wordMeaning] — despite issue #36's own tentative
+///   [ErrorCategory.wordChoice] — despite issue #36's own tentative
 ///   suggestion of Word Choice, the *existing* categorization model that
 ///   issue asks to defer to (`stage2CategorizationSpanish` in
 ///   `correction_prompt.dart`) draws exactly this line: Word Choice is "a
@@ -97,8 +97,7 @@ CorrectionResponse mapNaturalnessEditsIntoCorrectionResponse({
   required CorrectionResponse firstPassResponse,
   required NaturalnessMergeResult naturalnessMerge,
 }) {
-  final originalGraphemes = firstPassResponse.originalText.characters
-      .toList();
+  final originalGraphemes = firstPassResponse.originalText.characters.toList();
   final sortedEdits = [...naturalnessMerge.appliedEdits]
     ..sort((left, right) => left.startIndex.compareTo(right.startIndex));
 
