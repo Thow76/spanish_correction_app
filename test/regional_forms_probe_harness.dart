@@ -54,32 +54,20 @@ const String defaultRegionalOutputPath = 'docs/regional_forms_probe.md';
 /// The language point of the five sentences the model should notice.
 const String regionalLanguagePoint = 'Valid Regional / Should Not Flag';
 
-/// The whole prompt. Its only job is to find regional forms.
+/// The whole prompt: one question, nothing else.
 const String regionalFormsPrompt =
-    'You are a Spanish tutor with a good knowledge of how Spanish differs '
-    'between countries and regions.\n'
-    '\n'
-    'Read the learner\'s text and report every regional form in it: any '
-    'word, phrase, verb form, pronoun or construction that is standard in '
-    'some Spanish-speaking regions but not in others, or that would sound '
-    'unusual, be misunderstood, or cause offence in some regions.\n'
-    '\n'
-    'Do not correct anything. Do not comment on spelling, grammar, '
-    'punctuation or style. Do not report forms that are standard across '
-    'the Spanish-speaking world. If the text has no regional form, return '
+    'Please report any phrases in this text that could be considered '
+    'regionally valid: that is, not used universally across the '
+    'Spanish-speaking world, but used in some territories. For each one, '
+    'say where it is used and where it is not. If there are none, return '
     'an empty list.\n'
     '\n'
     'Return a JSON object with one field, "items": a list. Each item has '
-    'exactly four fields:\n'
-    '- "written": the words exactly as the learner wrote them, copied '
-    'character for character from the text.\n'
-    '- "used_in": where the form is standard or common.\n'
-    '- "not_used_in": where it is not used, or where it means something '
-    'else.\n'
-    '- "reason": one short plain-English sentence for a learner of '
-    'Spanish, saying what the form is and why it is regional.\n'
+    'exactly four fields: "written" (the phrase exactly as it appears in '
+    'the text), "used_in" (where it is used), "not_used_in" (where it is '
+    'not), and "reason" (one short sentence in plain English).\n'
     '\n'
-    'Return JSON only, with no Markdown and no commentary.';
+    'Return JSON only.';
 
 String buildRegionalUserContent(String text) => 'Text to review:\n$text';
 
@@ -430,10 +418,16 @@ List<TwoPassFixture> regionalFixturesFrom(Map<String, String> env) {
 
 void main() {
   group('the prompt', () {
-    test('asks only for regional forms, never for corrections', () {
-      expect(regionalFormsPrompt, contains('report every regional form'));
-      expect(regionalFormsPrompt, contains('Do not correct anything'));
+    test('asks one question: which phrases are regionally valid', () {
+      expect(regionalFormsPrompt, contains('regionally valid'));
+      expect(regionalFormsPrompt, contains('not used universally'));
+      expect(
+        regionalFormsPrompt,
+        contains('where it is used and where it is not'),
+      );
       expect(regionalFormsPrompt, contains('return an empty list'));
+      expect(regionalFormsPrompt, isNot(contains('correct')));
+      expect(regionalFormsPrompt, isNot(contains('grammar')));
       for (final field in ['written', 'used_in', 'not_used_in', 'reason']) {
         expect(regionalFormsPrompt, contains('"$field"'));
       }
