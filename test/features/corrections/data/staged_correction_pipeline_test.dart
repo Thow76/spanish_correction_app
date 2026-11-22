@@ -13,6 +13,67 @@ import 'package:spanish_correction_app/features/corrections/domain/error_categor
 const _submittedText = 'Vi mucho trafico ayer.';
 
 void main() {
+  test('build step 2.2b: a Grammar and a Word Choice point are highlighted on '
+      'the words that change, a full Natural Language point stays whole, '
+      'and Stage 3 matches on the trimmed positions', () async {
+    const text =
+        'Ayer yo fue al mercado. Estoy muy embarazada. '
+        'Tuvimos un buen tiempo.';
+    final client = _RoutingHttpClient({
+      stage1DetectionDialectSpanish: _arrayEnvelope([
+        '"yo fue"',
+        '"Estoy muy embarazada"',
+        '"Tuvimos un buen tiempo"',
+      ]),
+      stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
+      stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
+      stage2CategorizationSpanish: _arrayEnvelope([
+        '{"original_phrase": "yo fue", "corrected_phrase": "yo fui", '
+            '"occurrence": 1, "category": "Grammar", "verdict": "error"}',
+        '{"original_phrase": "Estoy muy embarazada", '
+            '"corrected_phrase": "Estoy muy avergonzada", "occurrence": 1, '
+            '"category": "Word Choice", "verdict": "error"}',
+        '{"original_phrase": "Tuvimos un buen tiempo", '
+            '"corrected_phrase": "Lo pasamos bien", "occurrence": 1, '
+            '"category": "Natural Language", "verdict": "error", '
+            '"span_scope": "full"}',
+      ]),
+      stage3FeedbackSpanish: _arrayEnvelope([
+        '{"start_index": 8, "short_explanation": "First person: fui."}',
+        '{"start_index": 34, "short_explanation": "False friend."}',
+        '{"start_index": 46, "short_explanation": "Calque."}',
+      ]),
+    });
+
+    final response = await runStagedCorrectionPipeline(
+      client: OpenAiChatCompletionsClient(
+        apiKey: 'test-key',
+        httpClient: client,
+      ),
+      model: 'gpt-5.5',
+      submittedText: text,
+    );
+
+    expect(
+      response.correctedText,
+      'Ayer yo fui al mercado. Estoy muy avergonzada. Lo pasamos bien.',
+    );
+    expect(response.corrections, hasLength(3));
+    final [grammar, wordChoice, natural] = response.corrections;
+    expect(grammar.originalPhrase, 'fue');
+    expect(grammar.correctedPhrase, 'fui');
+    expect(grammar.startIndex, 8);
+    expect(grammar.endIndex, 11);
+    expect(grammar.shortExplanation, 'First person: fui.');
+    expect(wordChoice.originalPhrase, 'embarazada');
+    expect(wordChoice.correctedPhrase, 'avergonzada');
+    expect(wordChoice.startIndex, 34);
+    expect(wordChoice.endIndex, 44);
+    expect(natural.originalPhrase, 'Tuvimos un buen tiempo');
+    expect(natural.startIndex, 46);
+    expect(natural.endIndex, 68);
+  });
+
   test('runs Stage 1 -> Stage 1B -> Stage 2 -> position/insertion/dedup -> '
       'verdict split -> Stage 3 end to end and assembles a correct '
       'CorrectionResponse, via the real pipeline function with only the '
@@ -417,67 +478,6 @@ Map<String, String> _redundantPronounDeletionReplies({
     stage2CategorizationSpanish: _arrayEnvelope(stage2Entries),
     stage3FeedbackSpanish: _arrayEnvelope(stage3Entries),
   };
-
-  test('build step 2.2b: a Grammar and a Word Choice point are highlighted on '
-      'the words that change, a full Natural Language point stays whole, '
-      'and Stage 3 matches on the trimmed positions', () async {
-    const text =
-        'Ayer yo fue al mercado. Estoy muy embarazada. '
-        'Tuvimos un buen tiempo.';
-    final client = _RoutingHttpClient({
-      stage1DetectionDialectSpanish: _arrayEnvelope([
-        '"yo fue"',
-        '"Estoy muy embarazada"',
-        '"Tuvimos un buen tiempo"',
-      ]),
-      stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-      stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-      stage2CategorizationSpanish: _arrayEnvelope([
-        '{"original_phrase": "yo fue", "corrected_phrase": "yo fui", '
-            '"occurrence": 1, "category": "Grammar", "verdict": "error"}',
-        '{"original_phrase": "Estoy muy embarazada", '
-            '"corrected_phrase": "Estoy muy avergonzada", "occurrence": 1, '
-            '"category": "Word Choice", "verdict": "error"}',
-        '{"original_phrase": "Tuvimos un buen tiempo", '
-            '"corrected_phrase": "Lo pasamos bien", "occurrence": 1, '
-            '"category": "Natural Language", "verdict": "error", '
-            '"span_scope": "full"}',
-      ]),
-      stage3FeedbackSpanish: _arrayEnvelope([
-        '{"start_index": 8, "short_explanation": "First person: fui."}',
-        '{"start_index": 34, "short_explanation": "False friend."}',
-        '{"start_index": 46, "short_explanation": "Calque."}',
-      ]),
-    });
-
-    final response = await runStagedCorrectionPipeline(
-      client: OpenAiChatCompletionsClient(
-        apiKey: 'test-key',
-        httpClient: client,
-      ),
-      model: 'gpt-5.5',
-      submittedText: text,
-    );
-
-    expect(
-      response.correctedText,
-      'Ayer yo fui al mercado. Estoy muy avergonzada. Lo pasamos bien.',
-    );
-    expect(response.corrections, hasLength(3));
-    final [grammar, wordChoice, natural] = response.corrections;
-    expect(grammar.originalPhrase, 'fue');
-    expect(grammar.correctedPhrase, 'fui');
-    expect(grammar.startIndex, 8);
-    expect(grammar.endIndex, 11);
-    expect(grammar.shortExplanation, 'First person: fui.');
-    expect(wordChoice.originalPhrase, 'embarazada');
-    expect(wordChoice.correctedPhrase, 'avergonzada');
-    expect(wordChoice.startIndex, 34);
-    expect(wordChoice.endIndex, 44);
-    expect(natural.originalPhrase, 'Tuvimos un buen tiempo');
-    expect(natural.startIndex, 46);
-    expect(natural.endIndex, 68);
-  });
 }
 
 /// Wraps a hand-written list of already-JSON-encoded array element strings

@@ -349,8 +349,10 @@ AppliedItems applyItems(String text, List<SuggestionItem> items) {
       ),
   ];
   final placed = placeSuggestionEdits(text, stepItems, allCategories);
+  // Match on the model's own item (`source`), not on the applied one: since
+  // build step 2.2b an applied item may be a trimmed copy.
   final placedItems = Set<SuggestionStepItem>.identity()
-    ..addAll(placed.map((edit) => edit.item));
+    ..addAll(placed.map((edit) => edit.source));
   final applied = <SuggestionItem>[];
   final notApplied = <SuggestionItem>[];
   for (var i = 0; i < items.length; i++) {

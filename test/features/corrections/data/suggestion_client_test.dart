@@ -318,11 +318,7 @@ void main() {
       final (client, _) = _client(
         _reply([
           _item('yo fue', 'yo fui', 'Grammar'),
-          _item(
-            'Estoy muy embarazada',
-            'Estoy muy avergonzada',
-            'Word Choice',
-          ),
+          _item('Estoy muy embarazada', 'Estoy muy avergonzada', 'Word Choice'),
         ]),
         _reply([]),
       );
@@ -342,6 +338,20 @@ void main() {
       expect(wordChoice.originalPhrase, 'embarazada');
       expect(wordChoice.correctedPhrase, 'avergonzada');
       expect(wordChoice.startIndex, text.indexOf('embarazada'));
+    });
+
+    test('a trimmed edit keeps the model\'s own item as its source', () {
+      final item = const SuggestionStepItem(
+        written: 'yo fue',
+        suggestion: 'yo fui',
+        category: 'Grammar',
+        reason: 'r',
+      );
+      final placed = placeSuggestionEdits('Ayer yo fue al mercado.', [
+        item,
+      ], twoStepIssueCategories);
+      expect(placed.single.item.written, 'fue');
+      expect(identical(placed.single.source, item), isTrue);
     });
 
     test('a Natural phrasing point is never trimmed', () async {
