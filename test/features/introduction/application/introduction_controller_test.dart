@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_input_mode.dart';
 import 'package:spanish_correction_app/features/introduction/application/introduction_controller.dart';
 import 'package:spanish_correction_app/features/introduction/application/introduction_step.dart';
 import 'package:spanish_correction_app/features/introduction/content/introduction_content.dart';
@@ -325,6 +326,16 @@ void main() {
       final saved = repository.saved!.introduction;
       expect(saved.opener?.submissionId, suggestions[0].id);
       expect(saved.interestQuestion?.submissionId, suggestions[1].id);
+    });
+
+    test('build step 2.3: the opener is sent as typed and the interest '
+        'answer as spoken, so the spoken one gets no Spelling items', () async {
+      await atEndScreen(withFeedback());
+
+      expect(feedback.sentModes, [
+        CorrectionInputMode.typed,
+        CorrectionInputMode.spoken,
+      ]);
     });
 
     test('a failed send is tried once more from See suggestions', () async {

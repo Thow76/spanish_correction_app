@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_input_mode.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
 import 'package:spanish_correction_app/features/corrections/application/prompt_phrase_translation.dart';
 import 'package:spanish_correction_app/features/corrections/application/retranslation_grade_response.dart';
@@ -407,8 +408,9 @@ class _FakeCorrectionService implements CorrectionService {
   @override
   Future<CorrectionResponse> correctText(
     String text,
-    Language language,
-  ) async => throw UnimplementedError();
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async => throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(

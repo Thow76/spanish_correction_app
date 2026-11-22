@@ -1,4 +1,5 @@
 import 'package:spanish_correction_app/core/enums/language.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_input_mode.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
@@ -10,6 +11,9 @@ import 'package:spanish_correction_app/features/introduction/application/introdu
 class FakeIntroductionFeedback implements IntroductionFeedback {
   /// The answers sent, in order.
   final sent = <String>[];
+
+  /// How each answer in [sent] was given, in the same order.
+  final sentModes = <CorrectionInputMode>[];
 
   /// Every History entry made, by id.
   final history = <String, CorrectionSubmission>{};
@@ -23,8 +27,13 @@ class FakeIntroductionFeedback implements IntroductionFeedback {
   int _count = 0;
 
   @override
-  Future<CorrectionSubmission> send(String answer, Language language) async {
+  Future<CorrectionSubmission> send(
+    String answer,
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async {
     sent.add(answer);
+    sentModes.add(inputMode);
     if (failuresLeft > 0) {
       failuresLeft--;
       throw Exception('no internet');

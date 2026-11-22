@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/core/services/walkthrough_service.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_input_mode.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository_controller.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
@@ -19,8 +20,11 @@ import 'package:spanish_correction_app/features/write/application/transcription_
 import 'package:spanish_correction_app/core/models/walkthrough_activity.dart';
 import 'package:spanish_correction_app/shared/widgets/saved_correction_summary_card.dart';
 
-SavedExplanation _explanation() =>
-    const SavedExplanation(whyItsWrong: 'why', inContext: 'context', alternatives: []);
+SavedExplanation _explanation() => const SavedExplanation(
+  whyItsWrong: 'why',
+  inContext: 'context',
+  alternatives: [],
+);
 
 SavedCorrection _buildSaved({
   required String id,
@@ -52,16 +56,19 @@ class _FakeCorrectionRepository implements CorrectionRepository {
   final List<SavedCorrection> _saved;
 
   @override
-  Future<List<SavedCorrection>> getSavedCorrections({Language? language}) async =>
-      _saved;
+  Future<List<SavedCorrection>> getSavedCorrections({
+    Language? language,
+  }) async => _saved;
 
   @override
-  Future<List<CorrectionSubmission>> getRecentSubmissions({Language? language}) async =>
-      const [];
+  Future<List<CorrectionSubmission>> getRecentSubmissions({
+    Language? language,
+  }) async => const [];
 
   @override
-  Future<List<WalkthroughActivity>> getWalkthroughActivities({Language? language}) async =>
-      const [];
+  Future<List<WalkthroughActivity>> getWalkthroughActivities({
+    Language? language,
+  }) async => const [];
 
   @override
   Future<void> addSubmission(CorrectionSubmission submission) async {}
@@ -93,12 +100,17 @@ class _UnusedTranscriptionService implements TranscriptionService {
 
 class _UnusedCorrectionService implements CorrectionService {
   @override
-  Future<CorrectionResponse> correctText(String text, Language language) async =>
-      throw UnimplementedError();
+  Future<CorrectionResponse> correctText(
+    String text,
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async => throw UnimplementedError();
 
   @override
-  Future<String> generateLongExplanation(CorrectionItem correction, Language language) async =>
-      throw UnimplementedError();
+  Future<String> generateLongExplanation(
+    CorrectionItem correction,
+    Language language,
+  ) async => throw UnimplementedError();
 
   @override
   Future<SavedExplanation> generateStructuredExplanation(
@@ -156,7 +168,8 @@ Future<void> tapFilterChip(WidgetTester tester, Finder chip) async {
   await tester.dragUntilVisible(
     chip,
     find.byWidgetPredicate(
-      (widget) => widget is ListView && widget.scrollDirection == Axis.horizontal,
+      (widget) =>
+          widget is ListView && widget.scrollDirection == Axis.horizontal,
     ),
     const Offset(-60, 0),
   );
@@ -251,32 +264,29 @@ void main() {
       expect(find.text('0 de 5 seleccionada(s)'), findsOneWidget);
     });
 
-    testWidgets(
-      'a card shows the word count of the practice sentence, not the '
-      'short phrase headline',
-      (tester) async {
-        await pumpBuilder(
-          tester,
-          savedCorrections: [
-            _buildSaved(
-              id: 'sc-1',
-              promptPhrase: 'A trip to the market',
-              // The practice sentence (expectedAnswer) resolves to this
-              // whole 6-word sentence, even though the card's headline is
-              // just the 1-word phrase "mercado".
-              correctedSentence: 'Fui al mercado el sábado pasado.',
-              correctedPhrase: 'mercado',
-              correctedStartIndex: 7,
-            ),
-          ],
-        );
-        await tester.tap(find.byTooltip('Grammar'));
-        await tester.pumpAndSettle();
+    testWidgets('a card shows the word count of the practice sentence, not the '
+        'short phrase headline', (tester) async {
+      await pumpBuilder(
+        tester,
+        savedCorrections: [
+          _buildSaved(
+            id: 'sc-1',
+            promptPhrase: 'A trip to the market',
+            // The practice sentence (expectedAnswer) resolves to this
+            // whole 6-word sentence, even though the card's headline is
+            // just the 1-word phrase "mercado".
+            correctedSentence: 'Fui al mercado el sábado pasado.',
+            correctedPhrase: 'mercado',
+            correctedStartIndex: 7,
+          ),
+        ],
+      );
+      await tester.tap(find.byTooltip('Grammar'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('mercado'), findsOneWidget);
-        expect(find.text('6 palabra(s)'), findsOneWidget);
-      },
-    );
+      expect(find.text('mercado'), findsOneWidget);
+      expect(find.text('6 palabra(s)'), findsOneWidget);
+    });
 
     testWidgets(
       'multiple categories can be picked at once, and hiding a category '
@@ -370,54 +380,53 @@ void main() {
       },
     );
 
-    testWidgets(
-      'collapsing one category section hides only its own cards',
-      (tester) async {
-        await pumpBuilder(
-          tester,
-          savedCorrections: [
-            _buildSaved(
-              id: 'sc-1',
-              promptPhrase: 'Grammar one',
-              correctedSentence: 'Fui al mercado.',
-              correctedPhrase: 'mercado',
-              category: ErrorCategory.grammar,
-            ),
-            _buildSaved(
-              id: 'sc-2',
-              promptPhrase: 'Spelling one',
-              correctedSentence: 'Comí una manzana.',
-              correctedPhrase: 'manzana',
-              category: ErrorCategory.spelling,
-            ),
-          ],
-        );
+    testWidgets('collapsing one category section hides only its own cards', (
+      tester,
+    ) async {
+      await pumpBuilder(
+        tester,
+        savedCorrections: [
+          _buildSaved(
+            id: 'sc-1',
+            promptPhrase: 'Grammar one',
+            correctedSentence: 'Fui al mercado.',
+            correctedPhrase: 'mercado',
+            category: ErrorCategory.grammar,
+          ),
+          _buildSaved(
+            id: 'sc-2',
+            promptPhrase: 'Spelling one',
+            correctedSentence: 'Comí una manzana.',
+            correctedPhrase: 'manzana',
+            category: ErrorCategory.spelling,
+          ),
+        ],
+      );
 
-        await tester.tap(find.byTooltip('Grammar'));
-        await tester.pumpAndSettle();
-        await tapFilterChip(tester, find.byTooltip('Spelling'));
+      await tester.tap(find.byTooltip('Grammar'));
+      await tester.pumpAndSettle();
+      await tapFilterChip(tester, find.byTooltip('Spelling'));
 
-        expect(find.text('mercado').hitTestable(), findsOneWidget);
-        expect(find.text('manzana').hitTestable(), findsOneWidget);
+      expect(find.text('mercado').hitTestable(), findsOneWidget);
+      expect(find.text('manzana').hitTestable(), findsOneWidget);
 
-        // Collapse the Grammar section by tapping its header. AnimatedCrossFade
-        // keeps the collapsed child mounted (so find.text still matches it) but
-        // shrinks it to zero size, so hitTestable() is the right check here.
-        await tester.tap(find.text('Grammar'));
-        await tester.pumpAndSettle();
+      // Collapse the Grammar section by tapping its header. AnimatedCrossFade
+      // keeps the collapsed child mounted (so find.text still matches it) but
+      // shrinks it to zero size, so hitTestable() is the right check here.
+      await tester.tap(find.text('Grammar'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('mercado').hitTestable(), findsNothing);
-        // Spelling's section is untouched by collapsing Grammar's.
-        expect(find.text('manzana').hitTestable(), findsOneWidget);
+      expect(find.text('mercado').hitTestable(), findsNothing);
+      // Spelling's section is untouched by collapsing Grammar's.
+      expect(find.text('manzana').hitTestable(), findsOneWidget);
 
-        // Expanding it again brings the card back.
-        await tester.tap(find.text('Grammar'));
-        await tester.pumpAndSettle();
+      // Expanding it again brings the card back.
+      await tester.tap(find.text('Grammar'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('mercado').hitTestable(), findsOneWidget);
-        expect(find.text('manzana').hitTestable(), findsOneWidget);
-      },
-    );
+      expect(find.text('mercado').hitTestable(), findsOneWidget);
+      expect(find.text('manzana').hitTestable(), findsOneWidget);
+    });
 
     testWidgets('Clear deselects every category and hides all cards', (
       tester,
@@ -500,41 +509,37 @@ void main() {
         addTearDown(tester.view.reset);
       }
 
-      testWidgets(
-        'selecting a 6th phrase is blocked and shows a message',
-        (tester) async {
-          useTallSurface(tester);
-          await pumpBuilder(
-            tester,
-            savedCorrections: sevenGrammarCorrections(),
-          );
-          await tester.tap(find.byTooltip('Grammar'));
+      testWidgets('selecting a 6th phrase is blocked and shows a message', (
+        tester,
+      ) async {
+        useTallSurface(tester);
+        await pumpBuilder(tester, savedCorrections: sevenGrammarCorrections());
+        await tester.tap(find.byTooltip('Grammar'));
+        await tester.pumpAndSettle();
+
+        for (var i = 1; i <= 5; i++) {
+          await tester.tap(find.text('p$i'));
           await tester.pumpAndSettle();
+        }
+        expect(find.text('5 de 5 seleccionada(s)'), findsOneWidget);
 
-          for (var i = 1; i <= 5; i++) {
-            await tester.tap(find.text('p$i'));
-            await tester.pumpAndSettle();
-          }
-          expect(find.text('5 de 5 seleccionada(s)'), findsOneWidget);
+        await tester.tap(find.text('p6'));
+        await tester.pumpAndSettle();
 
-          await tester.tap(find.text('p6'));
-          await tester.pumpAndSettle();
-
-          // Still capped at 5 — the 6th tap was rejected, not added.
-          expect(find.text('5 de 5 seleccionada(s)'), findsOneWidget);
-          final card6 = tester.widget<SavedCorrectionSummaryCard>(
-            find.ancestor(
-              of: find.text('p6'),
-              matching: find.byType(SavedCorrectionSummaryCard),
-            ),
-          );
-          expect(card6.selected, isFalse);
-          expect(
-            find.textContaining('Solo puedes elegir 5 frases'),
-            findsOneWidget,
-          );
-        },
-      );
+        // Still capped at 5 — the 6th tap was rejected, not added.
+        expect(find.text('5 de 5 seleccionada(s)'), findsOneWidget);
+        final card6 = tester.widget<SavedCorrectionSummaryCard>(
+          find.ancestor(
+            of: find.text('p6'),
+            matching: find.byType(SavedCorrectionSummaryCard),
+          ),
+        );
+        expect(card6.selected, isFalse);
+        expect(
+          find.textContaining('Solo puedes elegir 5 frases'),
+          findsOneWidget,
+        );
+      });
 
       testWidgets(
         'Seleccionar todo fills only up to the cap when more than 5 are visible',
@@ -561,33 +566,29 @@ void main() {
         },
       );
 
-      testWidgets(
-        'deselecting still works normally while at the cap',
-        (tester) async {
-          useTallSurface(tester);
-          await pumpBuilder(
-            tester,
-            savedCorrections: sevenGrammarCorrections(),
-          );
-          await tester.tap(find.byTooltip('Grammar'));
+      testWidgets('deselecting still works normally while at the cap', (
+        tester,
+      ) async {
+        useTallSurface(tester);
+        await pumpBuilder(tester, savedCorrections: sevenGrammarCorrections());
+        await tester.tap(find.byTooltip('Grammar'));
+        await tester.pumpAndSettle();
+        for (var i = 1; i <= 5; i++) {
+          await tester.tap(find.text('p$i'));
           await tester.pumpAndSettle();
-          for (var i = 1; i <= 5; i++) {
-            await tester.tap(find.text('p$i'));
-            await tester.pumpAndSettle();
-          }
+        }
 
-          await tester.tap(find.text('p1'));
-          await tester.pumpAndSettle();
+        await tester.tap(find.text('p1'));
+        await tester.pumpAndSettle();
 
-          expect(find.text('4 de 5 seleccionada(s)'), findsOneWidget);
+        expect(find.text('4 de 5 seleccionada(s)'), findsOneWidget);
 
-          // With room again, a new one can be selected.
-          await tester.tap(find.text('p6'));
-          await tester.pumpAndSettle();
+        // With room again, a new one can be selected.
+        await tester.tap(find.text('p6'));
+        await tester.pumpAndSettle();
 
-          expect(find.text('5 de 5 seleccionada(s)'), findsOneWidget);
-        },
-      );
+        expect(find.text('5 de 5 seleccionada(s)'), findsOneWidget);
+      });
     });
 
     testWidgets('Start session is disabled when nothing is selected', (
@@ -609,110 +610,103 @@ void main() {
       expect(button.onPressed, isNull);
     });
 
-    testWidgets(
-      'Start session resolves the sentence containing the error via '
-      'correctedStartIndex, not the whole multi-sentence submission',
-      (tester) async {
-        await pumpBuilder(
-          tester,
-          savedCorrections: [
-            _buildSaved(
-              id: 'sc-1',
-              promptPhrase: 'A trip to the market',
-              correctedSentence:
-                  'Fui al mercado. Compré pan y luego volví a casa.',
-              correctedPhrase: 'mercado',
-              correctedStartIndex: 7,
-            ),
-          ],
-        );
-        await tester.tap(find.byTooltip('Grammar'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('mercado'));
-        await tester.pumpAndSettle();
+    testWidgets('Start session resolves the sentence containing the error via '
+        'correctedStartIndex, not the whole multi-sentence submission', (
+      tester,
+    ) async {
+      await pumpBuilder(
+        tester,
+        savedCorrections: [
+          _buildSaved(
+            id: 'sc-1',
+            promptPhrase: 'A trip to the market',
+            correctedSentence:
+                'Fui al mercado. Compré pan y luego volví a casa.',
+            correctedPhrase: 'mercado',
+            correctedStartIndex: 7,
+          ),
+        ],
+      );
+      await tester.tap(find.byTooltip('Grammar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('mercado'));
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Empezar sesión'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Empezar sesión'));
+      await tester.pumpAndSettle();
 
-        final gameScreen = tester.widget<PromptTranslationGameScreen>(
-          find.byType(PromptTranslationGameScreen),
-        );
-        expect(gameScreen.initialQuestions, hasLength(1));
-        expect(
-          gameScreen.initialQuestions.single.expectedAnswer,
-          'Fui al mercado.',
-        );
-      },
-    );
+      final gameScreen = tester.widget<PromptTranslationGameScreen>(
+        find.byType(PromptTranslationGameScreen),
+      );
+      expect(gameScreen.initialQuestions, hasLength(1));
+      expect(
+        gameScreen.initialQuestions.single.expectedAnswer,
+        'Fui al mercado.',
+      );
+    });
 
-    testWidgets(
-      'falls back to a substring search for correctedPhrase when '
-      'correctedStartIndex is absent (older saves)',
-      (tester) async {
-        await pumpBuilder(
-          tester,
-          savedCorrections: [
-            _buildSaved(
-              id: 'sc-1',
-              promptPhrase: 'A trip to the market',
-              correctedSentence:
-                  'Fui al mercado. Compré pan y luego volví a casa.',
-              correctedPhrase: 'mercado',
-            ),
-          ],
-        );
-        await tester.tap(find.byTooltip('Grammar'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('mercado'));
-        await tester.pumpAndSettle();
+    testWidgets('falls back to a substring search for correctedPhrase when '
+        'correctedStartIndex is absent (older saves)', (tester) async {
+      await pumpBuilder(
+        tester,
+        savedCorrections: [
+          _buildSaved(
+            id: 'sc-1',
+            promptPhrase: 'A trip to the market',
+            correctedSentence:
+                'Fui al mercado. Compré pan y luego volví a casa.',
+            correctedPhrase: 'mercado',
+          ),
+        ],
+      );
+      await tester.tap(find.byTooltip('Grammar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('mercado'));
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Empezar sesión'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Empezar sesión'));
+      await tester.pumpAndSettle();
 
-        final gameScreen = tester.widget<PromptTranslationGameScreen>(
-          find.byType(PromptTranslationGameScreen),
-        );
-        expect(
-          gameScreen.initialQuestions.single.expectedAnswer,
-          'Fui al mercado.',
-        );
-      },
-    );
+      final gameScreen = tester.widget<PromptTranslationGameScreen>(
+        find.byType(PromptTranslationGameScreen),
+      );
+      expect(
+        gameScreen.initialQuestions.single.expectedAnswer,
+        'Fui al mercado.',
+      );
+    });
 
-    testWidgets(
-      'falls back to the first sentence when neither an index nor a '
-      'locatable phrase is available',
-      (tester) async {
-        await pumpBuilder(
-          tester,
-          savedCorrections: [
-            _buildSaved(
-              id: 'sc-1',
-              promptPhrase: 'A trip to the market',
-              correctedSentence: 'Fui al mercado. Compré pan.',
-              correctedPhrase: '',
-            ),
-          ],
-        );
-        await tester.tap(find.byTooltip('Grammar'));
-        await tester.pumpAndSettle();
-        // The card's phrase text is empty, so select it via its card widget
-        // directly rather than by text.
-        await tester.tap(find.byType(SavedCorrectionSummaryCard));
-        await tester.pumpAndSettle();
+    testWidgets('falls back to the first sentence when neither an index nor a '
+        'locatable phrase is available', (tester) async {
+      await pumpBuilder(
+        tester,
+        savedCorrections: [
+          _buildSaved(
+            id: 'sc-1',
+            promptPhrase: 'A trip to the market',
+            correctedSentence: 'Fui al mercado. Compré pan.',
+            correctedPhrase: '',
+          ),
+        ],
+      );
+      await tester.tap(find.byTooltip('Grammar'));
+      await tester.pumpAndSettle();
+      // The card's phrase text is empty, so select it via its card widget
+      // directly rather than by text.
+      await tester.tap(find.byType(SavedCorrectionSummaryCard));
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Empezar sesión'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Empezar sesión'));
+      await tester.pumpAndSettle();
 
-        final gameScreen = tester.widget<PromptTranslationGameScreen>(
-          find.byType(PromptTranslationGameScreen),
-        );
-        expect(
-          gameScreen.initialQuestions.single.expectedAnswer,
-          'Fui al mercado.',
-        );
-      },
-    );
+      final gameScreen = tester.widget<PromptTranslationGameScreen>(
+        find.byType(PromptTranslationGameScreen),
+      );
+      expect(
+        gameScreen.initialQuestions.single.expectedAnswer,
+        'Fui al mercado.',
+      );
+    });
 
     group('phrase-only toggle', () {
       testWidgets(
@@ -792,35 +786,34 @@ void main() {
         },
       );
 
-      testWidgets(
-        'the word-count badge reflects the current toggle state',
-        (tester) async {
-          await pumpBuilder(
-            tester,
-            savedCorrections: [
-              _buildSaved(
-                id: 'sc-1',
-                promptPhrase: 'A trip to the market',
-                correctedSentence:
-                    'Fui al mercado. Compré pan y luego volví a casa.',
-                correctedPhrase: 'mercado',
-                correctedStartIndex: 7,
-              ),
-            ],
-          );
-          await tester.tap(find.byTooltip('Grammar'));
-          await tester.pumpAndSettle();
+      testWidgets('the word-count badge reflects the current toggle state', (
+        tester,
+      ) async {
+        await pumpBuilder(
+          tester,
+          savedCorrections: [
+            _buildSaved(
+              id: 'sc-1',
+              promptPhrase: 'A trip to the market',
+              correctedSentence:
+                  'Fui al mercado. Compré pan y luego volví a casa.',
+              correctedPhrase: 'mercado',
+              correctedStartIndex: 7,
+            ),
+          ],
+        );
+        await tester.tap(find.byTooltip('Grammar'));
+        await tester.pumpAndSettle();
 
-          // Phrase only (on): "Fui al mercado." — 3 words.
-          expect(find.text('3 palabra(s)'), findsOneWidget);
+        // Phrase only (on): "Fui al mercado." — 3 words.
+        expect(find.text('3 palabra(s)'), findsOneWidget);
 
-          await tester.tap(find.byType(SwitchListTile));
-          await tester.pumpAndSettle();
+        await tester.tap(find.byType(SwitchListTile));
+        await tester.pumpAndSettle();
 
-          // Full text: "Fui al mercado. Compré pan y luego volví a casa." — 10 words.
-          expect(find.text('10 palabra(s)'), findsOneWidget);
-        },
-      );
+        // Full text: "Fui al mercado. Compré pan y luego volví a casa." — 10 words.
+        expect(find.text('10 palabra(s)'), findsOneWidget);
+      });
 
       testWidgets(
         'flipping the switch after selecting still applies at session start',
@@ -943,9 +936,7 @@ void main() {
         expect(find.text('Nada seleccionado todavía'), findsOneWidget);
       });
 
-      testWidgets('tapping a category chip exits review mode', (
-        tester,
-      ) async {
+      testWidgets('tapping a category chip exits review mode', (tester) async {
         await pumpBuilder(
           tester,
           savedCorrections: [

@@ -8,6 +8,7 @@ import 'package:spanish_correction_app/features/corrections/application/correcti
 import 'package:spanish_correction_app/features/corrections/application/prompt_phrase_translation.dart';
 import 'package:spanish_correction_app/features/corrections/application/retranslation_grade_response.dart';
 import 'package:spanish_correction_app/features/corrections/application/submit_correction_use_case.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_input_mode.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_item.dart';
 import 'package:spanish_correction_app/features/corrections/domain/correction_response.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
@@ -128,6 +129,39 @@ void main() {
     expect(submission.id, startsWith('submission-'));
     expect(repository.addedSubmissions.single.id, submission.id);
   });
+
+  test(
+    'build step 2.3: the input mode reaches the check, typed by default',
+    () async {
+      const response = CorrectionResponse(
+        originalText: 'Estoy bien.',
+        correctedText: 'Estoy bien.',
+        corrections: [],
+      );
+      final service = _FakeCorrectionService(responseToReturn: response);
+      final useCase = SubmitCorrectionUseCase(
+        correctionService: service,
+        repositoryController: controller,
+      );
+
+      await useCase('Estoy bien.', Language.spanish);
+      expect(service.lastInputMode, CorrectionInputMode.typed);
+
+      await useCase(
+        'Estoy bien.',
+        Language.spanish,
+        inputMode: CorrectionInputMode.spoken,
+      );
+      expect(service.lastInputMode, CorrectionInputMode.spoken);
+
+      await useCase.submit(
+        'Estoy bien.',
+        Language.spanish,
+        inputMode: CorrectionInputMode.spoken,
+      );
+      expect(service.lastInputMode, CorrectionInputMode.spoken);
+    },
+  );
 }
 
 class _FakeCorrectionService implements CorrectionService {
@@ -136,8 +170,16 @@ class _FakeCorrectionService implements CorrectionService {
   final CorrectionResponse? responseToReturn;
   final Object? exceptionToThrow;
 
+  /// The input mode of the last call.
+  CorrectionInputMode? lastInputMode;
+
   @override
-  Future<CorrectionResponse> correctText(String text, Language language) async {
+  Future<CorrectionResponse> correctText(
+    String text,
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async {
+    lastInputMode = inputMode;
     final exception = exceptionToThrow;
     if (exception != null) {
       throw exception;

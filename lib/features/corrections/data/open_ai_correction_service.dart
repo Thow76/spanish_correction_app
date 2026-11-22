@@ -11,12 +11,13 @@ import '../application/correction_service.dart';
 import '../application/correction_service_exception.dart';
 import '../application/prompt_phrase_translation.dart';
 import '../application/retranslation_grade_response.dart';
+import '../domain/correction_input_mode.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
 import '../domain/error_category.dart';
 import '../../saved/domain/saved_explanation.dart';
 import 'openai_chat_completions_client.dart';
-import 'staged_correction_pipeline.dart';
+import 'suggestion_client.dart';
 
 class OpenAiCorrectionService implements CorrectionService {
   OpenAiCorrectionService({
@@ -39,12 +40,24 @@ class OpenAiCorrectionService implements CorrectionService {
   final HttpClient _httpClient;
   late final OpenAiChatCompletionsClient _chatCompletionsClient;
 
+  /// The app's Spanish check (build step 2.3): the two-step client from
+  /// step 2.1, GPT-6 Luna for Issues and GPT-6 Sol for Suggestions. Its
+  /// model names are its own; [_model] is for everything else this class
+  /// does.
+  late final SuggestionClient _suggestionClient = SuggestionClient.openAi(
+    _chatCompletionsClient,
+  );
+
   @override
-  Future<CorrectionResponse> correctText(String text, Language language) async {
+  Future<CorrectionResponse> correctText(
+    String text,
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async {
     _ensureConfigured();
 
     if (language == Language.spanish) {
-      return _correctSpanishTextViaStagedPipeline(text);
+      return _correctSpanishText(text, inputMode: inputMode);
     }
 
     final responseText = await _createResponse(
@@ -75,46 +88,42 @@ class OpenAiCorrectionService implements CorrectionService {
     }
   }
 
-  /// Runs the staged pipeline and translates its exceptions into
-  /// [CorrectionServiceException], matching the contract every other method
-  /// on this class already upholds (`SubmitCorrectionUseCase` catches
-  /// [CorrectionServiceException] specifically, e.g. to detect
-  /// `networkUnavailable` and queue the submission for offline sync).
+  /// Runs the two-step check (decision P4; build steps 2.1 and 2.3) and
+  /// translates its exceptions into [CorrectionServiceException], the
+  /// contract every other method on this class already upholds. Both
+  /// groups come back as one [CorrectionResponse], Issues first, in the
+  /// shape the results screen, History and Saved already read.
   ///
   /// `ChatCompletionsException.kind` is classified at its source
   /// (`OpenAiChatCompletionsClient`) to match the legacy `/v1/responses`
   /// path's own classification for the same underlying failure exactly:
   /// [ChatCompletionsFailureKind.connectivity] (a `SocketException` — the
-  /// device has no network) maps to `networkUnavailable`, the same as the
-  /// legacy path; everything else
+  /// device has no network) maps to `networkUnavailable`; everything else
   /// ([ChatCompletionsFailureKind.serviceFailure] — a timeout, a bad HTTP
   /// status, or a malformed response body) maps to `apiFailure`, again the
-  /// same as the legacy path. This is deliberately not a two-way split of
-  /// "network vs. everything" — the legacy path itself treats a timeout as
-  /// `apiFailure`, not `networkUnavailable` (a timeout doesn't mean the
-  /// device is offline), so this mirrors that rather than retrying
-  /// something that isn't actually a connectivity problem.
-  Future<CorrectionResponse> _correctSpanishTextViaStagedPipeline(
-    String text,
-  ) async {
+  /// same as the legacy path. A timeout is not `networkUnavailable`: it
+  /// means the service did not answer in time, not that the device is
+  /// offline. If either of the two calls fails, the whole check fails and
+  /// nothing is shown, since P4 rules out fallbacks.
+  Future<CorrectionResponse> _correctSpanishText(
+    String text, {
+    required CorrectionInputMode inputMode,
+  }) async {
     try {
-      return await runStagedCorrectionPipeline(
-        client: _chatCompletionsClient,
-        model: _model,
-        submittedText: text,
-      );
+      final result = await _suggestionClient.check(text, inputMode: inputMode);
+      return result.toCorrectionResponse();
     } on ChatCompletionsException catch (error) {
       final reason = error.kind == ChatCompletionsFailureKind.connectivity
           ? CorrectionFailureReason.networkUnavailable
           : CorrectionFailureReason.apiFailure;
       throw CorrectionServiceException(
         reason,
-        'Staged Spanish correction pipeline failed: $error',
+        'Spanish two-step check failed: $error',
       );
     } on FormatException catch (error) {
       throw CorrectionServiceException(
         CorrectionFailureReason.invalidResponse,
-        'Staged Spanish correction pipeline returned an invalid response: $error',
+        'Spanish two-step check returned an invalid response: $error',
       );
     }
   }

@@ -1,13 +1,15 @@
 import '../../../core/enums/language.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/submit_correction_use_case.dart';
+import '../../corrections/domain/correction_input_mode.dart';
 import '../../corrections/domain/correction_item.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../saved/application/save_correction_use_case.dart';
 import '../application/introduction_feedback.dart';
 
 /// The introduction's feedback through the app's own check, History and
-/// Saved (task 1.4). Until slice 2 this is today's check.
+/// Saved (task 1.4). Since build step 2.3 the check is the two-step check,
+/// the same path as the Check a phrase page.
 class HistoryIntroductionFeedback implements IntroductionFeedback {
   const HistoryIntroductionFeedback({
     required SubmitCorrectionUseCase submitCorrectionUseCase,
@@ -22,8 +24,11 @@ class HistoryIntroductionFeedback implements IntroductionFeedback {
   final CorrectionRepositoryController _repositoryController;
 
   @override
-  Future<CorrectionSubmission> send(String answer, Language language) =>
-      _submit.submit(answer, language);
+  Future<CorrectionSubmission> send(
+    String answer,
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) => _submit.submit(answer, language, inputMode: inputMode);
 
   @override
   Future<CorrectionSubmission?> find(
