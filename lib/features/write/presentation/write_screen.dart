@@ -15,6 +15,7 @@ import '../../../shared/widgets/primary_action_button.dart';
 import '../../../shared/widgets/text_input_panel.dart';
 import '../../corrections/application/correction_service_exception.dart';
 import '../../corrections/application/submit_correction_use_case.dart';
+import '../../corrections/domain/correction_input_mode.dart';
 import '../../corrections/domain/correction_item.dart';
 import '../../corrections/presentation/corrections_screen.dart';
 import '../../saved/application/save_correction_use_case.dart';
@@ -54,6 +55,17 @@ class _WriteScreenState extends State<WriteScreen> {
   bool _isTranscribing = false;
   int _recordingSecondsRemaining = _recordingLimitSeconds;
 
+  /// Whether the text in the box came from a recording (build step 2.3).
+  /// Set when a transcript is put in the box; cleared when the learner
+  /// empties the box. Editing a transcript keeps it spoken, since the
+  /// phone still wrote most of the spelling. The check shows no Spelling
+  /// items for spoken text (decision C3).
+  bool _textFromRecording = false;
+
+  CorrectionInputMode get _inputMode => _textFromRecording
+      ? CorrectionInputMode.spoken
+      : CorrectionInputMode.typed;
+
   // Returns the Spanish string for Language.spanish, Portuguese for Language.portuguese.
   String _str(String es, String pt) => switch (widget.language) {
     Language.spanish => es,
@@ -82,7 +94,12 @@ class _WriteScreenState extends State<WriteScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 390),
               child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 48, 16, keyboardVisible ? 0 : 24),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  48,
+                  16,
+                  keyboardVisible ? 0 : 24,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -101,7 +118,7 @@ class _WriteScreenState extends State<WriteScreen> {
                       child: TextInputPanel(
                         controller: _controller,
                         characterLimit: _characterLimit,
-                        onChanged: _handleTextChanged,
+                        onChanged: _handleTyping,
                         hintText: _str(
                           'Type or paste your Spanish text here...',
                           'Type or paste your Portuguese text here...',
@@ -143,6 +160,14 @@ class _WriteScreenState extends State<WriteScreen> {
     );
   }
 
+  /// The learner changed the text in the box.
+  void _handleTyping(String value) {
+    if (value.isEmpty) {
+      _textFromRecording = false;
+    }
+    _handleTextChanged(value);
+  }
+
   void _handleTextChanged(String value) {
     final count = value.characters.length;
     if (count < _characterLimit) {
@@ -174,6 +199,7 @@ class _WriteScreenState extends State<WriteScreen> {
       final response = await widget.submitCorrectionUseCase(
         _controller.text.trim(),
         widget.language,
+        inputMode: _inputMode,
       );
 
       if (!mounted) {
@@ -295,8 +321,10 @@ class _WriteScreenState extends State<WriteScreen> {
         );
       }
 
-      final transcript = await widget.transcriptionService
-          .transcribeAudio(audioPath, widget.language);
+      final transcript = await widget.transcriptionService.transcribeAudio(
+        audioPath,
+        widget.language,
+      );
 
       if (!mounted) {
         return;
@@ -309,6 +337,7 @@ class _WriteScreenState extends State<WriteScreen> {
       _controller.selection = TextSelection.collapsed(
         offset: _controller.text.length,
       );
+      _textFromRecording = limitedTranscript.isNotEmpty;
       _handleTextChanged(limitedTranscript);
     } on TranscriptionServiceException catch (error) {
       if (!mounted) {

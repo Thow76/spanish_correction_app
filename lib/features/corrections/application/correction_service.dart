@@ -1,4 +1,5 @@
 import '../../../core/enums/language.dart';
+import '../domain/correction_input_mode.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_response.dart';
 import '../domain/error_category.dart';
@@ -7,7 +8,13 @@ import 'prompt_phrase_translation.dart';
 import 'retranslation_grade_response.dart';
 
 abstract interface class CorrectionService {
-  Future<CorrectionResponse> correctText(String text, Language language);
+  /// Checks [text]. [inputMode] says whether the learner typed it or spoke
+  /// it; spoken Spanish text gets no Spelling items (build step 2.3).
+  Future<CorrectionResponse> correctText(
+    String text,
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  });
 
   Future<String> generateLongExplanation(
     CorrectionItem correction,

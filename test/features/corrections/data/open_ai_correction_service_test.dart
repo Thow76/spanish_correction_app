@@ -9,6 +9,7 @@ import 'package:spanish_correction_app/core/services/prompt_builder.dart';
 import 'package:spanish_correction_app/core/services/prompts/correction_prompt.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service_exception.dart';
 import 'package:spanish_correction_app/features/corrections/data/open_ai_correction_service.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_input_mode.dart';
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 
 void main() {
@@ -301,49 +302,137 @@ void main() {
     );
   });
 
-  group('correctText Spanish staged pipeline', () {
+  group('correctText Spanish two-step check (build step 2.3)', () {
+    /// A reply from one step: the items only, as the prompts ask.
+    String itemsReply(List<Map<String, String>> items) =>
+        _chatEnvelope(jsonEncode({'items': items}));
+
+    Map<String, String> item(
+      String written,
+      String suggestion,
+      String category,
+      String reason,
+    ) => {
+      'written': written,
+      'suggestion': suggestion,
+      'category': category,
+      'reason': reason,
+    };
+
+    test('Spanish goes through the two-step client: GPT-6 Luna for Issues, '
+        'then GPT-6 Sol for Suggestions, both on /v1/chat/completions, and '
+        'the two groups come back as one response, Issues first', () async {
+      const submitted = 'Vi mucho trafico ayer y hice una decisión.';
+      final client = _RoutingHttpClient({
+        twoStepIssuesPromptSpanish: itemsReply([
+          item('trafico', 'tráfico', 'Spelling', 'Needs the accent.'),
+        ]),
+        twoStepSuggestionsPromptSpanish: itemsReply([
+          item(
+            'hice una decisión',
+            'tomé una decisión',
+            'Natural phrasing',
+            'Spanish takes a decision.',
+          ),
+        ]),
+      });
+
+      final result = await serviceWith(
+        client,
+      ).correctText(submitted, Language.spanish);
+
+      expect(result.originalText, submitted);
+      expect(
+        result.correctedText,
+        'Vi mucho tráfico ayer y tomé una decisión.',
+      );
+      expect(result.corrections, hasLength(2));
+      final [issue, suggestion] = result.corrections;
+      expect(issue.originalPhrase, 'trafico');
+      expect(issue.correctedPhrase, 'tráfico');
+      expect(issue.category, ErrorCategory.spelling);
+      expect(issue.shortExplanation, 'Needs the accent.');
+      expect(suggestion.originalPhrase, 'hice una decisión');
+      expect(suggestion.category, ErrorCategory.naturalPhrasing);
+
+      // Two calls, one per model, in order; the legacy /v1/responses
+      // path and the old staged pipeline were never used.
+      expect(client.requestedUris, hasLength(2));
+      expect(
+        client.requestedUris.every((uri) => uri.path == '/v1/chat/completions'),
+        isTrue,
+      );
+      expect(client.modelsSent, ['gpt-6-luna', 'gpt-6-sol']);
+      expect(client.systemPromptsSent, [
+        twoStepIssuesPromptSpanish,
+        twoStepSuggestionsPromptSpanish,
+      ]);
+    });
+
+    test('typed text keeps a Spelling item, which is the default', () async {
+      const submitted = 'Donde esta el baño?';
+      final client = _RoutingHttpClient({
+        twoStepIssuesPromptSpanish: itemsReply([
+          item(
+            'Donde esta el baño?',
+            '¿Dónde está el baño?',
+            'Spelling',
+            'Spanish needs the opening question mark and accents.',
+          ),
+        ]),
+        twoStepSuggestionsPromptSpanish: itemsReply(const []),
+      });
+
+      final result = await serviceWith(
+        client,
+      ).correctText(submitted, Language.spanish);
+
+      expect(result.correctedText, '¿Dónde está el baño?');
+      expect(result.corrections, hasLength(1));
+      expect(result.corrections.single.category, ErrorCategory.spelling);
+    });
+
     test(
-      'Spanish routes through the real staged pipeline '
-      '(network layer faked, same pattern as the pipeline\'s own tests)',
+      'spoken text gets no Spelling items: one the model returns is left '
+      'out, not shown and not applied, while a Grammar item is kept',
       () async {
-        const submitted = 'Vi mucho trafico ayer.';
+        const submitted = 'Donde esta el baño? Ayer yo fue al mercado.';
         final client = _RoutingHttpClient({
-          stage1DetectionDialectSpanish: _arrayEnvelope(['"trafico"']),
-          stage1RedundancyDetectionSpanish: _arrayEnvelope(const []),
-          stage1ReflexiveDetectionSpanish: _arrayEnvelope(const []),
-          stage2CategorizationSpanish: _arrayEnvelope([
-            '{"original_phrase": "trafico", "corrected_phrase": "tráfico", '
-                '"occurrence": 1, "category": "Spelling", "verdict": "error"}',
+          twoStepIssuesPromptSpanish: itemsReply([
+            item(
+              'Donde esta el baño?',
+              '¿Dónde está el baño?',
+              'Spelling',
+              'Spanish needs the opening question mark and accents.',
+            ),
+            item('yo fue', 'yo fui', 'Grammar', 'First person: fui.'),
           ]),
-          stage3FeedbackSpanish: _arrayEnvelope([
-            '{"start_index": 9, "short_explanation": '
-                '"Trafico needs an accent on the a: tráfico."}',
-          ]),
+          twoStepSuggestionsPromptSpanish: itemsReply(const []),
         });
 
-        final result = await serviceWith(
-          client,
-        ).correctText(submitted, Language.spanish);
+        final result = await serviceWith(client).correctText(
+          submitted,
+          Language.spanish,
+          inputMode: CorrectionInputMode.spoken,
+        );
 
-        expect(result.correctedText, 'Vi mucho tráfico ayer.');
-        expect(result.corrections, hasLength(1));
-        expect(result.corrections.single.originalPhrase, 'trafico');
-        expect(result.corrections.single.category, ErrorCategory.spelling);
-
-        // Every call went to the staged pipeline's endpoint — the legacy
-        // path's /v1/responses was never hit.
-        expect(client.requestedUris, isNotEmpty);
         expect(
-          client.requestedUris.every(
-            (uri) => uri.path == '/v1/chat/completions',
-          ),
-          isTrue,
+          result.correctedText,
+          'Donde esta el baño? Ayer yo fui al mercado.',
+        );
+        expect(result.corrections, hasLength(1));
+        expect(result.corrections.single.category, ErrorCategory.grammar);
+        expect(result.corrections.single.originalPhrase, 'fue');
+        // Step 2 read the text with only the Grammar fix applied.
+        expect(
+          client.userTextsSent.last,
+          'Text to review:\nDonde esta el baño? Ayer yo fui al mercado.',
         );
       },
     );
 
     test('Portuguese still uses the existing single-call path — there is no '
-        'staged Portuguese pipeline', () async {
+        'two-step Portuguese check', () async {
       const submitted = 'Oi, tudo bem?';
       final client = _CapturingHttpClient(
         _responsesEnvelope(
@@ -373,19 +462,19 @@ void main() {
     });
   });
 
-  group('correctText failure classification parity (Spanish staged vs '
+  group('correctText failure classification parity (Spanish two-step vs '
       'Portuguese legacy)', () {
     test('a SocketException classifies as networkUnavailable on BOTH paths, '
         'for the same underlying fault', () async {
       const fault = SocketException('Failed host lookup');
 
-      Object? stagedError;
+      Object? twoStepError;
       try {
         await serviceWith(
           _ThrowingHttpClient(fault),
         ).correctText('Vi mucho trafico ayer.', Language.spanish);
       } catch (error) {
-        stagedError = error;
+        twoStepError = error;
       }
 
       Object? legacyError;
@@ -397,9 +486,9 @@ void main() {
         legacyError = error;
       }
 
-      expect(stagedError, isA<CorrectionServiceException>());
+      expect(twoStepError, isA<CorrectionServiceException>());
       expect(
-        (stagedError as CorrectionServiceException).reason,
+        (twoStepError as CorrectionServiceException).reason,
         CorrectionFailureReason.networkUnavailable,
       );
 
@@ -410,7 +499,7 @@ void main() {
       );
     });
 
-    test('on the staged Spanish path, a TimeoutException classifies as '
+    test('on the two-step Spanish path, a TimeoutException classifies as '
         'apiFailure, not networkUnavailable — matching the legacy path\'s own '
         'treatment of a timeout as apiFailure', () async {
       final client = _ThrowingHttpClient(TimeoutException('timed out'));
@@ -431,7 +520,7 @@ void main() {
       );
     });
 
-    test('on the staged Spanish path, a bad response (malformed JSON body) '
+    test('on the two-step Spanish path, a bad response (malformed JSON body) '
         'classifies as apiFailure, not networkUnavailable — the two failure '
         'kinds do not collapse into the same reason', () async {
       // A JSON array instead of an object — decodes fine but fails the
@@ -554,14 +643,11 @@ class _FakeHttpClientResponse extends Stream<List<int>>
   Object? noSuchMethod(Invocation invocation) => null;
 }
 
-/// Wraps a hand-written list of already-JSON-encoded array element strings
-/// in a `/v1/chat/completions` reply envelope — same helper as
-/// `staged_correction_pipeline_test.dart`, e.g. `_arrayEnvelope(['"trafico"'])`
-/// -> a reply whose content is `["trafico"]`.
-String _arrayEnvelope(List<String> elements) => jsonEncode({
+/// Wraps [content] in a `/v1/chat/completions` reply envelope.
+String _chatEnvelope(String content) => jsonEncode({
   'choices': [
     {
-      'message': {'role': 'assistant', 'content': '[${elements.join(', ')}]'},
+      'message': {'role': 'assistant', 'content': content},
     },
   ],
 });
@@ -580,10 +666,22 @@ class _RoutingHttpClient implements HttpClient {
   final Map<String, String> _repliesBySystemPrompt;
   final List<Uri> requestedUris = [];
 
+  /// The model, system prompt and user message of every call, in order.
+  final List<String> modelsSent = [];
+  final List<String> systemPromptsSent = [];
+  final List<String> userTextsSent = [];
+
   @override
   Future<HttpClientRequest> postUrl(Uri url) async {
     requestedUris.add(url);
-    return _RoutingRequest(repliesBySystemPrompt: _repliesBySystemPrompt);
+    return _RoutingRequest(
+      repliesBySystemPrompt: _repliesBySystemPrompt,
+      onSent: (model, systemPrompt, userText) {
+        modelsSent.add(model);
+        systemPromptsSent.add(systemPrompt);
+        userTextsSent.add(userText);
+      },
+    );
   }
 
   @override
@@ -591,9 +689,11 @@ class _RoutingHttpClient implements HttpClient {
 }
 
 class _RoutingRequest implements HttpClientRequest {
-  _RoutingRequest({required this.repliesBySystemPrompt});
+  _RoutingRequest({required this.repliesBySystemPrompt, this.onSent});
 
   final Map<String, String> repliesBySystemPrompt;
+  final void Function(String model, String systemPrompt, String userText)?
+  onSent;
   final BytesBuilder _bytes = BytesBuilder();
 
   @override
@@ -608,6 +708,11 @@ class _RoutingRequest implements HttpClientRequest {
     final sent = jsonDecode(body) as Map<String, Object?>;
     final messages = sent['messages'] as List;
     final systemPrompt = (messages[0] as Map)['content'] as String;
+    onSent?.call(
+      sent['model'] as String,
+      systemPrompt,
+      (messages[1] as Map)['content'] as String,
+    );
     final reply = repliesBySystemPrompt[systemPrompt];
     if (reply == null) {
       throw StateError(

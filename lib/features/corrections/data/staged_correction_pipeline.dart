@@ -26,16 +26,12 @@ import 'stage3_feedback_client.dart';
 /// function takes no `language` parameter rather than one that could only
 /// ever do one thing.
 ///
-/// Not part of the `CorrectionService` interface directly, but it is the
-/// live path for Spanish: `OpenAiCorrectionService.correctText()` calls it
-/// (via `_correctSpanishTextViaStagedPipeline`) for every Spanish
-/// submission today. (Status update, issue #73: this comment previously
-/// said the opposite — that this function was deliberately not called from
-/// `correctText()` or any live route, and that wiring it in was separate,
-/// later work. That was accurate when issue #27 wrote it, but is stale now
-/// — see `docs/two_pass_orchestration_entry_points.md`, whose own "Note"
-/// section already flagged this exact comment as stale, and issue #44 for
-/// the fuller current-wiring writeup.)
+/// No longer on the live path. Until build step 2.3 (22 Nov 2026)
+/// `OpenAiCorrectionService.correctText()` called this for every Spanish
+/// submission; the two-step check (`suggestion_client.dart`, decision P4)
+/// has replaced it. Nothing in the app calls this now. It is kept until
+/// build step 2.5 deletes the five-stage pipeline, with its prompt wording
+/// archived.
 Future<CorrectionResponse> runStagedCorrectionPipeline({
   required OpenAiChatCompletionsClient client,
   required String model,

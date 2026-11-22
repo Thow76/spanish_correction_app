@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/enums/language.dart';
+import '../../corrections/domain/correction_input_mode.dart';
 import '../../corrections/domain/correction_item.dart';
 import '../../history/domain/correction_submission.dart';
 import '../../profile/application/profile_repository.dart';
@@ -27,7 +28,17 @@ enum StopDestination {
 }
 
 /// The two steps the learner answers, whose answers are sent for feedback.
-enum _AnsweredStep { opener, interestQuestion }
+/// The opener is typed and the interest question is spoken (decision A3),
+/// which the check is told, so the spoken answer gets no Spelling items
+/// (build step 2.3).
+enum _AnsweredStep {
+  opener(CorrectionInputMode.typed),
+  interestQuestion(CorrectionInputMode.spoken);
+
+  const _AnsweredStep(this.inputMode);
+
+  final CorrectionInputMode inputMode;
+}
 
 /// Runs the introduction (decisions A1, A2 and A3; build plan task 1.3).
 ///
@@ -412,7 +423,11 @@ class IntroductionController extends ChangeNotifier {
     String answer,
   ) async {
     try {
-      final submission = await feedback.send(answer, language);
+      final submission = await feedback.send(
+        answer,
+        language,
+        inputMode: step.inputMode,
+      );
       _received[submission.id] = submission;
       _update(switch (step) {
         _AnsweredStep.opener => progress.withOpenerAnswered(

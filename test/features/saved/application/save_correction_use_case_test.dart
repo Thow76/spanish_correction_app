@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/core/models/walkthrough_activity.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_input_mode.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository_controller.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
@@ -37,8 +38,11 @@ class _FakeCorrectionService implements CorrectionService {
   String? capturedCorrectedPhrase;
 
   @override
-  Future<CorrectionResponse> correctText(String text, Language language) async =>
-      throw UnimplementedError();
+  Future<CorrectionResponse> correctText(
+    String text,
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async => throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(
@@ -85,16 +89,19 @@ class _FakeCorrectionRepository implements CorrectionRepository {
   }
 
   @override
-  Future<List<SavedCorrection>> getSavedCorrections({Language? language}) async =>
-      saved;
+  Future<List<SavedCorrection>> getSavedCorrections({
+    Language? language,
+  }) async => saved;
 
   @override
-  Future<List<CorrectionSubmission>> getRecentSubmissions({Language? language}) async =>
-      const [];
+  Future<List<CorrectionSubmission>> getRecentSubmissions({
+    Language? language,
+  }) async => const [];
 
   @override
-  Future<List<WalkthroughActivity>> getWalkthroughActivities({Language? language}) async =>
-      const [];
+  Future<List<WalkthroughActivity>> getWalkthroughActivities({
+    Language? language,
+  }) async => const [];
 
   @override
   Future<void> addSubmission(CorrectionSubmission submission) async {}
@@ -117,115 +124,103 @@ class _FakeCorrectionRepository implements CorrectionRepository {
 
 void main() {
   group('SaveCorrectionUseCase', () {
-    test(
-      'success: populates promptPhrase and both highlight indices from the '
-      'service result',
-      () async {
-        final correctionService = _FakeCorrectionService(
-          promptPhraseResult: const PromptPhraseTranslation(
-            text: 'I went to the market.',
-            highlightStartIndex: 2,
-            highlightEndIndex: 6,
-          ),
-        );
-        final useCase = SaveCorrectionUseCase(
-          correctionService: correctionService,
-          repositoryController: CorrectionRepositoryController(
-            _FakeCorrectionRepository(),
-          ),
-        );
+    test('success: populates promptPhrase and both highlight indices from the '
+        'service result', () async {
+      final correctionService = _FakeCorrectionService(
+        promptPhraseResult: const PromptPhraseTranslation(
+          text: 'I went to the market.',
+          highlightStartIndex: 2,
+          highlightEndIndex: 6,
+        ),
+      );
+      final useCase = SaveCorrectionUseCase(
+        correctionService: correctionService,
+        repositoryController: CorrectionRepositoryController(
+          _FakeCorrectionRepository(),
+        ),
+      );
 
-        final saved = await useCase.call(
-          correction: _correction(),
-          originalSentence: 'Voy al mercado.',
-          correctedSentence: 'Fui al mercado.',
-          language: Language.spanish,
-        );
+      final saved = await useCase.call(
+        correction: _correction(),
+        originalSentence: 'Voy al mercado.',
+        correctedSentence: 'Fui al mercado.',
+        language: Language.spanish,
+      );
 
-        expect(saved.promptPhrase, 'I went to the market.');
-        expect(saved.promptHighlightStartIndex, 2);
-        expect(saved.promptHighlightEndIndex, 6);
-      },
-    );
+      expect(saved.promptPhrase, 'I went to the market.');
+      expect(saved.promptHighlightStartIndex, 2);
+      expect(saved.promptHighlightEndIndex, 6);
+    });
 
-    test(
-      'passes correction.correctedPhrase (not correctedSentence) as '
-      'correctedPhrase to generatePromptPhrase',
-      () async {
-        final correctionService = _FakeCorrectionService();
-        final useCase = SaveCorrectionUseCase(
-          correctionService: correctionService,
-          repositoryController: CorrectionRepositoryController(
-            _FakeCorrectionRepository(),
-          ),
-        );
+    test('passes correction.correctedPhrase (not correctedSentence) as '
+        'correctedPhrase to generatePromptPhrase', () async {
+      final correctionService = _FakeCorrectionService();
+      final useCase = SaveCorrectionUseCase(
+        correctionService: correctionService,
+        repositoryController: CorrectionRepositoryController(
+          _FakeCorrectionRepository(),
+        ),
+      );
 
-        await useCase.call(
-          correction: _correction(correctedPhrase: 'Fui'),
-          originalSentence: 'Voy al mercado.',
-          correctedSentence: 'Fui al mercado.',
-          language: Language.spanish,
-        );
+      await useCase.call(
+        correction: _correction(correctedPhrase: 'Fui'),
+        originalSentence: 'Voy al mercado.',
+        correctedSentence: 'Fui al mercado.',
+        language: Language.spanish,
+      );
 
-        expect(correctionService.capturedCorrectedSentence, 'Fui al mercado.');
-        expect(correctionService.capturedCorrectedPhrase, 'Fui');
-      },
-    );
+      expect(correctionService.capturedCorrectedSentence, 'Fui al mercado.');
+      expect(correctionService.capturedCorrectedPhrase, 'Fui');
+    });
 
-    test(
-      'generatePromptPhrase throwing falls back to empty text with null '
-      'indices, and the save still succeeds',
-      () async {
-        final correctionService = _FakeCorrectionService(
-          promptPhraseError: Exception('network down'),
-        );
-        final useCase = SaveCorrectionUseCase(
-          correctionService: correctionService,
-          repositoryController: CorrectionRepositoryController(
-            _FakeCorrectionRepository(),
-          ),
-        );
+    test('generatePromptPhrase throwing falls back to empty text with null '
+        'indices, and the save still succeeds', () async {
+      final correctionService = _FakeCorrectionService(
+        promptPhraseError: Exception('network down'),
+      );
+      final useCase = SaveCorrectionUseCase(
+        correctionService: correctionService,
+        repositoryController: CorrectionRepositoryController(
+          _FakeCorrectionRepository(),
+        ),
+      );
 
-        final saved = await useCase.call(
-          correction: _correction(),
-          originalSentence: 'Voy al mercado.',
-          correctedSentence: 'Fui al mercado.',
-          language: Language.spanish,
-        );
+      final saved = await useCase.call(
+        correction: _correction(),
+        originalSentence: 'Voy al mercado.',
+        correctedSentence: 'Fui al mercado.',
+        language: Language.spanish,
+      );
 
-        expect(saved.promptPhrase, '');
-        expect(saved.promptHighlightStartIndex, isNull);
-        expect(saved.promptHighlightEndIndex, isNull);
-      },
-    );
+      expect(saved.promptPhrase, '');
+      expect(saved.promptHighlightStartIndex, isNull);
+      expect(saved.promptHighlightEndIndex, isNull);
+    });
 
-    test(
-      'a verified-empty highlighted_phrase from the service still saves the '
-      'translation text with null highlight indices',
-      () async {
-        final correctionService = _FakeCorrectionService(
-          promptPhraseResult: const PromptPhraseTranslation(
-            text: 'I bought three apples.',
-          ),
-        );
-        final useCase = SaveCorrectionUseCase(
-          correctionService: correctionService,
-          repositoryController: CorrectionRepositoryController(
-            _FakeCorrectionRepository(),
-          ),
-        );
+    test('a verified-empty highlighted_phrase from the service still saves the '
+        'translation text with null highlight indices', () async {
+      final correctionService = _FakeCorrectionService(
+        promptPhraseResult: const PromptPhraseTranslation(
+          text: 'I bought three apples.',
+        ),
+      );
+      final useCase = SaveCorrectionUseCase(
+        correctionService: correctionService,
+        repositoryController: CorrectionRepositoryController(
+          _FakeCorrectionRepository(),
+        ),
+      );
 
-        final saved = await useCase.call(
-          correction: _correction(),
-          originalSentence: 'Compre tres manzanas.',
-          correctedSentence: 'Compré tres manzanas.',
-          language: Language.spanish,
-        );
+      final saved = await useCase.call(
+        correction: _correction(),
+        originalSentence: 'Compre tres manzanas.',
+        correctedSentence: 'Compré tres manzanas.',
+        language: Language.spanish,
+      );
 
-        expect(saved.promptPhrase, 'I bought three apples.');
-        expect(saved.promptHighlightStartIndex, isNull);
-        expect(saved.promptHighlightEndIndex, isNull);
-      },
-    );
+      expect(saved.promptPhrase, 'I bought three apples.');
+      expect(saved.promptHighlightStartIndex, isNull);
+      expect(saved.promptHighlightEndIndex, isNull);
+    });
   });
 }

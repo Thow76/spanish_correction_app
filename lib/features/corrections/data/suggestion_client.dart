@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:characters/characters.dart';
 
 import '../../../core/services/prompts/correction_prompt.dart';
+import '../domain/correction_input_mode.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_span_trim_calculator.dart';
 import '../domain/correction_response.dart';
@@ -157,6 +158,12 @@ class SuggestionCheckResult {
 /// for Suggestions. One call per model; no re-runs and no fallbacks. A
 /// failed call throws ([ChatCompletionsException] from the client, or
 /// [FormatException] for a reply that cannot be read).
+///
+/// Spoken text (build step 2.3, decision C3) gets no Spelling items: the
+/// phone's transcription wrote the spelling, accents and punctuation, not
+/// the learner. Any Spelling item step 1 returns for spoken text is left
+/// out, so it is neither shown nor applied, and step 2 reads the text
+/// without it. The prompts themselves are not changed.
 class SuggestionClient {
   SuggestionClient({
     required SuggestionChatCall call,
@@ -179,7 +186,10 @@ class SuggestionClient {
   final String issuesModel;
   final String suggestionsModel;
 
-  Future<SuggestionCheckResult> check(String text) async {
+  Future<SuggestionCheckResult> check(
+    String text, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async {
     final issuesReply = await _call(
       model: issuesModel,
       systemPrompt: twoStepIssuesPromptSpanish,
@@ -190,7 +200,7 @@ class SuggestionClient {
     final issueEdits = placeSuggestionEdits(
       text,
       parseSuggestionStepReply(issuesReply),
-      twoStepIssueCategories,
+      issueCategoriesFor(inputMode),
     );
     final textAfterIssues = applySuggestionEdits(text, issueEdits);
 
@@ -223,6 +233,17 @@ class SuggestionClient {
 
 /// The user message each step receives, as the E.3 test program sent it.
 String buildTwoStepUserContent(String text) => 'Text to review:\n$text';
+
+/// The Issue categories kept for text given in [inputMode]: all of them
+/// for typed text; for spoken text, all but Spelling (build step 2.3).
+List<String> issueCategoriesFor(CorrectionInputMode inputMode) =>
+    switch (inputMode) {
+      CorrectionInputMode.typed => twoStepIssueCategories,
+      CorrectionInputMode.spoken => [
+        for (final category in twoStepIssueCategories)
+          if (category != 'Spelling') category,
+      ],
+    };
 
 /// One item placed in the text it was read from: [start] and [end] are
 /// positions (in UTF-16 code units, Dart's string positions) of

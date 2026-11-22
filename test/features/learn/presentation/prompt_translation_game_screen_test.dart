@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/core/models/walkthrough_question.dart';
+import 'package:spanish_correction_app/features/corrections/domain/correction_input_mode.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository_controller.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
@@ -97,8 +98,9 @@ class _FakeCorrectionService implements CorrectionService {
   @override
   Future<CorrectionResponse> correctText(
     String text,
-    Language language,
-  ) async => throw UnimplementedError();
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async => throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(
@@ -161,8 +163,9 @@ class _ThrowingCorrectionService implements CorrectionService {
   @override
   Future<CorrectionResponse> correctText(
     String text,
-    Language language,
-  ) async => throw UnimplementedError();
+    Language language, {
+    CorrectionInputMode inputMode = CorrectionInputMode.typed,
+  }) async => throw UnimplementedError();
 
   @override
   Future<String> generateLongExplanation(
