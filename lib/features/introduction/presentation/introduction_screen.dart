@@ -222,8 +222,8 @@ class _IntroductionScreenState extends State<IntroductionScreen> {
             key: ValueKey('introduction-suggestions-$index'),
             response: submission.response,
             title: submissions.length == 1
-                ? 'Corrections'
-                : 'Corrections ${index + 1} of ${submissions.length}',
+                ? 'Feedback'
+                : 'Feedback ${index + 1} of ${submissions.length}',
             onSaveCorrection: (point) =>
                 _savePoint(routeContext, point, submission),
             nextLabel: isLast ? 'Done' : 'Next answer',

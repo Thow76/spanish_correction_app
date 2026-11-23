@@ -2,6 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/design/app_colors.dart';
 
+/// The two groups a feedback point can belong to (decision C1): Issues are
+/// the clear mistakes the first step of the check finds; Suggestions are the
+/// natural-phrasing points the second step finds. The results screen shows
+/// the points under one heading per group.
+enum FeedbackGroup {
+  issue('Issue', 'Issues'),
+  suggestion('Suggestion', 'Suggestions');
+
+  const FeedbackGroup(this.label, this.heading);
+
+  /// The name of one point of this group ("Issue").
+  final String label;
+
+  /// The heading over the group's points ("Issues").
+  final String heading;
+}
+
 /// The four kinds of feedback point (decision C3, revised 21 Nov 2026).
 ///
 /// Spelling, Grammar and Word Choice are Issues (the first step of the
@@ -29,6 +46,13 @@ enum ErrorCategory {
 
   final String label;
   final Color color;
+
+  /// The group this category belongs to. Fixed here, not by the AI: the
+  /// two-step check's first step returns only Issue categories and its
+  /// second step only Natural phrasing, so the category says the group.
+  FeedbackGroup get group => this == ErrorCategory.naturalPhrasing
+      ? FeedbackGroup.suggestion
+      : FeedbackGroup.issue;
 
   /// The name the older prompts still use for this category: the old
   /// one-call check, the Portuguese check, the explanation written when a

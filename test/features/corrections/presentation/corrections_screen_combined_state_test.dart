@@ -36,7 +36,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Both surfaces are present — neither conditional suppressed the other.
-      expect(find.text('No corrections required'), findsOneWidget);
+      expect(find.text('Nothing to suggest for this text.'), findsOneWidget);
       expect(find.text('Notes'), findsOneWidget);
       expect(find.text('vosotros coméis'), findsOneWidget);
       expect(
@@ -46,11 +46,11 @@ void main() {
 
       // Layout order: advisory -> Notes panel -> copy button.
       final advisoryY = tester
-          .getTopLeft(find.text('No corrections required'))
+          .getTopLeft(find.text('Nothing to suggest for this text.'))
           .dy;
       final notesTitleY = tester.getTopLeft(find.text('Notes')).dy;
       final copyButtonY = tester
-          .getTopLeft(find.text('Copy corrected text'))
+          .getTopLeft(find.text('Copy suggested version'))
           .dy;
 
       expect(advisoryY, lessThan(notesTitleY));

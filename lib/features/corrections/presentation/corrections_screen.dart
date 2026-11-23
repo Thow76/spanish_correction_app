@@ -10,12 +10,18 @@ import '../../../shared/widgets/primary_action_button.dart';
 import '../domain/correction_item.dart';
 import '../domain/correction_note.dart';
 import '../domain/correction_response.dart';
+import '../domain/error_category.dart';
 
+/// The results screen (build step 2.4, decisions C1 and C5): what the learner
+/// wrote, the suggested version, then the points under the headings Issues
+/// and Suggestions, with one standing line saying these are AI suggestions.
+/// Save is the only action on a point. The screen never says "correction",
+/// "corrected" or "error".
 class CorrectionsScreen extends StatelessWidget {
   const CorrectionsScreen({
     required this.response,
     required this.onSaveCorrection,
-    this.title = 'Corrections',
+    this.title = 'Feedback',
     this.nextLabel,
     this.onNext,
     super.key,
@@ -32,6 +38,17 @@ class CorrectionsScreen extends StatelessWidget {
   /// Shown only when both [nextLabel] and [onNext] are given.
   final String? nextLabel;
   final VoidCallback? onNext;
+
+  /// The one standing line on the screen (decision C1). No per-item hedging.
+  static const String standingLine =
+      'These are AI suggestions. Check anything that surprises you.';
+
+  /// The heading over the improved text (decision C1: the improved text is
+  /// the suggested version, never "Corrected").
+  static const String suggestedVersionTitle = 'Suggested version';
+
+  /// Shown in place of the suggested version when the check found nothing.
+  static const String nothingToSuggest = 'Nothing to suggest for this text.';
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +70,15 @@ class CorrectionsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(height: AppSpacing.md),
+                const Text(
+                  standingLine,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    height: 20 / 14,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 _TextPanel(
                   title: 'Original',
@@ -66,22 +92,33 @@ class CorrectionsScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.lg),
                 if (response.hasCorrections)
                   _TextPanel(
-                    title: 'Corrected',
+                    title: suggestedVersionTitle,
                     text: response.correctedText,
                     corrections: response.corrections,
                     rangeSelector: (item) =>
                         (item.correctedStartIndex, item.correctedEndIndex),
                     phraseSelector: (item) => item.correctedPhrase,
-                    // The corrected indices are reported by the model against
-                    // its own corrected text; trust only an exact slice match
-                    // and drop any highlight that does not validate (never a
-                    // wrong span).
+                    // The suggested-side indices are computed by the app
+                    // against its own suggested text; trust only an exact
+                    // slice match and drop any highlight that does not
+                    // validate (never a wrong span).
                     requireExactRange: true,
                     onTapCorrection: (item) =>
                         _showCorrectionSheet(context, item),
                   )
                 else
-                  const _NoCorrectionsPanel(),
+                  const _NothingToSuggestPanel(),
+                if (response.hasCorrections)
+                  for (final group in FeedbackGroup.values) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    _GroupSection(
+                      group: group,
+                      items: response.corrections
+                          .where((item) => item.category.group == group)
+                          .toList(),
+                      onTapItem: (item) => _showCorrectionSheet(context, item),
+                    ),
+                  ],
                 if (response.notes.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.lg),
                   _NotesPanel(notes: response.notes),
@@ -93,11 +130,11 @@ class CorrectionsScreen extends StatelessWidget {
                       ClipboardData(text: response.correctedText),
                     );
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Corrected text copied')),
+                      const SnackBar(content: Text('Suggested version copied')),
                     );
                   },
                   icon: const Icon(Icons.copy_outlined),
-                  label: const Text('Copy corrected text'),
+                  label: const Text('Copy suggested version'),
                 ),
                 if (nextLabel != null && onNext != null) ...[
                   const SizedBox(height: AppSpacing.lg),
@@ -151,7 +188,14 @@ class CorrectionsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    _CategoryPill(item: item),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        _GroupPill(group: item.category.group),
+                        _CategoryPill(item: item),
+                      ],
+                    ),
                     const SizedBox(height: AppSpacing.lg),
                     Text(
                       item.shortExplanation,
@@ -281,15 +325,15 @@ class _PanelContainer extends StatelessWidget {
   }
 }
 
-class _NoCorrectionsPanel extends StatelessWidget {
-  const _NoCorrectionsPanel();
+class _NothingToSuggestPanel extends StatelessWidget {
+  const _NothingToSuggestPanel();
 
   @override
   Widget build(BuildContext context) {
     return const _PanelContainer(
-      title: 'Corrected',
+      title: CorrectionsScreen.suggestedVersionTitle,
       child: Text(
-        'No corrections required',
+        CorrectionsScreen.nothingToSuggest,
         style: TextStyle(
           color: AppColors.textSecondary,
           fontSize: 15,
@@ -357,6 +401,161 @@ class _NoteEntry extends StatelessWidget {
 class TapGestureRecognizerFactory {
   static TapGestureRecognizer build(VoidCallback onTap) {
     return TapGestureRecognizer()..onTap = onTap;
+  }
+}
+
+/// One group's points under its heading ("Issues" or "Suggestions"). Both
+/// headings show whenever the check found anything, so an empty group says
+/// "None": for spoken text that tells the learner no clear mistake was
+/// found, and a typed text with Issues only says the second step had nothing
+/// to add.
+class _GroupSection extends StatelessWidget {
+  const _GroupSection({
+    required this.group,
+    required this.items,
+    required this.onTapItem,
+  });
+
+  final FeedbackGroup group;
+  final List<CorrectionItem> items;
+  final ValueChanged<CorrectionItem> onTapItem;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PanelContainer(
+      title: group.heading,
+      child: items.isEmpty
+          ? const Text(
+              'None',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 15,
+                height: 24 / 15,
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (index, item) in items.indexed) ...[
+                  if (index > 0) const SizedBox(height: AppSpacing.md),
+                  _PointRow(item: item, onTap: () => onTapItem(item)),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+/// One point as a row: what was written, what is suggested in the
+/// category's colour, the category, and the one-line reason (decision C1).
+/// Tapping it opens the same sheet as tapping the highlighted phrase.
+class _PointRow extends StatelessWidget {
+  const _PointRow({required this.item, required this.onTap});
+
+  final CorrectionItem item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final written = item.originalPhrase.isEmpty
+        ? '(nothing here)'
+        : item.originalPhrase;
+    final suggested = item.correctedPhrase.isEmpty
+        ? '(leave this out)'
+        : item.correctedPhrase;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(fontSize: 15, height: 24 / 15),
+                children: [
+                  TextSpan(
+                    text: written,
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                  const WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(
+                        Icons.arrow_forward,
+                        size: 16,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  TextSpan(
+                    text: suggested,
+                    style: TextStyle(
+                      color: item.category.color,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              item.category.label,
+              style: TextStyle(
+                color: item.category.color,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (item.shortExplanation.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                item.shortExplanation,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                  height: 20 / 14,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The point's group on the sheet, beside its category ("Issue" or
+/// "Suggestion"), in a plain pill so the category keeps its colour.
+class _GroupPill extends StatelessWidget {
+  const _GroupPill({required this.group});
+
+  final FeedbackGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: AppColors.textSecondary.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Text(
+          group.label,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -5,7 +5,7 @@ import 'package:spanish_correction_app/features/corrections/domain/correction_re
 import 'package:spanish_correction_app/features/corrections/domain/error_category.dart';
 import 'package:spanish_correction_app/features/corrections/presentation/corrections_screen.dart';
 
-/// Covers step 3's conditional Corrected panel: real highlighted text when
+/// Covers step 3's conditional Suggested version panel: real highlighted text when
 /// `hasCorrections` is true (regression coverage for existing behaviour),
 /// advisory text in its place when false.
 void main() {
@@ -24,7 +24,7 @@ void main() {
   }
 
   testWidgets(
-    'renders the real Corrected panel text when corrections is non-empty',
+    'renders the real Suggested version panel text when corrections is non-empty',
     (tester) async {
       const response = CorrectionResponse(
         originalText: 'Hola bien',
@@ -46,15 +46,15 @@ void main() {
       await pumpScreen(tester, response);
 
       // Text.rich flattens its TextSpan children to plain text, so this
-      // confirms the Corrected panel actually rendered the highlighted
+      // confirms the Suggested version panel actually rendered the highlighted
       // corrected text, not just that the string exists somewhere.
       expect(find.text('Hola bueno'), findsOneWidget);
-      expect(find.text('No corrections required'), findsNothing);
+      expect(find.text('Nothing to suggest for this text.'), findsNothing);
     },
   );
 
   testWidgets(
-    'renders advisory text in place of the Corrected panel when corrections '
+    'renders advisory text in place of the Suggested version panel when corrections '
     'is empty',
     (tester) async {
       const response = CorrectionResponse(
@@ -65,12 +65,12 @@ void main() {
 
       await pumpScreen(tester, response);
 
-      expect(find.text('No corrections required'), findsOneWidget);
+      expect(find.text('Nothing to suggest for this text.'), findsOneWidget);
       // correctedText is identical to originalText here (as it always is
-      // when corrections is empty), so this confirms the Corrected panel's
+      // when corrections is empty), so this confirms the Suggested version panel's
       // own Text.rich was replaced by the advisory — not just that the
       // string happens to appear once from the Original panel and once from
-      // an unreplaced Corrected panel.
+      // an unreplaced Suggested version panel.
       expect(find.text('Hola, ¿cómo estás?'), findsOneWidget);
     },
   );
