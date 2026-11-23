@@ -365,7 +365,7 @@ void main() {
         await tapAndSettle(tester, find.text('See suggestions'));
 
         // The opener's answer first.
-        expect(find.text('Corrections 1 of 2'), findsOneWidget);
+        expect(find.text('Feedback 1 of 2'), findsOneWidget);
         expect(find.text('Estoy bien, gracias.'), findsWidgets);
         tapFirstHighlight(tester);
         await tester.pumpAndSettle();
@@ -378,7 +378,7 @@ void main() {
         await tapAndSettle(tester, find.text('Next answer'));
 
         // Then the interest answer; moving on without saving ignores it.
-        expect(find.text('Corrections 2 of 2'), findsOneWidget);
+        expect(find.text('Feedback 2 of 2'), findsOneWidget);
         expect(find.text('Me gusta mucho el jazz.'), findsWidgets);
         await tapAndSettle(tester, find.text('Done'));
 
@@ -394,7 +394,7 @@ void main() {
       await answerBoth(tester);
       await tapAndSettle(tester, find.text('Not now'));
 
-      expect(find.textContaining('Corrections'), findsNothing);
+      expect(find.textContaining('Feedback'), findsNothing);
       expect(doneWith, isTrue);
       expect(feedback.history, hasLength(2));
       expect(repository.stored.introduction.isComplete, isTrue);
