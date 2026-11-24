@@ -28,8 +28,8 @@ import 'naturalness_merge.dart';
 /// - `category` is [ErrorCategory.naturalPhrasing], not
 ///   [ErrorCategory.wordChoice] — despite issue #36's own tentative
 ///   suggestion of Word Choice, the *existing* categorization model that
-///   issue asks to defer to (`stage2CategorizationSpanish` in
-///   `correction_prompt.dart`) draws exactly this line: Word Choice is "a
+///   issue asks to defer to (`stage2CategorizationSpanish`, archived in
+///   `docs/archive/staged_pipeline_prompts.md`) draws exactly this line: Word Choice is "a
 ///   single wrong or suboptimal word... fixing it means swapping one word
 ///   for another," while Natural Language is "a phrase or construction
 ///   that is unnatural, awkward, overly literal... fixing it means

@@ -1,18 +1,17 @@
 import 'package:characters/characters.dart';
 
-/// One Stage 2 correction (`stage2CategorizationSpanish` in
-/// `correction_prompt.dart`) awaiting its original-side position, or —
-/// once [resolveOccurrenceCorrections] has run — already carrying it.
+/// One correction awaiting its original-side position, or — once
+/// [resolveOccurrenceCorrections] has run — already carrying it.
 ///
-/// Deliberately not `CorrectionItem`: Stage 2's output supplies
-/// `original_phrase`, `corrected_phrase`, `occurrence`, `category`, and
-/// `verdict`, but no `short_explanation` (that's Stage 3's job, which runs
-/// after this) and no resolved position yet. Forcing this shape into
-/// `CorrectionItem` would mean faking a `shortExplanation` that doesn't
-/// exist at this pipeline stage. This type carries only what
-/// [resolveOccurrenceCorrections] itself needs; merging the resolved
-/// `startIndex` into a richer type once Stage 3 has run is later wiring
-/// work, not this session's.
+/// Deliberately not `CorrectionItem`: the model's reply supplies the
+/// flagged phrase and an occurrence number, but no resolved position yet
+/// (and, in the five-stage pipeline this was written for, no explanation
+/// either until a later stage). Forcing that shape into `CorrectionItem`
+/// would mean faking fields that don't exist at this point. This type
+/// carries only what [resolveOccurrenceCorrections] itself needs. The
+/// pipeline was deleted in build step 2.5 (its prompts are archived in
+/// `docs/archive/staged_pipeline_prompts.md`); the two-step check's
+/// `SuggestionClient` still uses this resolver to place each item.
 class OccurrenceCorrection {
   const OccurrenceCorrection({
     required this.originalPhrase,
@@ -20,12 +19,12 @@ class OccurrenceCorrection {
     this.startIndex,
   });
 
-  /// The exact substring Stage 2 flagged, to be located in the original
+  /// The exact substring the model flagged, to be located in the original
   /// submitted text.
   final String originalPhrase;
 
   /// Which instance of [originalPhrase] this is, 1-based, left to right —
-  /// Stage 2's own disambiguator for a phrase that appears more than once
+  /// the model's own disambiguator for a phrase that appears more than once
   /// (e.g. the second "para" in a text where it appears three times).
   final int occurrence;
 
