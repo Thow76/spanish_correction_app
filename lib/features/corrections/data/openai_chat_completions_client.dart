@@ -95,25 +95,19 @@ class ChatCompletionsUsage {
 /// Calls OpenAI's `/v1/chat/completions` endpoint with a system/user message
 /// pair and returns the assistant's raw reply text.
 ///
-/// This is the shared transport primitive the staged correction pipeline's
-/// four prompt calls (Stage 1, Stage 1B, Stage 2, Stage 3) are built on —
-/// each stage harness in `test/` already validated this exact request shape
-/// and extraction logic independently; this class is that logic made real
-/// and reusable instead of copied by value a fifth time. It knows nothing
-/// about any stage's prompt content or response shape — parsing a stage's
-/// reply into its own structured result is each stage's own concern, not
-/// this class's.
+/// This is the shared transport primitive the two-step check
+/// (`SuggestionClient`, `suggestion_client.dart`) is built on: one call for
+/// Issues, one for Suggestions. It knows nothing about any prompt's content
+/// or response shape — parsing a reply into a structured result is the
+/// caller's concern, not this class's.
 ///
 /// Not part of the `CorrectionService` interface directly, but it is
 /// wired into the live route: `OpenAiCorrectionService` instantiates this
-/// class itself (see its constructor) and passes it to
-/// `runStagedCorrectionPipeline`, the live path for Spanish. (Status
-/// update, issue #73: this comment previously said this class was
-/// deliberately not wired into `correctText()` or any live route, which
-/// was accurate when the staged pipeline was still being assembled and
-/// tested independently, but is stale now — see
-/// `docs/two_pass_orchestration_entry_points.md`, issue #27, and issue
-/// #44 for the fuller current-wiring writeup.)
+/// class itself (see its constructor) and hands it to `SuggestionClient`,
+/// the live path for Spanish. (It was first built as the transport for the
+/// five-stage pipeline's prompt calls; that pipeline was deleted in build
+/// step 2.5, and its prompt wording is archived in
+/// `docs/archive/staged_pipeline_prompts.md`.)
 class OpenAiChatCompletionsClient {
   OpenAiChatCompletionsClient({
     required String apiKey,

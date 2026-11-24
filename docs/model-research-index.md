@@ -8,9 +8,12 @@ historical trial-and-error reports separately.
 - `docs/correction_prompt_issues_and_solutions.md` tracks the current correction
   prompt decisions, including the standalone Portuguese prompt and the
   retranslation `is_related` gate.
-- `docs/current_spanish_correction_prompt_audit.md` documents the current live
-  Spanish staged correction prompts and prompt-risk wording without changing
-  prompt behavior.
+- `docs/current_spanish_correction_prompt_audit.md` documents the five-stage
+  Spanish correction prompts as they were when that pipeline was live. The
+  pipeline was deleted in build step 2.5 (24 November 2026); its prompt wording
+  is archived verbatim in `docs/archive/staged_pipeline_prompts.md`, and the
+  live Spanish path is now the two-step check
+  (`lib/features/corrections/data/suggestion_client.dart`).
 - `docs/first_pass_correction_architecture_review.md` recommends the next
   first-pass Spanish correction architecture and the safeguards to preserve.
 - `docs/walkthrough_prompt_spec.md` is the current walkthrough contract.
@@ -20,27 +23,22 @@ historical trial-and-error reports separately.
 
 Keep these `test/` suites untouched; they are the active model-related checks.
 
-- `test/stage1_detection_harness.dart`
-- `test/stage1_detection_dialect_harness.dart`
-- `test/stage1_reflexive_detection_harness.dart`
-- `test/stage1_reflexive_span_width_harness.dart`
-- `test/stage1_redundancy_pass_harness.dart`
-- `test/stage1_redundancy_model_comparison_harness.dart`
-- `test/stage1_stage2_chained_harness.dart`
-- `test/stage2_categorization_harness.dart`
-- `test/stage2_span_scope_harness.dart`
-- `test/stage3_feedback_harness.dart`
-- `test/verdict_battery_merged.dart`
+- `test/two_step_suggestions_prompt_harness.dart` (the two-step check's test program)
+- `test/regional_forms_probe_harness.dart`
+- `test/partner_prompt_harness.dart`
 - `test/retranslation_grade_validation.dart`
 - `test/walkthrough_prompt_validation.dart`
-- `test/correction_consistency_harness.dart`
 - `test/corrected_index_reliability_probe.dart`
-- `test/peninsular_norms_battery.dart`
-- `test/para_destination_battery.dart`
-- `test/category_tiebreak_battery.dart`
 - `test/bare_prompt_control_test.dart`
 - `test/model_comparison_harness.dart`
-- `test/pipeline_baseline_harness.dart`
+
+Deleted in build step 2.5 (24 November 2026) together with the five-stage
+pipeline they measured: the `stage1_*`, `stage2_*` and `stage3_*` harnesses,
+`verdict_battery_merged.dart`, `peninsular_norms_battery.dart`,
+`para_destination_battery.dart`, `category_tiebreak_battery.dart`,
+`pipeline_baseline_harness.dart` and `correction_consistency_harness.dart`.
+Their last reports remain under `docs/archive/legacy-model-reports/`, and the
+files themselves are in git history (the `main` commit after pull request 197).
 
 ## Shared benchmark fixtures
 
@@ -49,8 +47,8 @@ representative Spanish inputs (short phrase, sentence/short paragraph,
 paragraph, two-paragraph, and near-600-character cases, including a
 CALCS-style calque case) for routine latency/request-count/token-usage/cost/
 model-comparison runs — not a language-quality regression suite. Harnesses
-such as the staged pipeline baseline harness and the model-comparison
-harness can import and reuse it instead of re-declaring their own inputs.
+such as the model-comparison harness can import and reuse it instead of
+re-declaring their own inputs.
 Its offline fixture-invariant tests live in
 `test/shared/benchmark_fixtures_test.dart`.
 

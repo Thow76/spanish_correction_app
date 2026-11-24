@@ -332,8 +332,8 @@ Short explanation: ${correction.shortExplanation}
   /// call, tagged with [stageLabel] and [model] — same read-only diagnostic
   /// instrumentation as `OpenAiChatCompletionsClient._logUsage`, covering the
   /// legacy path (non-Spanish correction, explanations, prompt-phrase
-  /// generation, and retranslation grading) that the staged-pipeline logging
-  /// doesn't reach. Does not affect parsing or any pipeline behavior.
+  /// generation, and retranslation grading) that the chat-completions
+  /// client's logging doesn't reach. Does not affect parsing or any behaviour.
   static void _logUsage({
     required String stageLabel,
     required String model,

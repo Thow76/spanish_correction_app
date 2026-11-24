@@ -1,5 +1,11 @@
 # Current Spanish Correction Prompt Audit
 
+> **Superseded (24 November 2026).** The five-stage pipeline this audit describes was
+> deleted in build step 2.5. Its prompt wording is archived verbatim in
+> `docs/archive/staged_pipeline_prompts.md`; the live Spanish path is now the two-step
+> check in `lib/features/corrections/data/suggestion_client.dart`. The text below is
+> kept as it was written.
+
 Issue: [#5](https://github.com/Thow76/spanish_correction_app/issues/5)
 
 Branch base: `correction_pipeline_refactor`

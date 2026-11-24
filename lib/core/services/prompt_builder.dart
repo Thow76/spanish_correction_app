@@ -36,8 +36,8 @@ class PromptBuilder {
 ''';
 
   // Language.spanish is provably unreachable here: OpenAiCorrectionService
-  // routes Spanish through the staged correction pipeline before this is
-  // ever called, and Gemini (the only other caller) has been removed. The
+  // routes Spanish through the two-step check (`SuggestionClient`) before
+  // this is ever called, and Gemini (the only other caller) has been removed. The
   // single-call Spanish prompt this used to return (`correctionPromptSpanish`)
   // was deleted along with it. Throws rather than silently returning
   // Portuguese's prompt or an empty string, so a regression that somehow
@@ -46,8 +46,8 @@ class PromptBuilder {
   static String correctionSystemPrompt(Language language) => switch (language) {
     Language.spanish => throw UnsupportedError(
       'PromptBuilder.correctionSystemPrompt(Language.spanish) has no prompt '
-      'to return — OpenAI Spanish corrections always use the staged '
-      'correction pipeline, and Gemini (the only other caller) has been '
+      'to return — OpenAI Spanish corrections always use the two-step '
+      'check (SuggestionClient), and Gemini (the only other caller) has been '
       'removed.',
     ),
     Language.portuguese => correctionPromptPortuguese,

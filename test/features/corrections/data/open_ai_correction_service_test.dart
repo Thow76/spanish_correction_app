@@ -566,8 +566,8 @@ class _CapturingHttpClient implements HttpClient {
 
   /// Every URL a request was opened against, in call order — used to prove
   /// which endpoint(s) a `correctText` call actually hit (the legacy path
-  /// calls `/v1/responses` exactly once; the staged pipeline calls
-  /// `/v1/chat/completions`, potentially several times).
+  /// calls `/v1/responses` exactly once; the two-step check calls
+  /// `/v1/chat/completions` twice).
   final List<Uri> requestedUris = [];
 
   @override
@@ -655,7 +655,7 @@ String _chatEnvelope(String content) => jsonEncode({
 // ── Minimal dart:io HttpClient fake that routes a reply by the outgoing
 // request's system prompt, and records every requested URI ──
 //
-// Same fake as `staged_correction_pipeline_test.dart`'s `_RoutingHttpClient`,
+// A routing fake (first written for the deleted five-stage pipeline's tests),
 // extended here to also track `requestedUris` so a test can prove every
 // call went to `/v1/chat/completions` and never to the legacy
 // `/v1/responses` endpoint.
@@ -732,7 +732,7 @@ class _RoutingRequest implements HttpClientRequest {
 /// all (a `SocketException` or `TimeoutException`), same fake as
 /// `openai_chat_completions_client_test.dart`'s `_ThrowingHttpClient`.
 /// Works for both the legacy path (`/v1/responses`, single call) and the
-/// staged path (`/v1/chat/completions`, first call fails the same way)
+/// two-step path (`/v1/chat/completions`, first call fails the same way)
 /// since the fault happens at `postUrl`, before either path's endpoint
 /// even matters.
 class _ThrowingHttpClient implements HttpClient {
