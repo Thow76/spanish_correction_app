@@ -8,12 +8,14 @@ import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
 import '../../corrections/application/submit_correction_use_case.dart';
 import '../../history/presentation/history_screen.dart';
+import '../../home/presentation/home_screen.dart';
 import '../../learn/presentation/learn_screen.dart';
 import '../../profile/application/profile_repository.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../saved/application/save_correction_use_case.dart';
 import '../../saved/presentation/saved_screen.dart';
 import '../../write/application/transcription_service.dart';
+import '../../write/presentation/check_a_phrase_page.dart';
 import '../../write/presentation/write_screen.dart';
 import '../application/new_items_marker.dart';
 
@@ -79,6 +81,22 @@ class _AppShellState extends State<AppShell> {
     if (mounted) setState(() {});
   }
 
+  /// Whether the first place in the bar is Home (decision B1; build step
+  /// 3.1). Chats are Spanish only in the first build, and Portuguese keeps
+  /// today's Write page in the bar (decision F1).
+  bool get _hasHome => widget.language == Language.spanish;
+
+  SubmitCorrectionUseCase get _submitCorrectionUseCase =>
+      SubmitCorrectionUseCase(
+        correctionService: widget.correctionService,
+        repositoryController: widget.repositoryController,
+      );
+
+  SaveCorrectionUseCase get _saveCorrectionUseCase => SaveCorrectionUseCase(
+    correctionService: widget.correctionService,
+    repositoryController: widget.repositoryController,
+  );
+
   /// The bottom bar's History tab is second and Saved third.
   static MarkedTab? _markedTabAt(int index) => switch (index) {
     1 => MarkedTab.history,
@@ -110,26 +128,23 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final submitCorrectionUseCase = SubmitCorrectionUseCase(
-      correctionService: widget.correctionService,
-      repositoryController: widget.repositoryController,
-    );
-    final saveCorrectionUseCase = SaveCorrectionUseCase(
-      correctionService: widget.correctionService,
-      repositoryController: widget.repositoryController,
-    );
+    final submitCorrectionUseCase = _submitCorrectionUseCase;
+    final saveCorrectionUseCase = _saveCorrectionUseCase;
     // Read above the Scaffold: here MediaQuery still carries the real keyboard
     // inset (the Scaffold zeroes it for its body), and reading it rebuilds this
     // widget when the keyboard animates in/out.
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final screens = [
-      WriteScreen(
-        submitCorrectionUseCase: submitCorrectionUseCase,
-        saveCorrectionUseCase: saveCorrectionUseCase,
-        transcriptionService: widget.transcriptionService,
-        language: widget.language,
-        keyboardVisible: keyboardVisible,
-      ),
+      if (_hasHome)
+        HomeScreen(onCheckAPhrase: _openCheckAPhrase)
+      else
+        WriteScreen(
+          submitCorrectionUseCase: submitCorrectionUseCase,
+          saveCorrectionUseCase: saveCorrectionUseCase,
+          transcriptionService: widget.transcriptionService,
+          language: widget.language,
+          keyboardVisible: keyboardVisible,
+        ),
       HistoryScreen(
         repositoryController: widget.repositoryController,
         saveCorrectionUseCase: saveCorrectionUseCase,
@@ -204,11 +219,18 @@ class _AppShellState extends State<AppShell> {
             );
           },
           destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.edit_outlined),
-              selectedIcon: Icon(Icons.edit),
-              label: 'Write',
-            ),
+            if (_hasHome)
+              const NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home),
+                label: 'Home',
+              )
+            else
+              const NavigationDestination(
+                icon: Icon(Icons.edit_outlined),
+                selectedIcon: Icon(Icons.edit),
+                label: 'Write',
+              ),
             NavigationDestination(
               icon: _iconWithDot(Icons.history_outlined, MarkedTab.history),
               selectedIcon: _iconWithDot(Icons.history, MarkedTab.history),
@@ -225,6 +247,21 @@ class _AppShellState extends State<AppShell> {
               label: 'Learn',
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// The Check a phrase icon on Home opens today's Write page as it is,
+  /// as its own page with a back arrow (decisions B2 and B5).
+  void _openCheckAPhrase() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CheckAPhrasePage(
+          submitCorrectionUseCase: _submitCorrectionUseCase,
+          saveCorrectionUseCase: _saveCorrectionUseCase,
+          transcriptionService: widget.transcriptionService,
+          language: widget.language,
         ),
       ),
     );
