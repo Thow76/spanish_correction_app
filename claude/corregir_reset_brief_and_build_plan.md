@@ -6,6 +6,7 @@ Direction is settled in `claude/corregir_current_app_and_direction.md`; decision
 
 ## 1. Change log
 
+- **2026-11-26 (G12)** — Reminders: one a day at a time the learner picks in settings (6 pm to start), only on days when a group is open; tapping it opens Learn. No new step yet; it shapes the games screens slice.
 - **2026-11-26 (G11)** — The games' instructions and buttons are in English by default, with a setting to switch them to Spanish; the practice sentences are always Spanish. No new step yet; it shapes the games screens slice.
 - **2026-11-26 (G10)** — The games in Learn keep the current web games' layout and flow, drawn in Corregir's own colours, fonts and buttons. No new step yet; it shapes the games screens slice.
 - **2026-11-26 (G9)** — Where the games live: there is no separate practice tab. The Learn tab becomes the games; the bottom bar keeps its four places (Home, History, Saved, Learn), Learn opens on the games, and Traducir frases and its session builder leave Learn when the games arrive. No new step yet: the games screens slice will be written next. Edits: practice track intro, P.11, After the first build, and wording "practice tab" replaced throughout.
