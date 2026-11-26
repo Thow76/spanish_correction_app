@@ -1,0 +1,533 @@
+/// Parses and validates a JSON list of practice questions (practice track,
+/// step P.1; decisions G1 and G5).
+///
+/// Ported from the Spanish Games app
+/// (`docs/games_port_source/question_parser.dart.txt`), where the list was a
+/// `questions.json` file. In Corregir the list comes from the AI's reply when
+/// a mistake is saved (steps P.7 and P.8) and from the practice database
+/// (P.5). Questions that fail validation are reported in
+/// [ParsedQuestions.problems] and left out, so one bad entry does not stop
+/// the rest from loading.
+///
+/// Older shapes still load: a missing `phase` is taken from the game, and
+/// `severity: "error"` / `"suggestion"` is read as `type: "grammar"` /
+/// `"note"`. A missing `stage` is worked out from the game, and a missing
+/// `item` is the `id`. A `stage` that does not fit the game is reported and
+/// the question skipped. An `unlocks_after` that points at no question in
+/// the list is kept: the padlocks (step P.2) treat it as unlocked.
+library;
+
+import 'dart:convert';
+
+import 'answer_check.dart';
+import 'question.dart';
+
+/// A problem found while validating one question.
+class QuestionProblem {
+  const QuestionProblem({
+    required this.index,
+    required this.id,
+    required this.message,
+  });
+
+  /// Position of the question in the list (0-based).
+  final int index;
+
+  /// The question's `id` if it had one, otherwise `null`.
+  final String? id;
+
+  final String message;
+
+  @override
+  String toString() {
+    final where = id == null ? 'question ${index + 1}' : 'question "$id"';
+    return '$where: $message';
+  }
+}
+
+/// The result of parsing a list of questions.
+class ParsedQuestions {
+  const ParsedQuestions({required this.questions, required this.problems});
+
+  /// Questions that passed validation, in list order.
+  final List<Question> questions;
+
+  /// One entry for each question that was left out, in list order.
+  final List<QuestionProblem> problems;
+
+  bool get hasProblems => problems.isNotEmpty;
+
+  /// Number of valid questions per game.
+  Map<GameType, int> get countByGame {
+    final counts = <GameType, int>{for (final g in GameType.values) g: 0};
+    for (final q in questions) {
+      counts[q.game] = counts[q.game]! + 1;
+    }
+    return counts;
+  }
+
+  /// Number of valid questions per phase.
+  Map<QuestionPhase, int> get countByPhase {
+    final counts = <QuestionPhase, int>{
+      for (final p in QuestionPhase.values) p: 0,
+    };
+    for (final q in questions) {
+      counts[q.phase] = counts[q.phase]! + 1;
+    }
+    return counts;
+  }
+
+  /// Valid questions for one game.
+  List<Question> forGame(GameType game) =>
+      questions.where((q) => q.game == game).toList();
+
+  /// Valid questions for one phase.
+  List<Question> forPhase(QuestionPhase phase) =>
+      questions.where((q) => q.phase == phase).toList();
+
+  /// Number of valid questions per ladder stage.
+  Map<LadderStage, int> get countByStage {
+    final counts = <LadderStage, int>{for (final s in LadderStage.values) s: 0};
+    for (final q in questions) {
+      counts[q.stage] = counts[q.stage]! + 1;
+    }
+    return counts;
+  }
+
+  /// Valid questions for one ladder stage, in list order.
+  List<Question> forStage(LadderStage stage) =>
+      questions.where((q) => q.stage == stage).toList();
+
+  /// Valid questions grouped by ladder stage, every stage present (empty
+  /// when the list has none), in ladder order.
+  Map<LadderStage, List<Question>> get byStage => {
+    for (final s in LadderStage.values) s: forStage(s),
+  };
+}
+
+/// Thrown when the list as a whole cannot be read: not JSON, or not an array.
+class QuestionListException implements Exception {
+  const QuestionListException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'QuestionListException: $message';
+}
+
+/// Parses the text of a JSON array of questions.
+///
+/// Throws [QuestionListException] if the text is not JSON or the top level is
+/// not an array. Individual invalid questions do not throw; they are reported
+/// in [ParsedQuestions.problems].
+ParsedQuestions parseQuestions(String jsonText) {
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(jsonText);
+  } on FormatException catch (e) {
+    throw QuestionListException('Text is not valid JSON: ${e.message}');
+  }
+  return parseQuestionList(decoded);
+}
+
+/// Parses an already-decoded JSON value (the result of `jsonDecode`).
+ParsedQuestions parseQuestionList(Object? decoded) {
+  if (decoded is! List) {
+    throw QuestionListException(
+      'Questions must be a JSON array, '
+      'but the top level is ${_describe(decoded)}.',
+    );
+  }
+
+  final parsed = <(int, Question)>[];
+  final problems = <QuestionProblem>[];
+  final seenIds = <String>{};
+
+  for (var i = 0; i < decoded.length; i++) {
+    final raw = decoded[i];
+    final id = raw is Map ? _optionalString(raw['id']) : null;
+    try {
+      final question = questionFromJson(raw);
+      if (!seenIds.add(question.id)) {
+        throw const FormatException('duplicate id');
+      }
+      parsed.add((i, question));
+    } on FormatException catch (e) {
+      problems.add(QuestionProblem(index: i, id: id, message: e.message));
+    }
+  }
+
+  problems.sort((a, b) => a.index.compareTo(b.index));
+
+  // A question whose `unlocks_after` names a question no longer in the list
+  // is kept, not skipped: once the question before it has been answered
+  // right and removed, the stage just unlocked would otherwise vanish. The
+  // padlocks (step P.2) decide whether it is locked.
+  return ParsedQuestions(
+    questions: [for (final (_, q) in parsed) q],
+    problems: problems,
+  );
+}
+
+/// Builds one [Question] from its JSON object.
+///
+/// Throws [FormatException] with a plain-English message if the object does
+/// not match the format.
+Question questionFromJson(Object? raw) {
+  if (raw is! Map) {
+    throw FormatException('expected an object, got ${_describe(raw)}');
+  }
+
+  final id = _requiredString(raw, 'id');
+
+  final gameValue = _requiredString(raw, 'game');
+  final game = GameType.fromJson(gameValue);
+  if (game == null) {
+    throw FormatException(
+      '"game" must be one of ${_gameValues()}, got "$gameValue"',
+    );
+  }
+
+  // phase: optional (taken from the game when absent), but if given it must
+  // be 1 or 2 and match the game's phase.
+  if (raw.containsKey('phase') && raw['phase'] != null) {
+    final rawPhase = raw['phase'];
+    final phase = QuestionPhase.fromJson(rawPhase);
+    if (phase == null) {
+      throw FormatException('"phase" must be 1 or 2, got ${_show(rawPhase)}');
+    }
+    if (phase != game.phase) {
+      throw FormatException(
+        '${game.jsonValue} is a phase ${game.phase.number} game, '
+        'but "phase" is ${phase.number}',
+      );
+    }
+  }
+
+  final category = _optionalString(raw['category']) ?? '';
+
+  final type = _parseType(raw);
+
+  final prompt = _requiredString(raw, 'prompt');
+  if (game == GameType.fillGap && !prompt.contains('___')) {
+    throw const FormatException(
+      'a fill_gap "prompt" must contain ___ where the gap goes',
+    );
+  }
+  final markProblem = promptMarkProblem(prompt, game);
+  if (markProblem != null) throw FormatException(markProblem);
+  final promptRuns = parsePromptMarks(prompt);
+
+  final rawAnswers = raw['answers'];
+  if (rawAnswers is! List || rawAnswers.isEmpty) {
+    throw const FormatException('"answers" must be a non-empty list');
+  }
+
+  var answers = const <String>[];
+  var pairs = const <MatchPair>[];
+  if (game == GameType.match) {
+    pairs = _parsePairs(rawAnswers);
+  } else {
+    answers = _stringList(rawAnswers, 'answers');
+  }
+
+  final options = _parseOptions(raw, game, answers, promptRuns);
+
+  var missingWord = false;
+  if (raw.containsKey('missing_word') && raw['missing_word'] != null) {
+    final rawMissing = raw['missing_word'];
+    if (rawMissing is! bool) {
+      throw FormatException(
+        '"missing_word" must be true or false, got ${_describe(rawMissing)}',
+      );
+    }
+    if (rawMissing && !game.isPhase1) {
+      throw FormatException(
+        '"missing_word" is only for phase 1 questions, not ${game.jsonValue}',
+      );
+    }
+    missingWord = rawMissing;
+  }
+
+  final stage = _parseStage(raw, game, options);
+
+  final item = _optionalTextField(raw, 'item') ?? id;
+
+  final unlocksAfter = _optionalTextField(raw, 'unlocks_after');
+  if (unlocksAfter != null && unlocksAfter == id) {
+    throw const FormatException('"unlocks_after" must not be its own "id"');
+  }
+
+  final fixedStart = _optionalTextField(raw, 'fixed_start');
+  final fixedEnd = _optionalTextField(raw, 'fixed_end');
+  if ((fixedStart != null || fixedEnd != null) && game != GameType.order) {
+    throw FormatException(
+      '"fixed_start" and "fixed_end" are only for order questions, '
+      'not ${game.jsonValue}',
+    );
+  }
+
+  // `rule`: on a match question, the rule bank id; on the other games, the
+  // rule as a short pattern for the explanation.
+  final ruleText = _optionalText(raw['rule']);
+  final isMatch = game == GameType.match;
+
+  return Question(
+    id: id,
+    game: game,
+    category: category,
+    type: type,
+    prompt: prompt,
+    promptRuns: promptRuns,
+    answers: answers,
+    pairs: pairs,
+    options: options,
+    missingWord: missingWord,
+    explanation: _optionalString(raw['explanation']) ?? '',
+    rule: isMatch ? null : ruleText,
+    ruleId: isMatch ? ruleText?.trim() : null,
+    meaning: _optionalText(raw['meaning']),
+    focus: _optionalText(raw['focus']),
+    hint: _optionalText(raw['hint']),
+    stage: stage,
+    item: item,
+    unlocksAfter: unlocksAfter,
+    fixedStart: fixedStart,
+    fixedEnd: fixedEnd,
+  );
+}
+
+/// `stage`: optional; worked out from the game when absent. When given it
+/// must be 1–5 or "consolidation" and fit the game: 1 choose_correction, 2
+/// fill_gap with options, 3 repair, 4 fill_gap without options, 5
+/// spot_error, consolidation order or match.
+LadderStage _parseStage(
+  Map<dynamic, dynamic> raw,
+  GameType game,
+  List<String>? options,
+) {
+  final hasOptions = options != null && options.isNotEmpty;
+  final derived = LadderStage.forGame(game, hasOptions: hasOptions);
+  final rawStage = raw['stage'];
+  if (rawStage == null || (rawStage is String && rawStage.trim().isEmpty)) {
+    return derived;
+  }
+  final stage = LadderStage.fromJson(rawStage);
+  if (stage == null) {
+    throw FormatException(
+      '"stage" must be 1 to 5 or "consolidation", got ${_show(rawStage)}',
+    );
+  }
+  if (stage != derived) {
+    final what = game == GameType.fillGap
+        ? 'fill_gap ${hasOptions ? 'with' : 'without'} options'
+        : game.jsonValue;
+    throw FormatException(
+      '"stage" is ${_show(rawStage)}, which is played with '
+      '${stage.gameDescription}, but this question is $what '
+      '(${derived.label.toLowerCase()})',
+    );
+  }
+  return stage;
+}
+
+/// `type` ("grammar" / "note"); the games' old `severity` ("error" /
+/// "suggestion") is read when `type` is absent. Missing both defaults to
+/// `grammar`.
+QuestionType _parseType(Map<dynamic, dynamic> raw) {
+  final typeValue = _optionalString(raw['type']);
+  if (typeValue != null && typeValue.isNotEmpty) {
+    final type = QuestionType.fromJson(typeValue);
+    if (type == null) {
+      throw FormatException(
+        '"type" must be "grammar" or "note", got "$typeValue"',
+      );
+    }
+    return type;
+  }
+  final severityValue = _optionalString(raw['severity']);
+  if (severityValue != null && severityValue.isNotEmpty) {
+    final type = QuestionType.fromLegacySeverity(severityValue);
+    if (type == null) {
+      throw FormatException(
+        '"severity" (old format) must be "error" or "suggestion", '
+        'got "$severityValue"',
+      );
+    }
+    return type;
+  }
+  return QuestionType.grammar;
+}
+
+/// `options`: required for `choose_correction` (at least two), optional for
+/// `fill_gap`, not allowed elsewhere. Exactly one option must be an accepted
+/// answer ([optionsAnswerProblem]) and, for `choose_correction`, no option
+/// may be the marked words unchanged.
+List<String>? _parseOptions(
+  Map<dynamic, dynamic> raw,
+  GameType game,
+  List<String> answers,
+  List<PromptRun> promptRuns,
+) {
+  final present = raw.containsKey('options') && raw['options'] != null;
+  if (!present) {
+    if (game == GameType.chooseCorrection) {
+      throw const FormatException(
+        'a choose_correction question must have "options" to choose from',
+      );
+    }
+    return null;
+  }
+  if (game != GameType.fillGap && game != GameType.chooseCorrection) {
+    throw FormatException(
+      '"options" is only allowed for choose_correction and fill_gap '
+      'questions, not ${game.jsonValue}',
+    );
+  }
+  final rawOptions = raw['options'];
+  if (rawOptions is! List || rawOptions.isEmpty) {
+    throw const FormatException(
+      '"options" must be a non-empty list of strings when present',
+    );
+  }
+  final options = _stringList(rawOptions, 'options');
+  if (game == GameType.chooseCorrection && options.length < 2) {
+    throw const FormatException(
+      'a choose_correction question needs at least two "options"',
+    );
+  }
+  final problem = optionsAnswerProblem(options, answers);
+  if (problem != null) throw FormatException(problem);
+  if (game == GameType.chooseCorrection) {
+    final marked = [
+      for (final run in promptRuns)
+        if (run.marked) run.text,
+    ];
+    if (options.any((o) => isAcceptedAnswer(o, marked))) {
+      throw const FormatException(
+        '"options" must not include the marked words unchanged',
+      );
+    }
+  }
+  return options;
+}
+
+/// One right option: of a question's [options], exactly one may match an
+/// accepted answer, compared with the answer-checking rule
+/// ([isAcceptedAnswer]: trim, ignore case and final punctuation, accents
+/// must match). `answers` may list other wordings, as long as none of them
+/// is among the options. Step P.7 scores the AI's questions with this rule
+/// (decision G5).
+///
+/// Returns null when exactly one option is right, otherwise the problem
+/// line, naming the options that matched.
+String? optionsAnswerProblem(List<String> options, List<String> answers) {
+  final right = [
+    for (final o in options)
+      if (isAcceptedAnswer(o, answers)) o,
+  ];
+  if (right.isEmpty) {
+    return '"options" must include one of the "answers"; none of '
+        '${_quoteList(options)} is an accepted answer';
+  }
+  if (right.length > 1) {
+    return '"options" must have exactly one right option, but '
+        '${right.length} are accepted answers: ${_quoteList(right)}';
+  }
+  return null;
+}
+
+String _quoteList(List<String> items) => items.map((s) => '"$s"').join(', ');
+
+List<MatchPair> _parsePairs(List<dynamic> rawAnswers) {
+  final pairs = <MatchPair>[];
+  for (var i = 0; i < rawAnswers.length; i++) {
+    final item = rawAnswers[i];
+    if (item is! List || item.length != 2) {
+      throw FormatException(
+        'match "answers" must be a list of [left, right] pairs; '
+        'pair ${i + 1} is ${_describe(item)}',
+      );
+    }
+    final left = item[0];
+    final right = item[1];
+    if (left is! String ||
+        right is! String ||
+        left.trim().isEmpty ||
+        right.trim().isEmpty) {
+      throw FormatException(
+        'match "answers" pair ${i + 1} must hold two non-empty strings',
+      );
+    }
+    pairs.add(MatchPair(left, right));
+  }
+  if (pairs.length < 2) {
+    throw const FormatException('a match question needs at least two pairs');
+  }
+  return pairs;
+}
+
+String _requiredString(Map<dynamic, dynamic> raw, String key) {
+  final value = raw[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('"$key" is required and must be a non-empty string');
+  }
+  return value;
+}
+
+String? _optionalString(Object? value) => value is String ? value : null;
+
+/// An optional string that is `null` when absent or blank.
+String? _optionalText(Object? value) {
+  final s = _optionalString(value);
+  if (s == null || s.trim().isEmpty) return null;
+  return s;
+}
+
+/// An optional text field: `null` when absent, null or blank; reported when
+/// it is there but not a string.
+String? _optionalTextField(Map<dynamic, dynamic> raw, String key) {
+  final value = raw[key];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException(
+      '"$key" must be a string when present, got ${_describe(value)}',
+    );
+  }
+  if (value.trim().isEmpty) return null;
+  return value.trim();
+}
+
+List<String> _stringList(List<dynamic> list, String key) {
+  final result = <String>[];
+  for (var i = 0; i < list.length; i++) {
+    final item = list[i];
+    if (item is! String || item.trim().isEmpty) {
+      throw FormatException(
+        '"$key" must contain only non-empty strings; '
+        'item ${i + 1} is ${_describe(item)}',
+      );
+    }
+    result.add(item);
+  }
+  return result;
+}
+
+String _gameValues() =>
+    GameType.values.map((g) => '"${g.jsonValue}"').join(', ');
+
+String _show(Object? value) {
+  if (value is String) return '"$value"';
+  if (value is num || value is bool) return '$value';
+  return _describe(value);
+}
+
+String _describe(Object? value) {
+  if (value == null) return 'null';
+  if (value is String) return 'a string';
+  if (value is num) return 'a number';
+  if (value is bool) return 'a boolean';
+  if (value is List) return 'a list of ${value.length}';
+  if (value is Map) return 'an object';
+  return value.runtimeType.toString();
+}
