@@ -6,6 +6,7 @@ Direction is settled in `claude/corregir_current_app_and_direction.md`; decision
 
 ## 1. Change log
 
+- **2026-11-26 (G10)** — The games in Learn keep the current web games' layout and flow, drawn in Corregir's own colours, fonts and buttons. No new step yet; it shapes the games screens slice.
 - **2026-11-26 (G9)** — Where the games live: there is no separate practice tab. The Learn tab becomes the games; the bottom bar keeps its four places (Home, History, Saved, Learn), Learn opens on the games, and Traducir frases and its session builder leave Learn when the games arrive. No new step yet: the games screens slice will be written next. Edits: practice track intro, P.11, After the first build, and wording "practice tab" replaced throughout.
 - **2026-11-26 (G4 and G5; adds P.12)** — Every Spelling, Grammar and Word Choice mistake gets a subcategory, named by the check's first step in the same call; broad last items so everything fits. Edits: P.6, P.12, build order, Build progress line.
 - **2026-11-26 (G5 revised; P.7 and P.8 rewritten)** — Andrew: building questions is "a deterministic issue", not an AI one. Questions are built by fixed rules from the original and corrected sentence, with no AI and no cost; the rules set exactly which words are hidden or offered and how much of the sentence is shown. Edits: rules for the track, P.7, P.8, P.11.
