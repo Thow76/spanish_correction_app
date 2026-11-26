@@ -1,0 +1,594 @@
+/// End-of-session summary (B7): shown when the last question of a game has
+/// been checked and "See results" pressed.
+///
+/// - "Session complete" and this round's score ("You got 2 of 3 right.").
+/// - "All games so far": the score for everything answered since the app was
+///   opened, split into "New corrections" (phase 1) and "Recall" (phase 2),
+///   from the shared [SessionTally].
+/// - "To look at again": each question got wrong this round, with the
+///   right answer on its prompt card and the explanation card under it.
+/// - "Play again" (bottom button on phones, the top-bar link in phone
+///   landscape, under the session panel on laptop); the back chevron returns
+///   to the games.
+///
+/// Laptop: the side panel shows the round's SessionPanel, every question
+/// ticked or crossed, with "Play again" under it, so the button is on screen
+/// however long the list is (U9; it used to sit below the list).
+///
+/// U9 (UI spec sections 1, 4, 5, 6, 8, 10; the spec has no drawing of this
+/// screen, so it follows the game frame): each wrong question is one block,
+/// its chip row reading "Question 2 of 3" as the laptop session panel's rows
+/// do, with 24 between blocks so one question's cards are not read as the
+/// next one's.
+///
+/// B17: "Copy results" copies a plain-text list of every question checked
+/// since the app was opened ([SessionTally.resultsText]) for Andrew to paste
+/// into the ChatGPT companion. On phones it sits straight under the "All
+/// games so far" card, as it copies that whole session rather than this
+/// round; on laptop it is in the side panel under "Play again". After
+/// copying, a caption under it confirms how many results were copied. The
+/// spec has no drawing of it, so it is a secondary (outlined) button in the
+/// theme's style, so it does not compete with "Play again" (for U9).
+///
+/// B18: when the app sends results straight to the Test Review sheet, a
+/// status line under "Copy results" says whether they are saved, with
+/// "Send again" if a send failed.
+///
+/// B22: a Repair question right only after the hint counts as not passed,
+/// so it is listed under "To look at again", with "Right with a hint" under
+/// its chip row.
+///
+/// B32: "Finish" goes back to home and reloads the questions (the same as
+/// Reload there), so questions the script has already taken out drop out
+/// and the counts are fresh. By default it closes the game's screen with
+/// [RoundEnd.finish], which home takes as "reload". "Play again" still
+/// replays the same questions. Placement is a stand-in until U22: beside
+/// "Play again" at the bottom on phones in portrait, in the list under the
+/// score in phone landscape (where "Play again" is the top-bar link), and
+/// under "Play again" in the laptop side panel; a secondary (outlined)
+/// button like "Copy results".
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../data/results_sync.dart';
+import '../models/answer_check.dart';
+import '../models/question.dart';
+import '../models/session_tally.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../theme/app_typography.dart';
+import '../theme/form_factor.dart';
+import '../widgets/widgets.dart';
+
+/// How a game's screen was closed from its summary (B32). Home reloads the
+/// questions on [finish]; a plain back (no value) leaves them as they are.
+enum RoundEnd { finish }
+
+class SessionSummaryView extends StatelessWidget {
+  const SessionSummaryView({
+    super.key,
+    required this.game,
+    required this.questions,
+    required this.results,
+    required this.onPlayAgain,
+    required this.onBack,
+    this.session,
+    this.hinted,
+    this.onFinish,
+  });
+
+  final GameType game;
+
+  /// The round's questions, in the order played.
+  final List<Question> questions;
+
+  /// One entry per question in [questions]: right, wrong, or null if it was
+  /// never checked.
+  final List<bool?> results;
+
+  final VoidCallback onPlayAgain;
+  final VoidCallback onBack;
+
+  /// The app session's tally. Null (tests, a screen opened on its own)
+  /// counts this round only.
+  final SessionTally? session;
+
+  /// One entry per question in [questions]: right only after the hint
+  /// (B22). Null for games without hints.
+  final List<bool>? hinted;
+
+  /// "Finish" (B32). Null: close the game's screen with [RoundEnd.finish],
+  /// so home reloads the questions.
+  final VoidCallback? onFinish;
+
+  static const String title = 'Session complete';
+  static const String sessionHeading = 'All games so far';
+  static const String wrongHeading = 'To look at again';
+  static const String wrongCaption =
+      'The questions you got wrong this round, with the answer.';
+  static const String allRightText = 'You got every question right.';
+  static const String alreadyCorrectText = 'This sentence was already correct.';
+  static const String rightWithHintText = 'Right with a hint';
+
+  static String scoreText(int score, int total) =>
+      'You got $score of $total right.';
+
+  int get _score => results.where((r) => r == true).length;
+
+  /// The questions got wrong (or right only after the hint), with their
+  /// 1-based place in the round and whether the hint was needed.
+  List<(int, Question, bool)> get _wrong => [
+    for (var i = 0; i < questions.length && i < results.length; i++)
+      if (results[i] == false)
+        (
+          i + 1,
+          questions[i],
+          hinted != null && i < hinted!.length && hinted![i],
+        ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    final tally = session ?? SessionTally.fromRound(questions, results);
+    final wrong = _wrong;
+    final form = FormFactor.of(context);
+    final laptop = form == FormFactor.laptop;
+    final landscape = form == FormFactor.phoneLandscape;
+    final finish = FinishButton(
+      onPressed:
+          onFinish ??
+          () => Navigator.of(context).maybePop<RoundEnd>(RoundEnd.finish),
+    );
+
+    final rows = <Widget>[
+      Semantics(header: true, child: Text(title, style: type.cardTitle)),
+      Text(scoreText(_score, questions.length), style: type.body),
+      // Phone landscape has no bottom button: "Play again" is the top-bar
+      // link, so Finish goes in the list (B32).
+      if (landscape) finish,
+      _SessionScores(tally: tally),
+      if (!laptop) CopyResultsButton(tally: tally),
+      if (!laptop && tally.sync != null) ResultsSyncStatus(sync: tally.sync!),
+      if (wrong.isEmpty)
+        Text(allRightText, style: type.caption)
+      else ...[
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.s8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(wrongHeading, style: type.phaseHeading),
+              ),
+              const SizedBox(height: AppSpacing.s4),
+              Text(wrongCaption, style: type.caption),
+            ],
+          ),
+        ),
+        _WrongList(
+          children: [
+            for (final (place, q, withHint) in wrong)
+              _WrongQuestion(
+                question: q,
+                place: place,
+                total: questions.length,
+                hinted: withHint,
+              ),
+          ],
+        ),
+      ],
+    ];
+
+    final playAgain = PrimaryButton(
+      label: 'Play again',
+      onPressed: onPlayAgain,
+      trailingIcon: Icons.refresh_rounded,
+    );
+    final sessionPanel = SessionPanel(
+      marks: [
+        for (final r in results)
+          r == true ? QuestionMark.correct : QuestionMark.wrong,
+      ],
+    );
+
+    return GameFrame(
+      topBar: GameTopBar(
+        title: game.label,
+        onBack: onBack,
+        actionLabel: 'Play again',
+        onAction: onPlayAgain,
+      ),
+      // On laptop the button goes in the side panel instead of under the
+      // list, so it is never below the fold. Phones: Finish beside it (B32).
+      primaryButton: laptop
+          ? null
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: finish),
+                const SizedBox(width: AppSpacing.s12),
+                Expanded(child: playAgain),
+              ],
+            ),
+      sidePanel: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          sessionPanel,
+          const SizedBox(height: AppSpacing.s16),
+          playAgain,
+          const SizedBox(height: AppSpacing.s12),
+          finish,
+          const SizedBox(height: AppSpacing.s12),
+          CopyResultsButton(tally: tally),
+          if (tally.sync != null) ...[
+            const SizedBox(height: AppSpacing.s12),
+            ResultsSyncStatus(sync: tally.sync!),
+          ],
+        ],
+      ),
+      children: rows,
+    );
+  }
+}
+
+/// "Finish" (B32): back to home, which reloads the questions. A secondary
+/// (outlined) button in the theme's style, 52 high like the primary button,
+/// full width of where it is put. A stand-in until U22.
+class FinishButton extends StatelessWidget {
+  const FinishButton({super.key, required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  static const String label = 'Finish';
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusRing(
+      radius: AppRadius.control,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSizes.primaryButton),
+        child: OutlinedButton.icon(
+          onPressed: onPressed,
+          icon: const Icon(Icons.home_rounded, size: AppSizes.iconSmall),
+          label: const Text(label, textAlign: TextAlign.center),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Copy results" (B17): copies [SessionTally.resultsText] to the
+/// clipboard, then says so in a caption under the button (a live region,
+/// so screen readers hear it). Full width, 52 high like the primary button.
+class CopyResultsButton extends StatefulWidget {
+  const CopyResultsButton({super.key, required this.tally});
+
+  final SessionTally tally;
+
+  static const String label = 'Copy results';
+  static const String againLabel = 'Copy again';
+  static const String failedText = "Couldn't copy the results. Try again.";
+
+  /// "Copied 3 results. Paste them into your Spanish Daily Companion."
+  static String copiedText(int count) =>
+      'Copied $count ${count == 1 ? 'result' : 'results'}. '
+      'Paste them into your Spanish Daily Companion.';
+
+  @override
+  State<CopyResultsButton> createState() => _CopyResultsButtonState();
+}
+
+enum _CopyState { idle, copied, failed }
+
+class _CopyResultsButtonState extends State<CopyResultsButton> {
+  _CopyState _state = _CopyState.idle;
+  int _count = 0;
+
+  Future<void> _copy() async {
+    final count = widget.tally.answered;
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.tally.resultsText()));
+      if (!mounted) return;
+      setState(() {
+        _state = _CopyState.copied;
+        _count = count;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _state = _CopyState.failed);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    final copied = _state == _CopyState.copied;
+    final message = switch (_state) {
+      _CopyState.idle => null,
+      _CopyState.copied => CopyResultsButton.copiedText(_count),
+      _CopyState.failed => CopyResultsButton.failedText,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FocusRing(
+          radius: AppRadius.control,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: AppSizes.primaryButton,
+            ),
+            child: OutlinedButton.icon(
+              onPressed: widget.tally.answered == 0 ? null : _copy,
+              icon: Icon(
+                copied ? Icons.check_rounded : Icons.content_copy_rounded,
+                size: AppSizes.iconSmall,
+              ),
+              label: Text(
+                copied ? CopyResultsButton.againLabel : CopyResultsButton.label,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+        if (message != null) ...[
+          const SizedBox(height: AppSpacing.s8),
+          Semantics(
+            liveRegion: true,
+            child: Text(message, style: type.caption),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Whether the results reached the Test Review sheet (B18): a caption (a
+/// live region), and "Send again" after a failed send.
+class ResultsSyncStatus extends StatelessWidget {
+  const ResultsSyncStatus({super.key, required this.sync});
+
+  final ResultsSync sync;
+
+  static const String sendingText = 'Saving your results to Test Review…';
+  static const String savedText = 'Results saved to Test Review.';
+  static const String retryLabel = 'Send again';
+
+  /// "2 results not saved yet. Check your connection and send again."
+  static String failedText(int count) =>
+      '$count ${count == 1 ? 'result' : 'results'} not saved yet. '
+      'Check your connection and send again.';
+
+  /// "1 result has no row in Test Review, so it was not saved."
+  static String unknownText(int count) =>
+      '$count ${count == 1 ? 'result has' : 'results have'} no row in '
+      'Test Review, so ${count == 1 ? 'it was' : 'they were'} not saved.';
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final message = switch (sync.state) {
+          ResultsSyncState.idle => null,
+          ResultsSyncState.sending => sendingText,
+          ResultsSyncState.saved => savedText,
+          ResultsSyncState.failed => failedText(sync.pending),
+        };
+        final unknown = sync.unknown.length;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message != null)
+              Semantics(
+                liveRegion: true,
+                child: Text(message, style: type.caption),
+              ),
+            if (unknown > 0) ...[
+              const SizedBox(height: AppSpacing.s4),
+              Text(unknownText(unknown), style: type.caption),
+            ],
+            if (sync.state == ResultsSyncState.failed) ...[
+              const SizedBox(height: AppSpacing.s8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: sync.send,
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    size: AppSizes.iconSmall,
+                  ),
+                  label: const Text(retryLabel),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// "All games so far" with one line per phase: "New corrections  2 of 3 right",
+/// "Recall  None yet".
+class _SessionScores extends StatelessWidget {
+  const _SessionScores({required this.tally});
+
+  final SessionTally tally;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.s16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardAll,
+        border: Border.all(color: AppColors.hairline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              SessionSummaryView.sessionHeading,
+              style: type.phaseHeading,
+            ),
+          ),
+          for (final phase in QuestionPhase.values) ...[
+            const SizedBox(height: AppSpacing.s8),
+            _line(type, phase),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _line(AppTypography type, QuestionPhase phase) {
+    final score = SessionTally.scoreText(tally.scoreFor(phase));
+    return Semantics(
+      label: '${phase.label}: $score',
+      child: ExcludeSemantics(
+        // A Wrap rather than a Row (spec section 10): with large text the
+        // score moves under the label instead of squeezing it until
+        // "corrections" breaks mid-word.
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: AppSpacing.s12,
+          children: [
+            Text(phase.label, style: type.body),
+            Text(score, style: type.caption),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The wrong questions, 24 apart: more than the 8 inside a block and the
+/// frame's row gap, so each question's chip and cards read as one group.
+class _WrongList extends StatelessWidget {
+  const _WrongList({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.s24),
+          children[i],
+        ],
+      ],
+    );
+  }
+}
+
+/// One question got wrong: its chip row ("Question 2 of 3" on the right,
+/// matching the laptop session panel's row), the prompt card with the right
+/// answer in place, and the explanation.
+class _WrongQuestion extends StatelessWidget {
+  const _WrongQuestion({
+    required this.question,
+    required this.place,
+    required this.total,
+    this.hinted = false,
+  });
+
+  final Question question;
+
+  /// Right on the second try, after the hint (B22).
+  final bool hinted;
+
+  /// 1-based place in the round, and the round's length.
+  final int place;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    final q = question;
+    final alreadyCorrect =
+        q.game == GameType.spotError && spotErrorSentenceIsCorrect(q);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ChipRow(
+          type: q.type.jsonValue,
+          category: q.category,
+          current: place,
+          total: total,
+        ),
+        if (hinted) ...[
+          const SizedBox(height: AppSpacing.s8),
+          Text(SessionSummaryView.rightWithHintText, style: type.caption),
+        ],
+        if (q.game == GameType.match) ...[
+          const SizedBox(height: AppSpacing.s8),
+          Text(q.prompt, style: type.caption),
+        ],
+        const SizedBox(height: AppSpacing.s8),
+        _card(q),
+        if (alreadyCorrect) ...[
+          const SizedBox(height: AppSpacing.s8),
+          Text(SessionSummaryView.alreadyCorrectText, style: type.caption),
+        ],
+        const SizedBox(height: AppSpacing.s8),
+        ExplanationCard(
+          content: ExplanationContent.build(
+            explanation: q.explanation,
+            rule: q.rule,
+            meaning: q.meaning,
+            answers: q.game == GameType.match
+                ? [for (final p in q.pairs) p.right]
+                : q.answers,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The prompt card as it looks after a right answer.
+  static Widget _card(Question q) {
+    final first = q.answers.isEmpty ? null : q.answers.first;
+    return switch (q.game) {
+      GameType.chooseCorrection || GameType.repair => PromptCard.marked(
+        sentence: q.prompt,
+        missingWord: q.missingWord,
+        corrected: q.correctedSentence,
+      ),
+      GameType.fillGap => PromptCard.gap(
+        sentence: q.prompt,
+        fill: first,
+        gapState: first == null ? GapState.empty : GapState.correct,
+      ),
+      GameType.order => PromptCard.plain(
+        sentence: q.withFixedEnds(first ?? q.promptText),
+      ),
+      GameType.spotError => PromptCard.plain(
+        sentence: q.promptText,
+        corrected: spotErrorSentenceIsCorrect(q) ? null : first,
+      ),
+      GameType.match => PromptCard.plain(
+        sentence: [
+          for (final p in q.pairs) '${p.left} – ${p.right}',
+        ].join(' · '),
+      ),
+    };
+  }
+}
