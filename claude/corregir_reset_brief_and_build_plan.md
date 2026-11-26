@@ -6,6 +6,7 @@ Direction is settled in `claude/corregir_current_app_and_direction.md`; decision
 
 ## 1. Change log
 
+- **2026-11-26 (G11)** — The games' instructions and buttons are in English by default, with a setting to switch them to Spanish; the practice sentences are always Spanish. No new step yet; it shapes the games screens slice.
 - **2026-11-26 (G10)** — The games in Learn keep the current web games' layout and flow, drawn in Corregir's own colours, fonts and buttons. No new step yet; it shapes the games screens slice.
 - **2026-11-26 (G9)** — Where the games live: there is no separate practice tab. The Learn tab becomes the games; the bottom bar keeps its four places (Home, History, Saved, Learn), Learn opens on the games, and Traducir frases and its session builder leave Learn when the games arrive. No new step yet: the games screens slice will be written next. Edits: practice track intro, P.11, After the first build, and wording "practice tab" replaced throughout.
 - **2026-11-26 (G4 and G5; adds P.12)** — Every Spelling, Grammar and Word Choice mistake gets a subcategory, named by the check's first step in the same call; broad last items so everything fits. Edits: P.6, P.12, build order, Build progress line.
