@@ -48,6 +48,19 @@
 // - TWO_STEP_ONE_PROMPT: "full" (default) or "lean": the lean one-call
 //   prompt has only the categories, item shape, wording rules and the
 //   regional line, and never touches commas. For isolating the model.
+// - TWO_STEP_SUBCATEGORY: "true" makes step 1 also name one subcategory
+//   for each item, from the fixed list in
+//   lib/features/practice/domain/practice_subcategory.dart (build step
+//   P.12a). Off by default, so an ordinary run still sends exactly the
+//   app's prompt. Step 2 is unchanged. The report gains a "Subcategories"
+//   section. To measure the change, run once without and once with:
+//     TWO_STEP_LIVE=true TWO_STEP_FIXTURE_SET=all TWO_STEP_RUNS_PER_FIXTURE=5 \
+//     TWO_STEP_OUTPUT=docs/two_step_subcategory_off_5x.md \
+//     flutter test test/two_step_suggestions_prompt_harness.dart --tags live --timeout none
+//     TWO_STEP_LIVE=true TWO_STEP_SUBCATEGORY=true TWO_STEP_FIXTURE_SET=all \
+//     TWO_STEP_RUNS_PER_FIXTURE=5 \
+//     TWO_STEP_OUTPUT=docs/two_step_subcategory_on_5x.md \
+//     flutter test test/two_step_suggestions_prompt_harness.dart --tags live --timeout none
 // - TWO_STEP_MODE: "two" (default) or "one". In "one" mode the merged
 //   prompt (oneStepPrompt) runs once per sentence on TWO_STEP_ONE_MODEL
 //   (defaults to gpt-6-luna) and returns all four categories; the report
@@ -70,6 +83,7 @@ import 'package:spanish_correction_app/features/corrections/data/suggestion_clie
         placeSuggestionEdits,
         wholeWordMatches;
 import 'package:spanish_correction_app/features/corrections/domain/naturalness_review.dart';
+import 'package:spanish_correction_app/features/practice/domain/practice_subcategory.dart';
 
 import 'shared/openai_key.dart';
 import 'two_pass_integration_harness.dart'
@@ -212,6 +226,183 @@ Map<String, Object?> suggestionResponseFormat(List<String> categories) =>
     twoStepResponseFormat(categories);
 
 // ---------------------------------------------------------------------------
+// Subcategories (build step P.12a): step 1 only, in this test program only
+// ---------------------------------------------------------------------------
+
+/// The category whose list has no broad last item.
+const String _wordChoice = PracticeCategory.wordChoice;
+
+/// The broad subcategory of each category, which takes whatever fits none
+/// of the others (P.12). Word Choice has only two and no broad one.
+const Map<String, PracticeSubcategory> broadSubcategories = {
+  PracticeCategory.grammar: PracticeSubcategory.sentenceStructure,
+  PracticeCategory.spelling: PracticeSubcategory.letters,
+};
+
+/// The subcategories of [category] in the order the prompt lists them: as
+/// decision G4 lists them, with the broad one moved to the end.
+List<PracticeSubcategory> promptSubcategoriesFor(String category) {
+  final broad = broadSubcategories[category];
+  final all = PracticeSubcategory.forCategory(category);
+  return [
+    for (final subcategory in all)
+      if (subcategory != broad) subcategory,
+    ?broad,
+  ];
+}
+
+/// Every name step 1 may put in "subcategory".
+List<String> get subcategoryNames => [
+  for (final category in issueCategories)
+    for (final subcategory in promptSubcategoriesFor(category))
+      subcategory.label,
+];
+
+/// The paragraph that tells step 1 about subcategories, built from the
+/// app's fixed list so the two cannot drift apart.
+String get subcategoryInstructions {
+  final b = StringBuffer(
+    'Each item also names one subcategory. Choose it from the list for '
+    'the item\'s category, and use the name exactly as written here. '
+    'Never invent a new name.\n',
+  );
+  for (final category in issueCategories) {
+    final listed = promptSubcategoriesFor(category);
+    b.writeln(
+      '- $category: ${[for (final s in listed) '${s.label} (${_lowerFirst(s.covers)})'].join('; ')}',
+    );
+  }
+  b.write(
+    'If no other subcategory fits, use '
+    '"${broadSubcategories[PracticeCategory.grammar]!.label}" for Grammar '
+    'and "${broadSubcategories[PracticeCategory.spelling]!.label}" for '
+    'Spelling. For $_wordChoice, choose the closer of its two.\n',
+  );
+  return b.toString();
+}
+
+String _lowerFirst(String text) {
+  final trimmed = text.endsWith('.')
+      ? text.substring(0, text.length - 1)
+      : text;
+  return trimmed.isEmpty
+      ? trimmed
+      : trimmed[0].toLowerCase() + trimmed.substring(1);
+}
+
+const String _fourFields = 'exactly four fields';
+const String _categoryField =
+    '- "category": one of the allowed categories named above.\n';
+const String _subcategoryField =
+    '- "subcategory": one of the subcategory names listed above for the '
+    'item\'s category.\n';
+const String _allowedCategoriesLine =
+    'The allowed categories are: Spelling, Grammar, Word Choice.\n';
+
+/// Step 1's prompt with the subcategory added: the app's prompt, word for
+/// word, with one paragraph listing the subcategories and a fifth field in
+/// the item shape. Nothing else differs, so a run with it against a run
+/// without measures the subcategory alone. Step P.12b moves this wording
+/// into the app once Andrew is content with the figures.
+String get issuesStepSubcategoryPrompt {
+  for (final anchor in [_fourFields, _categoryField, _allowedCategoriesLine]) {
+    if (anchor.allMatches(issuesStepPrompt).length != 1) {
+      throw StateError(
+        'The step 1 prompt no longer holds "$anchor" exactly once, so the '
+        'subcategory wording cannot be placed.',
+      );
+    }
+  }
+  return issuesStepPrompt
+      .replaceFirst(
+        _allowedCategoriesLine,
+        '$_allowedCategoriesLine\n$subcategoryInstructions',
+      )
+      .replaceFirst(_fourFields, 'exactly five fields')
+      .replaceFirst(_categoryField, '$_categoryField$_subcategoryField');
+}
+
+/// Step 1's reply shape with the fifth field. The service only accepts a
+/// name from [subcategoryNames]; whether it belongs to the item's own
+/// category is checked afterwards ([subcategoryStatus]).
+Map<String, Object?> subcategoryResponseFormat(List<String> categories) => {
+  'type': 'json_schema',
+  'json_schema': {
+    'name': 'suggestion_items_with_subcategory_response',
+    'strict': true,
+    'schema': {
+      'type': 'object',
+      'additionalProperties': false,
+      'required': ['items'],
+      'properties': {
+        'items': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'additionalProperties': false,
+            'required': [
+              'written',
+              'suggestion',
+              'category',
+              'subcategory',
+              'reason',
+            ],
+            'properties': {
+              'written': {'type': 'string'},
+              'suggestion': {'type': 'string'},
+              'category': {'type': 'string', 'enum': categories},
+              'subcategory': {'type': 'string', 'enum': subcategoryNames},
+              'reason': {'type': 'string'},
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+/// How an item's subcategory stands against the fixed list.
+enum SubcategoryStatus {
+  /// On the list, under the item's own category.
+  onList('On the list, under the item\'s category'),
+
+  /// The item has no subcategory.
+  missing('Missing'),
+
+  /// A name that is not on the list at all.
+  notOnList('Not on the list'),
+
+  /// On the list, but under a different category from the item's.
+  otherCategory('On the list, but under a different category');
+
+  const SubcategoryStatus(this.reportLabel);
+  final String reportLabel;
+}
+
+SubcategoryStatus subcategoryStatus(SuggestionItem item) {
+  final name = item.subcategory?.trim() ?? '';
+  if (name.isEmpty) return SubcategoryStatus.missing;
+  for (final subcategory in PracticeSubcategory.values) {
+    if (subcategory.label == name) {
+      return subcategory.category == item.category
+          ? SubcategoryStatus.onList
+          : SubcategoryStatus.otherCategory;
+    }
+  }
+  return SubcategoryStatus.notOnList;
+}
+
+/// `TWO_STEP_SUBCATEGORY`: "true" asks step 1 for a subcategory.
+bool twoStepSubcategoryFrom(Map<String, String> env) {
+  final value = env['TWO_STEP_SUBCATEGORY']?.trim().toLowerCase() ?? '';
+  if (value.isEmpty || value == 'false') return false;
+  if (value == 'true') return true;
+  throw ArgumentError(
+    'TWO_STEP_SUBCATEGORY must be "true" or "false" (was "$value").',
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Items: parsing, checking and applying
 // ---------------------------------------------------------------------------
 
@@ -222,12 +413,17 @@ class SuggestionItem {
     required this.suggestion,
     required this.category,
     required this.reason,
+    this.subcategory,
   });
 
   final String written;
   final String suggestion;
   final String category;
   final String reason;
+
+  /// The subcategory step 1 named (build step P.12a); null when the reply
+  /// carried none, as in an ordinary run and for every step 2 item.
+  final String? subcategory;
 }
 
 /// A step's parsed reply: the whole corrected text (null if the reply did
@@ -269,6 +465,7 @@ StepReply parseStepReply(String replyText) {
     final suggestion = raw['suggestion'];
     final category = raw['category'];
     final reason = raw['reason'];
+    final subcategory = raw['subcategory'];
     if (written is! String ||
         suggestion is! String ||
         category is! String ||
@@ -281,6 +478,7 @@ StepReply parseStepReply(String replyText) {
         suggestion: suggestion,
         category: category,
         reason: reason,
+        subcategory: subcategory is String ? subcategory : null,
       ),
     );
   }
@@ -538,6 +736,7 @@ _callStep({
   required List<String> categories,
   required String stageLabel,
   required String text,
+  bool withSubcategory = false,
 }) async {
   final usage = <ChatCompletionsUsage>[];
   final client = OpenAiChatCompletionsClient(
@@ -552,7 +751,9 @@ _callStep({
       systemPrompt: systemPrompt,
       userText: _userContent(text),
       stageLabel: stageLabel,
-      responseFormat: suggestionResponseFormat(categories),
+      responseFormat: withSubcategory
+          ? subcategoryResponseFormat(categories)
+          : suggestionResponseFormat(categories),
     ),
   );
   stopwatch.stop();
@@ -638,15 +839,19 @@ Future<TwoStepResult> runTwoStep({
   required String suggestionsModel,
   required TwoPassFixture fixture,
   int runIndex = 1,
+  bool withSubcategory = false,
 }) => _orErrorResult(fixture, runIndex, () async {
   final step1 = await _callStep(
     apiKey: apiKey,
     httpClient: httpClient,
     model: issuesModel,
-    systemPrompt: issuesStepPrompt,
+    systemPrompt: withSubcategory
+        ? issuesStepSubcategoryPrompt
+        : issuesStepPrompt,
     categories: issueCategories,
     stageLabel: 'two_step_issues',
     text: fixture.text,
+    withSubcategory: withSubcategory,
   );
   final checked1 = checkItems(
     text: fixture.text,
@@ -755,7 +960,8 @@ String _items(List<SuggestionItem> items) => items.isEmpty
     : items
           .map(
             (i) =>
-                '${i.written} -> ${i.suggestion} [${i.category}: '
+                '${i.written} -> ${i.suggestion} [${i.category}'
+                '${i.subcategory == null ? '' : ' / ${i.subcategory}'}: '
                 '${i.reason}]',
           )
           .join('<br>');
@@ -770,6 +976,7 @@ String buildTwoStepReport({
   required List<TwoStepResult> results,
   required DateTime generatedAt,
   bool oneStep = false,
+  bool withSubcategory = false,
 }) {
   final b = StringBuffer()
     ..writeln('# Two-step suggestions harness (build step E.3)')
@@ -788,6 +995,13 @@ String buildTwoStepReport({
     ..writeln()
     ..writeln(baselineSummary)
     ..writeln()
+    ..writeln(
+      withSubcategory
+          ? '- Subcategories: **on**. Step 1 was also asked to name one '
+                'subcategory for each item (build step P.12a); see '
+                '"Subcategories" below.'
+          : '- Subcategories: off. Step 1 sent exactly the app\'s prompt.',
+    )
     ..writeln('- Total runs: `${results.length}`')
     ..writeln('- Generated: ${generatedAt.toUtc().toIso8601String()}')
     ..writeln();
@@ -915,6 +1129,10 @@ String buildTwoStepReport({
   }
   b.writeln();
 
+  if (withSubcategory) {
+    _writeSubcategorySection(b, results);
+  }
+
   // Wording and housekeeping counts.
   final shown = results.fold<int>(0, (a, r) => a + r.allShownItems.length);
   final badReasons = results.fold<int>(
@@ -977,6 +1195,119 @@ String buildTwoStepReport({
     );
   }
   return b.toString();
+}
+
+/// The "Subcategories" section: whether every step 1 item carries a name
+/// from the fixed list under its own category, how the names are spread,
+/// and whether a sentence gets the same one on every run.
+void _writeSubcategorySection(StringBuffer b, List<TwoStepResult> results) {
+  // Every item step 1 returned with an allowed category, shown or not.
+  final items = [
+    for (final r in results) ...[...r.issueItems, ...r.issuesNotApplied],
+  ];
+  final byStatus = {
+    for (final status in SubcategoryStatus.values)
+      status: items.where((i) => subcategoryStatus(i) == status).length,
+  };
+  final good = byStatus[SubcategoryStatus.onList]!;
+  b
+    ..writeln('## Subcategories')
+    ..writeln()
+    ..writeln(
+      '**Step 1 items with a subcategory from the list, under their own '
+      'category: $good of ${items.length} '
+      '(${_percent(good, items.length)}).**',
+    )
+    ..writeln()
+    ..writeln('| Subcategory is | Items |')
+    ..writeln('| --- | --- |');
+  for (final status in SubcategoryStatus.values) {
+    b.writeln('| ${status.reportLabel} | ${byStatus[status]} |');
+  }
+  b
+    ..writeln()
+    ..writeln('| Category | Subcategory | Items |')
+    ..writeln('| --- | --- | --- |');
+  for (final category in issueCategories) {
+    for (final subcategory in promptSubcategoriesFor(category)) {
+      final count = items
+          .where(
+            (i) =>
+                i.category == category && i.subcategory == subcategory.label,
+          )
+          .length;
+      b.writeln('| $category | ${subcategory.label} | $count |');
+    }
+  }
+  b.writeln();
+
+  final problems = items
+      .where((i) => subcategoryStatus(i) != SubcategoryStatus.onList)
+      .toList();
+  if (problems.isNotEmpty) {
+    b
+      ..writeln('Items whose subcategory is not as asked:')
+      ..writeln();
+    for (final item in problems) {
+      b.writeln(
+        '- `${item.written}` -> `${item.suggestion}`: ${item.category} / '
+        '${item.subcategory ?? '(none)'} '
+        '(${subcategoryStatus(item).reportLabel})',
+      );
+    }
+    b.writeln();
+  }
+
+  // The same change (same sentence, same written words, same suggestion)
+  // across runs: did it get the same subcategory every time?
+  final names = <String, Set<String>>{};
+  final seenIn = <String, int>{};
+  for (final r in results) {
+    for (final item in [...r.issueItems, ...r.issuesNotApplied]) {
+      final key = '${r.fixture.id}\u0000${item.written}\u0000${item.suggestion}';
+      names.putIfAbsent(key, () => {}).add(
+        '${item.category} / ${item.subcategory ?? '(none)'}',
+      );
+      seenIn[key] = (seenIn[key] ?? 0) + 1;
+    }
+  }
+  final repeated = [
+    for (final key in names.keys)
+      if (seenIn[key]! > 1) key,
+  ];
+  final varying = [
+    for (final key in repeated)
+      if (names[key]!.length > 1) key,
+  ];
+  b
+    ..writeln(
+      '- The same change returned in more than one run: `${repeated.length}`',
+    )
+    ..writeln(
+      '- Of those, given a different category or subcategory from one run '
+      'to another: `${varying.length}`',
+    )
+    ..writeln();
+  if (varying.isNotEmpty) {
+    b
+      ..writeln('| Sentence | Change | Names given |')
+      ..writeln('| --- | --- | --- |');
+    for (final key in varying) {
+      final parts = key.split('\u0000');
+      b.writeln(
+        '| ${parts[0]} | `${parts[1]}` -> `${parts[2]}` | '
+        '${names[key]!.join('<br>')} |',
+      );
+    }
+    b.writeln();
+  }
+  b
+    ..writeln(
+      'To see what the subcategory costs, compare "Speed and cost per '
+      'call" (row "1 Issues") and the pass rates in this report with a '
+      'run made without TWO_STEP_SUBCATEGORY.',
+    )
+    ..writeln();
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,6 +1439,7 @@ void main() {
 
     final prompts = {
       'issuesStepPrompt': normalise(issuesStepPrompt),
+      'issuesStepSubcategoryPrompt': normalise(issuesStepSubcategoryPrompt),
       'suggestionsStepPrompt': normalise(suggestionsStepPrompt),
       'oneStepPrompt': normalise(oneStepPrompt),
       'oneStepLeanPrompt': normalise(oneStepLeanPrompt),
@@ -1619,6 +1951,231 @@ void main() {
     );
   });
 
+  group('subcategories (build step P.12a)', () {
+    SuggestionItem item(String category, String? subcategory) =>
+        SuggestionItem(
+          written: 'x',
+          suggestion: 'y',
+          category: category,
+          reason: 'r',
+          subcategory: subcategory,
+        );
+
+    TwoStepResult run(String id, int runIndex, List<SuggestionItem> issues) {
+      final fixture = allTwoPassFixtures.firstWhere((f) => f.id == id);
+      return TwoStepResult(
+        fixture: fixture,
+        runIndex: runIndex,
+        issueItems: issues,
+        issuesDropped: const [],
+        issuesNotApplied: const [],
+        textAfterIssues: fixture.text,
+        suggestionItems: const [],
+        suggestionsDropped: const [],
+        suggestionsNotApplied: const [],
+        finalText: fixture.text,
+        issuesStats: CallStats.zero,
+        suggestionsStats: CallStats.zero,
+        score: scoreFinalText(fixture, fixture.text),
+      );
+    }
+
+    test('the list is the fixed one: eight, three and two, thirteen in all', () {
+      expect(promptSubcategoriesFor('Grammar'), hasLength(8));
+      expect(promptSubcategoriesFor('Spelling'), hasLength(3));
+      expect(promptSubcategoriesFor('Word Choice'), hasLength(2));
+      expect(promptSubcategoriesFor('Natural phrasing'), isEmpty);
+      expect(subcategoryNames, hasLength(13));
+      expect(subcategoryNames.toSet(), {
+        for (final s in PracticeSubcategory.values) s.label,
+      });
+    });
+
+    test('the broad one comes last for Grammar and Spelling', () {
+      expect(
+        promptSubcategoriesFor('Grammar').last,
+        PracticeSubcategory.sentenceStructure,
+      );
+      expect(
+        promptSubcategoriesFor('Spelling').last,
+        PracticeSubcategory.letters,
+      );
+    });
+
+    test('the prompt is the app\'s step 1 prompt plus the subcategory', () {
+      final prompt = issuesStepSubcategoryPrompt;
+
+      expect(prompt, contains('exactly five fields'));
+      expect(prompt, isNot(contains('exactly four fields')));
+      expect(prompt, contains('- "subcategory": one of the subcategory names'));
+      expect(prompt, contains(subcategoryInstructions));
+      for (final name in subcategoryNames) {
+        expect(prompt, contains(name));
+      }
+      expect(prompt, contains('Never invent a new name.'));
+      expect(prompt, contains('use "Sentence structure" for Grammar'));
+      expect(prompt, contains('"Letters" for Spelling'));
+
+      // Taking the three additions back out leaves the app's prompt, word
+      // for word.
+      final restored = prompt
+          .replaceFirst('\n$subcategoryInstructions', '')
+          .replaceFirst('exactly five fields', 'exactly four fields')
+          .replaceFirst(
+            '- "subcategory": one of the subcategory names listed above '
+                'for the item\'s category.\n',
+            '',
+          );
+      expect(restored, twoStepIssuesPromptSpanish);
+    });
+
+    test('the app\'s own prompts are not changed by this step', () {
+      expect(issuesStepPrompt, twoStepIssuesPromptSpanish);
+      expect(issuesStepPrompt, isNot(contains('subcategory')));
+      expect(suggestionsStepPrompt, isNot(contains('subcategory')));
+    });
+
+    test('the reply shape has the fifth field, limited to the list', () {
+      final format = subcategoryResponseFormat(issueCategories);
+      final schema = (format['json_schema']! as Map)['schema']! as Map;
+      final itemSchema =
+          ((schema['properties']! as Map)['items']! as Map)['items']! as Map;
+      final properties = itemSchema['properties']! as Map;
+
+      expect((format['json_schema']! as Map)['strict'], isTrue);
+      expect(itemSchema['required'], contains('subcategory'));
+      expect(itemSchema['additionalProperties'], isFalse);
+      expect((properties['subcategory']! as Map)['enum'], subcategoryNames);
+      expect((properties['category']! as Map)['enum'], issueCategories);
+    });
+
+    test('the ordinary reply shape has no fifth field', () {
+      final format = suggestionResponseFormat(issueCategories);
+      final schema = (format['json_schema']! as Map)['schema']! as Map;
+      final itemSchema =
+          ((schema['properties']! as Map)['items']! as Map)['items']! as Map;
+
+      expect(itemSchema['required'], isNot(contains('subcategory')));
+    });
+
+    test('a reply\'s subcategory is read, and its absence is tolerated', () {
+      final items = parseSuggestionItems(
+        '{"items": ['
+        '{"written": "cafe", "suggestion": "café", "category": "Spelling", '
+        '"subcategory": "Written accents", "reason": "r"},'
+        '{"written": "a", "suggestion": "b", "category": "Grammar", '
+        '"reason": "r"}]}',
+      );
+
+      expect(items[0].subcategory, 'Written accents');
+      expect(items[1].subcategory, isNull);
+    });
+
+    test('each subcategory is checked against the list and its category', () {
+      expect(
+        subcategoryStatus(item('Grammar', 'Subjunctive')),
+        SubcategoryStatus.onList,
+      );
+      expect(
+        subcategoryStatus(item('Grammar', null)),
+        SubcategoryStatus.missing,
+      );
+      expect(
+        subcategoryStatus(item('Grammar', '  ')),
+        SubcategoryStatus.missing,
+      );
+      expect(
+        subcategoryStatus(item('Grammar', 'Noun gender')),
+        SubcategoryStatus.notOnList,
+      );
+      expect(
+        subcategoryStatus(item('Grammar', 'Written accents')),
+        SubcategoryStatus.otherCategory,
+      );
+    });
+
+    test('the setting is off unless switched on', () {
+      expect(twoStepSubcategoryFrom({}), isFalse);
+      expect(twoStepSubcategoryFrom({'TWO_STEP_SUBCATEGORY': 'false'}), isFalse);
+      expect(twoStepSubcategoryFrom({'TWO_STEP_SUBCATEGORY': 'TRUE'}), isTrue);
+      expect(
+        () => twoStepSubcategoryFrom({'TWO_STEP_SUBCATEGORY': 'yes'}),
+        throwsArgumentError,
+      );
+    });
+
+    test('an ordinary report says subcategories are off and has no section', () {
+      final report = buildTwoStepReport(
+        issuesModel: 'gpt-6-luna',
+        suggestionsModel: 'gpt-6-sol',
+        results: [run(allTwoPassFixtures.first.id, 1, const [])],
+        generatedAt: DateTime.utc(2026, 11, 28),
+      );
+
+      expect(report, contains('Subcategories: off'));
+      expect(report, isNot(contains('## Subcategories')));
+    });
+
+    test('the report counts subcategories, lists the ones not as asked and '
+        'shows a change named differently between runs', () {
+      final id = allTwoPassFixtures.first.id;
+      final report = buildTwoStepReport(
+        issuesModel: 'gpt-6-luna',
+        suggestionsModel: 'gpt-6-sol',
+        results: [
+          run(id, 1, [
+            item('Grammar', 'Subjunctive'),
+            const SuggestionItem(
+              written: 'cafe',
+              suggestion: 'café',
+              category: 'Spelling',
+              reason: 'r',
+              subcategory: 'Written accents',
+            ),
+          ]),
+          run(id, 2, [
+            item('Grammar', 'Verb forms and tenses'),
+            const SuggestionItem(
+              written: 'cafe',
+              suggestion: 'café',
+              category: 'Spelling',
+              reason: 'r',
+              subcategory: 'Written accents',
+            ),
+            const SuggestionItem(
+              written: 'q',
+              suggestion: 'z',
+              category: 'Grammar',
+              reason: 'r',
+              subcategory: 'Noun gender',
+            ),
+          ]),
+        ],
+        generatedAt: DateTime.utc(2026, 11, 28),
+        withSubcategory: true,
+      );
+
+      expect(report, contains('Subcategories: **on**'));
+      expect(report, contains('## Subcategories'));
+      expect(report, contains('under their own category: 4 of 5 (80.0 per cent)'));
+      expect(report, contains('| Not on the list | 1 |'));
+      expect(report, contains('| Spelling | Written accents | 2 |'));
+      expect(report, contains('| Grammar | Subjunctive | 1 |'));
+      expect(report, contains('`q` -> `z`: Grammar / Noun gender'));
+      expect(
+        report,
+        contains('The same change returned in more than one run: `2`'),
+      );
+      expect(report, contains('from one run to another: `1`'));
+      expect(
+        report,
+        contains('Grammar / Subjunctive<br>Grammar / Verb forms and tenses'),
+      );
+      // The subcategory also shows beside the category in "Every run".
+      expect(report, contains('[Spelling / Written accents: r]'));
+    });
+  });
+
   group('report', () {
     TwoStepResult result({
       required String id,
@@ -1789,6 +2346,11 @@ void main() {
       final fixtures = twoStepFixturesFrom(environment);
       final runsPerFixture = twoStepRunsPerFixtureFrom(environment);
       final oneCall = twoStepOneCallMode(environment);
+      final withSubcategory = twoStepSubcategoryFrom(environment);
+      if (oneCall && withSubcategory) {
+        fail('TWO_STEP_SUBCATEGORY works with the two steps, not with '
+            'TWO_STEP_MODE=one.');
+      }
       final onePrompt = oneStepPromptFrom(environment);
       final oneModel = _setting(
         environment,
@@ -1816,6 +2378,7 @@ void main() {
                   suggestionsModel: suggestionsModel,
                   fixture: fixture,
                   runIndex: run,
+                  withSubcategory: withSubcategory,
                 );
           results.add(result);
           // ignore: avoid_print
@@ -1838,6 +2401,7 @@ void main() {
         results: results,
         generatedAt: DateTime.now(),
         oneStep: oneCall,
+        withSubcategory: withSubcategory,
       );
       final file = File(outputPath);
       await file.parent.create(recursive: true);
