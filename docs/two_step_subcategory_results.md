@@ -60,4 +60,4 @@ Consistency: where the same change came back in more than one run, it was given 
 - Every subcategory is from the list, under its own category: yes, 344 of 344.
 - Extra cost and time per call: about $0.00005 more per check, and no extra time.
 
-Whether Andrew is content for the subcategory to go into the app (step P.12b) is his decision; see the "Done outside the plan" list at the end of the Build progress list in `claude/corregir_reset_brief_and_build_plan.md`.
+Andrew said on 28 Nov 2026 that he is content for the subcategory to go into the app (step P.12b, in wave 3).
