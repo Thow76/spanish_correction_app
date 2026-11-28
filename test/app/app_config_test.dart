@@ -9,6 +9,8 @@ void main() {
     expect(config.openAiCorrectionModel, 'gpt-5.5');
     // Falls back to the correction model when OPENAI_WALKTHROUGH_MODEL is unset.
     expect(config.openAiWalkthroughModel, 'gpt-5.5');
+    // The chat partner's model (decision E2).
+    expect(config.openAiPartnerModel, 'gpt-6-luna');
   });
 
   group('the key file', () {

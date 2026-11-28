@@ -92,6 +92,20 @@ class ChatCompletionsUsage {
   final int? totalTokens;
 }
 
+/// One message of a conversation sent with
+/// [OpenAiChatCompletionsClient.completeMessages]: something the user said,
+/// or an earlier reply from the assistant.
+class ChatCompletionsMessage {
+  const ChatCompletionsMessage.user(this.content) : role = 'user';
+
+  const ChatCompletionsMessage.assistant(this.content) : role = 'assistant';
+
+  /// `user` or `assistant`, as the service names them.
+  final String role;
+
+  final String content;
+}
+
 /// Calls OpenAI's `/v1/chat/completions` endpoint with a system/user message
 /// pair and returns the assistant's raw reply text.
 ///
@@ -149,6 +163,25 @@ class OpenAiChatCompletionsClient {
     required String userText,
     String stageLabel = 'unspecified',
     Map<String, Object?>? responseFormat,
+  }) => completeMessages(
+    model: model,
+    systemPrompt: systemPrompt,
+    messages: [ChatCompletionsMessage.user(userText)],
+    stageLabel: stageLabel,
+    responseFormat: responseFormat,
+  );
+
+  /// The same call as [complete], but with a whole conversation after the
+  /// system prompt instead of one user message: each of [messages] is sent
+  /// in order with its own role. The chat partner uses this to send the
+  /// current chat with every reply (build step 3.3). [complete] is this
+  /// call with a single user message, so its request body is unchanged.
+  Future<String> completeMessages({
+    required String model,
+    required String systemPrompt,
+    required List<ChatCompletionsMessage> messages,
+    String stageLabel = 'unspecified',
+    Map<String, Object?>? responseFormat,
   }) async {
     final stopwatch = Stopwatch()..start();
     try {
@@ -166,7 +199,8 @@ class OpenAiChatCompletionsClient {
             'model': model,
             'messages': [
               {'role': 'system', 'content': systemPrompt},
-              {'role': 'user', 'content': userText},
+              for (final message in messages)
+                {'role': message.role, 'content': message.content},
             ],
             'response_format': ?responseFormat,
             if (model.startsWith('gpt-5.6')) 'reasoning_effort': 'high',
