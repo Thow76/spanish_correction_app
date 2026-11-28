@@ -1,0 +1,1205 @@
+{
+  "_meta": {
+    "description": "This file contains a serialized version of schema entities for drift.",
+    "version": "1.3.0"
+  },
+  "options": {
+    "store_date_time_values_as_text": false
+  },
+  "entities": [
+    {
+      "id": 0,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "practice_items",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": "newPracticeId",
+            "dsl_features": []
+          },
+          {
+            "name": "changed_at",
+            "getter_name": "changedAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at",
+            "getter_name": "createdAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "language",
+            "getter_name": "language",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "original_sentence",
+            "getter_name": "originalSentence",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "corrected_sentence",
+            "getter_name": "correctedSentence",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "original_phrase",
+            "getter_name": "originalPhrase",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "corrected_phrase",
+            "getter_name": "correctedPhrase",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "original_start",
+            "getter_name": "originalStart",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "original_end",
+            "getter_name": "originalEnd",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "corrected_start",
+            "getter_name": "correctedStart",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "corrected_end",
+            "getter_name": "correctedEnd",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "explanation",
+            "getter_name": "explanation",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "english_sentence",
+            "getter_name": "englishSentence",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "english_highlight_start",
+            "getter_name": "englishHighlightStart",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "english_highlight_end",
+            "getter_name": "englishHighlightEnd",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "category",
+            "getter_name": "category",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "category",
+                        "tag": "category"
+                      },
+                      ".isIn(const ['Spelling','Grammar','Word Choice','Natural phrasing'])"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "subcategory",
+            "getter_name": "subcategory",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": [],
+            "type_converter": {
+              "dart_expr": "const PracticeSubcategoryConverter()",
+              "dart_type_name": "PracticeSubcategory?"
+            }
+          },
+          {
+            "name": "context_text",
+            "getter_name": "contextText",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "chat_id",
+            "getter_name": "chatId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "input_mode",
+            "getter_name": "inputMode",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [],
+            "type_converter": {
+              "dart_expr": "const EnumNameConverter<PracticeInputMode>(PracticeInputMode.values)",
+              "dart_type_name": "PracticeInputMode"
+            }
+          },
+          {
+            "name": "saved_correction_id",
+            "getter_name": "savedCorrectionId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "defaultConstraints": "UNIQUE",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "UNIQUE"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              "unique"
+            ]
+          },
+          {
+            "name": "ladder_stage",
+            "getter_name": "ladderStage",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "ComparableExpr",
+                        "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+                      },
+                      "(",
+                      {
+                        "lexeme": "ladderStage",
+                        "tag": "ladderStage"
+                      },
+                      ").isBiggerOrEqualValue(0)"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "locked_stage",
+            "getter_name": "lockedStage",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "ComparableExpr",
+                        "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+                      },
+                      "(",
+                      {
+                        "lexeme": "lockedStage",
+                        "tag": "lockedStage"
+                      },
+                      ").isBiggerOrEqualValue(0)"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "retired",
+            "getter_name": "retired",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"retired\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"retired\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (subcategory = '' OR (category = 'Grammar' AND subcategory IN ('prepositions', 'agreement', 'verb_forms_and_tenses', 'subjunctive', 'ser_and_estar', 'articles', 'pronouns', 'sentence_structure')) OR (category = 'Spelling' AND subcategory IN ('written_accents', 'letters', 'punctuation_and_capitals')) OR (category = 'Word Choice' AND subcategory IN ('false_friends', 'mixed_up_pairs')))"
+        ],
+        "explicit_pk": [
+          "id"
+        ]
+      }
+    },
+    {
+      "id": 1,
+      "references": [
+        0
+      ],
+      "type": "table",
+      "data": {
+        "name": "practice_questions",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": "newPracticeId",
+            "dsl_features": []
+          },
+          {
+            "name": "changed_at",
+            "getter_name": "changedAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at",
+            "getter_name": "createdAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "item_id",
+            "getter_name": "itemId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES practice_items (id) ON DELETE CASCADE",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES practice_items (id) ON DELETE CASCADE"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "practice_items",
+                    "column": "id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": "cascade"
+                }
+              }
+            ]
+          },
+          {
+            "name": "game",
+            "getter_name": "game",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "stage",
+            "getter_name": "stage",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "ComparableExpr",
+                        "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+                      },
+                      "(",
+                      {
+                        "lexeme": "stage",
+                        "tag": "stage"
+                      },
+                      ").isBiggerOrEqualValue(0)"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "body",
+            "getter_name": "body",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "id"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "practice_groups",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": "newPracticeId",
+            "dsl_features": []
+          },
+          {
+            "name": "changed_at",
+            "getter_name": "changedAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at",
+            "getter_name": "createdAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "language",
+            "getter_name": "language",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "kind",
+            "getter_name": "kind",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [],
+            "type_converter": {
+              "dart_expr": "const EnumNameConverter<PracticeGroupKind>(PracticeGroupKind.values)",
+              "dart_type_name": "PracticeGroupKind"
+            }
+          },
+          {
+            "name": "category",
+            "getter_name": "category",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "subcategory",
+            "getter_name": "subcategory",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": [],
+            "type_converter": {
+              "dart_expr": "const PracticeSubcategoryConverter()",
+              "dart_type_name": "PracticeSubcategory?"
+            }
+          },
+          {
+            "name": "is_revision",
+            "getter_name": "isRevision",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"is_revision\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"is_revision\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "stage",
+            "getter_name": "stage",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('1')",
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "ComparableExpr",
+                        "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+                      },
+                      "(",
+                      {
+                        "lexeme": "stage",
+                        "tag": "stage"
+                      },
+                      ").isBiggerOrEqualValue(0)"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "retries_at_stage",
+            "getter_name": "retriesAtStage",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "ComparableExpr",
+                        "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+                      },
+                      "(",
+                      {
+                        "lexeme": "retriesAtStage",
+                        "tag": "retriesAtStage"
+                      },
+                      ").isBiggerOrEqualValue(0)"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "last_passed_at",
+            "getter_name": "lastPassedAt",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "unlocks_at",
+            "getter_name": "unlocksAt",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "finished",
+            "getter_name": "finished",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"finished\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"finished\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (category IN ('', 'Spelling', 'Grammar', 'Word Choice', 'Natural phrasing'))",
+          "CHECK (subcategory = '' OR (category = 'Grammar' AND subcategory IN ('prepositions', 'agreement', 'verb_forms_and_tenses', 'subjunctive', 'ser_and_estar', 'articles', 'pronouns', 'sentence_structure')) OR (category = 'Spelling' AND subcategory IN ('written_accents', 'letters', 'punctuation_and_capitals')) OR (category = 'Word Choice' AND subcategory IN ('false_friends', 'mixed_up_pairs')))"
+        ],
+        "explicit_pk": [
+          "id"
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "references": [
+        2,
+        0
+      ],
+      "type": "table",
+      "data": {
+        "name": "practice_group_items",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": "newPracticeId",
+            "dsl_features": []
+          },
+          {
+            "name": "changed_at",
+            "getter_name": "changedAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "group_id",
+            "getter_name": "groupId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES practice_groups (id) ON DELETE CASCADE",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES practice_groups (id) ON DELETE CASCADE"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "practice_groups",
+                    "column": "id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": "cascade"
+                }
+              }
+            ]
+          },
+          {
+            "name": "item_id",
+            "getter_name": "itemId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES practice_items (id) ON DELETE CASCADE",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES practice_items (id) ON DELETE CASCADE"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "practice_items",
+                    "column": "id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": "cascade"
+                }
+              }
+            ]
+          },
+          {
+            "name": "position",
+            "getter_name": "position",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "missed_last_round",
+            "getter_name": "missedLastRound",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"missed_last_round\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"missed_last_round\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "failed_retries",
+            "getter_name": "failedRetries",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "ComparableExpr",
+                        "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+                      },
+                      "(",
+                      {
+                        "lexeme": "failedRetries",
+                        "tag": "failedRetries"
+                      },
+                      ").isBiggerOrEqualValue(0)"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "id"
+        ],
+        "unique_keys": [
+          [
+            "group_id",
+            "item_id"
+          ]
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "references": [
+        0,
+        1,
+        2
+      ],
+      "type": "table",
+      "data": {
+        "name": "practice_attempts",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": "newPracticeId",
+            "dsl_features": []
+          },
+          {
+            "name": "changed_at",
+            "getter_name": "changedAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "item_id",
+            "getter_name": "itemId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES practice_items (id) ON DELETE CASCADE",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES practice_items (id) ON DELETE CASCADE"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "practice_items",
+                    "column": "id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": "cascade"
+                }
+              }
+            ]
+          },
+          {
+            "name": "question_id",
+            "getter_name": "questionId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES practice_questions (id) ON DELETE SET NULL",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES practice_questions (id) ON DELETE SET NULL"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "practice_questions",
+                    "column": "id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": "setNull"
+                }
+              }
+            ]
+          },
+          {
+            "name": "group_id",
+            "getter_name": "groupId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES practice_groups (id) ON DELETE SET NULL",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES practice_groups (id) ON DELETE SET NULL"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "practice_groups",
+                    "column": "id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": "setNull"
+                }
+              }
+            ]
+          },
+          {
+            "name": "mode",
+            "getter_name": "mode",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [],
+            "type_converter": {
+              "dart_expr": "const EnumNameConverter<PracticeMode>(PracticeMode.values)",
+              "dart_type_name": "PracticeMode"
+            }
+          },
+          {
+            "name": "game",
+            "getter_name": "game",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "stage",
+            "getter_name": "stage",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "ComparableExpr",
+                        "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+                      },
+                      "(",
+                      {
+                        "lexeme": "stage",
+                        "tag": "stage"
+                      },
+                      ").isBiggerOrEqualValue(0)"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "answer",
+            "getter_name": "answer",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "correct",
+            "getter_name": "correct",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"correct\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"correct\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "answered_at",
+            "getter_name": "answeredAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "id"
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "practice_rules",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": "newPracticeId",
+            "dsl_features": []
+          },
+          {
+            "name": "changed_at",
+            "getter_name": "changedAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('CAST(strftime(\\'%s\\', CURRENT_TIMESTAMP) AS INTEGER)')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "language",
+            "getter_name": "language",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "rule_id",
+            "getter_name": "ruleId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "rule_name",
+            "getter_name": "ruleName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "slot",
+            "getter_name": "slot",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "needs",
+            "getter_name": "needs",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "starts",
+            "getter_name": "starts",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'[]\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "fixed_answer",
+            "getter_name": "fixedAnswer",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "id"
+        ],
+        "unique_keys": [
+          [
+            "language",
+            "rule_id",
+            "slot"
+          ]
+        ]
+      }
+    }
+  ],
+  "fixed_sql": [
+    {
+      "name": "practice_items",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"practice_items\" (\"id\" TEXT NOT NULL, \"changed_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"created_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"language\" TEXT NOT NULL, \"original_sentence\" TEXT NOT NULL, \"corrected_sentence\" TEXT NOT NULL, \"original_phrase\" TEXT NOT NULL, \"corrected_phrase\" TEXT NOT NULL, \"original_start\" INTEGER NULL, \"original_end\" INTEGER NULL, \"corrected_start\" INTEGER NULL, \"corrected_end\" INTEGER NULL, \"explanation\" TEXT NOT NULL DEFAULT '', \"english_sentence\" TEXT NOT NULL DEFAULT '', \"english_highlight_start\" INTEGER NULL, \"english_highlight_end\" INTEGER NULL, \"category\" TEXT NOT NULL CHECK(\"category\" IN ('Spelling', 'Grammar', 'Word Choice', 'Natural phrasing')), \"subcategory\" TEXT NOT NULL DEFAULT '', \"context_text\" TEXT NOT NULL DEFAULT '', \"chat_id\" TEXT NULL, \"input_mode\" TEXT NOT NULL, \"saved_correction_id\" TEXT NULL UNIQUE, \"ladder_stage\" INTEGER NOT NULL DEFAULT 0 CHECK(\"ladder_stage\" >= 0), \"locked_stage\" INTEGER NOT NULL DEFAULT 0 CHECK(\"locked_stage\" >= 0), \"retired\" INTEGER NOT NULL DEFAULT 0 CHECK (\"retired\" IN (0, 1)), PRIMARY KEY (\"id\"), CHECK (subcategory = '' OR (category = 'Grammar' AND subcategory IN ('prepositions', 'agreement', 'verb_forms_and_tenses', 'subjunctive', 'ser_and_estar', 'articles', 'pronouns', 'sentence_structure')) OR (category = 'Spelling' AND subcategory IN ('written_accents', 'letters', 'punctuation_and_capitals')) OR (category = 'Word Choice' AND subcategory IN ('false_friends', 'mixed_up_pairs'))));"
+        }
+      ]
+    },
+    {
+      "name": "practice_questions",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"practice_questions\" (\"id\" TEXT NOT NULL, \"changed_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"created_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"item_id\" TEXT NOT NULL REFERENCES practice_items (id) ON DELETE CASCADE, \"game\" TEXT NOT NULL, \"stage\" INTEGER NOT NULL CHECK(\"stage\" >= 0), \"body\" TEXT NOT NULL, PRIMARY KEY (\"id\"));"
+        }
+      ]
+    },
+    {
+      "name": "practice_groups",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"practice_groups\" (\"id\" TEXT NOT NULL, \"changed_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"created_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"language\" TEXT NOT NULL, \"kind\" TEXT NOT NULL, \"category\" TEXT NOT NULL DEFAULT '', \"subcategory\" TEXT NOT NULL DEFAULT '', \"is_revision\" INTEGER NOT NULL DEFAULT 0 CHECK (\"is_revision\" IN (0, 1)), \"stage\" INTEGER NOT NULL DEFAULT 1 CHECK(\"stage\" >= 0), \"retries_at_stage\" INTEGER NOT NULL DEFAULT 0 CHECK(\"retries_at_stage\" >= 0), \"last_passed_at\" INTEGER NULL, \"unlocks_at\" INTEGER NULL, \"finished\" INTEGER NOT NULL DEFAULT 0 CHECK (\"finished\" IN (0, 1)), PRIMARY KEY (\"id\"), CHECK (category IN ('', 'Spelling', 'Grammar', 'Word Choice', 'Natural phrasing')), CHECK (subcategory = '' OR (category = 'Grammar' AND subcategory IN ('prepositions', 'agreement', 'verb_forms_and_tenses', 'subjunctive', 'ser_and_estar', 'articles', 'pronouns', 'sentence_structure')) OR (category = 'Spelling' AND subcategory IN ('written_accents', 'letters', 'punctuation_and_capitals')) OR (category = 'Word Choice' AND subcategory IN ('false_friends', 'mixed_up_pairs'))));"
+        }
+      ]
+    },
+    {
+      "name": "practice_group_items",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"practice_group_items\" (\"id\" TEXT NOT NULL, \"changed_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"group_id\" TEXT NOT NULL REFERENCES practice_groups (id) ON DELETE CASCADE, \"item_id\" TEXT NOT NULL REFERENCES practice_items (id) ON DELETE CASCADE, \"position\" INTEGER NOT NULL DEFAULT 0, \"missed_last_round\" INTEGER NOT NULL DEFAULT 0 CHECK (\"missed_last_round\" IN (0, 1)), \"failed_retries\" INTEGER NOT NULL DEFAULT 0 CHECK(\"failed_retries\" >= 0), PRIMARY KEY (\"id\"), UNIQUE (\"group_id\", \"item_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "practice_attempts",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"practice_attempts\" (\"id\" TEXT NOT NULL, \"changed_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"item_id\" TEXT NOT NULL REFERENCES practice_items (id) ON DELETE CASCADE, \"question_id\" TEXT NULL REFERENCES practice_questions (id) ON DELETE SET NULL, \"group_id\" TEXT NULL REFERENCES practice_groups (id) ON DELETE SET NULL, \"mode\" TEXT NOT NULL, \"game\" TEXT NOT NULL, \"stage\" INTEGER NOT NULL CHECK(\"stage\" >= 0), \"answer\" TEXT NOT NULL DEFAULT '', \"correct\" INTEGER NOT NULL CHECK (\"correct\" IN (0, 1)), \"answered_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), PRIMARY KEY (\"id\"));"
+        }
+      ]
+    },
+    {
+      "name": "practice_rules",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"practice_rules\" (\"id\" TEXT NOT NULL, \"changed_at\" INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)), \"language\" TEXT NOT NULL, \"rule_id\" TEXT NOT NULL, \"rule_name\" TEXT NOT NULL DEFAULT '', \"slot\" TEXT NOT NULL, \"needs\" TEXT NOT NULL DEFAULT '', \"starts\" TEXT NOT NULL DEFAULT '[]', \"fixed_answer\" TEXT NOT NULL DEFAULT '', PRIMARY KEY (\"id\"), UNIQUE (\"language\", \"rule_id\", \"slot\"));"
+        }
+      ]
+    }
+  ]
+}
