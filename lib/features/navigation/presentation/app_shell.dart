@@ -6,6 +6,7 @@ import '../../../core/services/walkthrough_service.dart';
 import '../../../shared/design/app_colors.dart';
 import '../../corrections/application/correction_repository_controller.dart';
 import '../../corrections/application/correction_service.dart';
+import '../../conversation/presentation/partner_settings_screen.dart';
 import '../../corrections/application/submit_correction_use_case.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../home/presentation/home_screen.dart';
@@ -307,6 +308,32 @@ class _AppShellState extends State<AppShell> {
                       widget.onChangeLanguage();
                     },
                   ),
+                  // Chats are Spanish only in the first build (decision F1),
+                  // so the partner's settings show for Spanish only.
+                  if (_hasHome)
+                    ListTile(
+                      key: const ValueKey('settings-partner-greetings'),
+                      title: const Text(
+                        'Partner greetings',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.textSecondary,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(this.context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const PartnerSettingsScreen(),
+                          ),
+                        );
+                      },
+                    ),
                   SwitchListTile(
                     title: const Text(
                       'Skip language selection on startup',

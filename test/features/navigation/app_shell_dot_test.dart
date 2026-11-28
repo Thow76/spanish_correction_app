@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spanish_correction_app/core/enums/language.dart';
 import 'package:spanish_correction_app/core/services/walkthrough_service.dart';
+import 'package:spanish_correction_app/features/conversation/presentation/partner_settings_screen.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_repository_controller.dart';
 import 'package:spanish_correction_app/features/corrections/application/correction_service.dart';
 import 'package:spanish_correction_app/features/navigation/application/new_items_marker.dart';
@@ -94,5 +95,20 @@ void main() {
     await tester.tap(find.text('Saved'));
     await tester.pumpAndSettle();
     expect(_dotShowing(tester, MarkedTab.saved), isFalse);
+  });
+
+  // Build step 5.1: the partner settings are reached from the settings sheet.
+  testWidgets('settings lead to the partner greetings screen', (tester) async {
+    marker = NewItemsMarker(repositoryController: controller);
+    await tester.runAsync(marker.load);
+    await pumpShell(tester);
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-partner-greetings')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PartnerSettingsScreen), findsOne);
+    expect(find.byKey(const ValueKey('partner-greetings-switch')), findsOne);
   });
 }
