@@ -5,7 +5,12 @@ class AppConfig {
     required this.openAiApiKey,
     required this.openAiCorrectionModel,
     required this.openAiWalkthroughModel,
+    this.openAiPartnerModel = defaultPartnerModel,
   });
+
+  /// The model the chat partner runs on unless the build command names
+  /// another (decision E2). This is the one place to change it.
+  static const defaultPartnerModel = 'gpt-6-luna';
 
   factory AppConfig.fromEnvironment() {
     const openAiCorrectionModel = String.fromEnvironment(
@@ -24,6 +29,10 @@ class AppConfig {
       openAiWalkthroughModel: const String.fromEnvironment(
         'OPENAI_WALKTHROUGH_MODEL',
         defaultValue: openAiCorrectionModel,
+      ),
+      openAiPartnerModel: const String.fromEnvironment(
+        'OPENAI_PARTNER_MODEL',
+        defaultValue: defaultPartnerModel,
       ),
     );
   }
@@ -51,6 +60,7 @@ class AppConfig {
       openAiApiKey: parseKeyFile(contents),
       openAiCorrectionModel: fromBuild.openAiCorrectionModel,
       openAiWalkthroughModel: fromBuild.openAiWalkthroughModel,
+      openAiPartnerModel: fromBuild.openAiPartnerModel,
     );
   }
 
@@ -85,4 +95,8 @@ class AppConfig {
   final String openAiApiKey;
   final String openAiCorrectionModel;
   final String openAiWalkthroughModel;
+
+  /// The model for the chat partner's replies, sign-off, titles and
+  /// summaries (decision E2): GPT-6 Luna to start with.
+  final String openAiPartnerModel;
 }
